@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Implementation of a CTA-wide semaphore for inter-CTA synchronization.
 */
@@ -49,7 +51,8 @@ class Semaphore {
 public:
 
   int *lock;
-  bool wait_thread;
+  int wait_thread;
+  int fetch_thread;
   int state;
 
 public:
@@ -59,19 +62,21 @@ public:
   Semaphore(int *lock_, int thread_id): 
     lock(lock_), 
     wait_thread(thread_id < 0 || thread_id == 0),
+#ifdef __HGGC_ARCH__
+    fetch_thread(__shfl_sync(0xffffffff, thread_id < 32, 0)),
+#endif
     state(-1) {
 
   }
 
+
   /// Permit fetching the synchronization mechanism early
   CUTLASS_DEVICE
   void fetch() {
-    if (wait_thread) {
-      #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-      asm volatile ("ld.global.acquire.gpu.b32 %0, [%1];\n" : "=r"(state) : "l"(lock));  
-      #else
-      asm volatile ("ld.global.cg.b32 %0, [%1];\n" : "=r"(state) : "l"(lock));  
-      #endif
+    if (fetch_thread) {
+      __ppu_atomic_load_acquire_u32_device(
+        reinterpret_cast<const volatile unsigned int*>(lock),
+        reinterpret_cast<uint&>(state));
     }
   }
 
@@ -98,11 +103,9 @@ public:
     __syncthreads();
 
     if (wait_thread) {
-      #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-      asm volatile ("st.global.release.gpu.b32 [%0], %1;\n" : : "l"(lock), "r"(status));
-      #else
-      asm volatile ("st.global.cg.b32 [%0], %1;\n" : : "l"(lock), "r"(status));
-      #endif
+      __ppu_atomic_store_release_u32_device(
+        reinterpret_cast<volatile unsigned int*>(lock),
+        status);
     }
   }
 };

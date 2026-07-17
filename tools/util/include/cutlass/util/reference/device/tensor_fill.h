@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /* \file
   \brief Defines device-side elementwise operations on TensorView. Note, the operations defined
     in this header are not specialized for any particular data layout and are therefore not
@@ -31,7 +33,7 @@
 
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 
 // Standard Library includes
 #include <utility>
@@ -42,8 +44,8 @@
 
 #endif
 
-// CUDA includes
-#include <curand_kernel.h>
+// device includes
+#include "cutlass/util/reference/device/acrand/acrand_kernel.h"
 
 // Cutlass includes
 #include "cutlass/cutlass.h"
@@ -67,26 +69,26 @@ namespace detail {
 
 template <typename FloatType>
 CUTLASS_DEVICE
-FloatType random_normal_float(curandState_t *state) {
-  return curand_normal(state);
+FloatType random_normal_float(acrandState_t *state) {
+  return acrand_normal(state);
 }
 
 template <>
 CUTLASS_DEVICE
-double random_normal_float<double>(curandState_t *state) {
-  return curand_normal_double(state);
+double random_normal_float<double>(acrandState_t *state) {
+  return acrand_normal_double(state);
 }
 
 template <typename FloatType>
 CUTLASS_DEVICE
-FloatType random_uniform_float(curandState_t *state) {
-  return curand_uniform(state);
+FloatType random_uniform_float(acrandState_t *state) {
+  return acrand_uniform(state);
 }
 
 template <>
 CUTLASS_DEVICE
-double random_uniform_float<double>(curandState_t *state) {
-  return curand_uniform_double(state);
+double random_uniform_float<double>(acrandState_t *state) {
+  return acrand_uniform_double(state);
 }
 
 template <typename Element>
@@ -139,7 +141,7 @@ struct RandomGaussianFunc {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -151,7 +153,7 @@ struct RandomGaussianFunc {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -226,7 +228,7 @@ struct RandomGaussianFunc<complex<Real>> {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -238,7 +240,7 @@ struct RandomGaussianFunc<complex<Real>> {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -449,7 +451,7 @@ struct RandomUniformFunc {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -461,7 +463,7 @@ struct RandomUniformFunc {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -551,7 +553,7 @@ struct RandomUniformFunc<complex<Real>> {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -563,7 +565,7 @@ struct RandomUniformFunc<complex<Real>> {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -771,7 +773,7 @@ struct RandomSparseMetaFunc {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -783,7 +785,7 @@ struct RandomSparseMetaFunc {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state

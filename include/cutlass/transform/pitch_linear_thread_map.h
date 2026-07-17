@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing how threads are mapped to a given tile. 
 
@@ -82,20 +84,15 @@ struct PitchLinearStripminedThreadMap {
 
     static_assert(!(Shape::kContiguous % kElementsPerAccess), "");
 
-    static_assert(!((Shape::kContiguous * Shape::kStrided) % (kThreads * kElementsPerAccess)), 
-      "Shape must be divisible thread count.");
-
     /// Shape of the tile in units of vectors
     using ShapeVec = layout::PitchLinearShape<
       Shape::kContiguous / kElementsPerAccess,
       Shape::kStrided
     >;
 
-    static_assert(
-      (Threads < ShapeVec::kContiguous && !(ShapeVec::kContiguous % kThreads)) ||
-      (!(kThreads % ShapeVec::kContiguous) && !(ShapeVec::kStrided % (kThreads / ShapeVec::kContiguous))),
-      "Shape must be divisible by number of iterations of each thread."
-    );
+    static_assert((Threads < ShapeVec::kContiguous && !(ShapeVec::kContiguous % kThreads)) ||
+                      (!(kThreads % ShapeVec::kContiguous)),
+                  "Shape must be divisible by number of iterations of each thread.");
   };
 
   /// Number of iterations by each thread
@@ -106,11 +103,12 @@ struct PitchLinearStripminedThreadMap {
           // Redo the comparison here to work around divide by zero compiler
           // error.  The compiler evaluates both path of platform::conditional.
           (Threads >= Detail::ShapeVec::kContiguous
-               ? Detail::ShapeVec::kStrided /
+               ? (Detail::ShapeVec::kStrided + (kThreads / Detail::ShapeVec::kContiguous - 1)) /
                      (kThreads / Detail::ShapeVec::kContiguous)
                : 0)>,
       layout::PitchLinearShape<Detail::ShapeVec::kContiguous / kThreads,
                                Detail::ShapeVec::kStrided>>::type;
+  
 
   /// Interval between accesses along each dimension of the tensor's logical coordinate space
   /// (in units of Elements)
@@ -125,6 +123,13 @@ struct PitchLinearStripminedThreadMap {
       1
     >
   >::type;
+
+  /// Shape of the tile in units of vectors
+  using StorageShape = typename platform::conditional<
+      Threads >= Detail::ShapeVec::kContiguous,
+      layout::PitchLinearShape<Shape::kContiguous,
+                               Iterations::kStrided*(kThreads / Detail::ShapeVec::kContiguous)>,
+      layout::PitchLinearShape<Shape::kContiguous, Shape::kStrided>>::type;
 
   /// Maps thread ID to a coordinate offset within the tensor's logical coordinate space
   /// (in units of Elements)
@@ -202,7 +207,7 @@ struct PitchLinearTilePolicyStripminedThreadStrided
 /// Policy defining a warp-raked arrangement in which a shape is partitioned into contiguous
 /// elements.
 ///
-/// This ThreadMap is used by tensor core kernels.
+/// This ThreadMap is used by tensor cell kernels.
 template <
   typename Shape_,
   int Threads,
@@ -248,6 +253,7 @@ struct PitchLinearWarpRakedThreadMap {
       Shape::kStrided
     >;
 
+#if !ENABLE_AIU
     static_assert(
       !(ShapeInAccesses::kContiguous % WarpThreadArrangement::kContiguous),
       "ShapeInAccesses must be divisible by WarpThreadArrangement.");
@@ -255,6 +261,7 @@ struct PitchLinearWarpRakedThreadMap {
     static_assert(
       !(ShapeInAccesses::kStrided % WarpThreadArrangement::kStrided),
       "ShapeInAccesses must be divisible by WarpThreadArrangement.");
+#endif
 
     // compute number of warp-level accesses total
     using WarpAccessIterations = layout::PitchLinearShape<
@@ -343,7 +350,7 @@ struct PitchLinearWarpRakedThreadMap {
 /// Policy defining a warp-raked arrangement in which a shape is partitioned into contiguous
 /// elements. Warps are arranged based on a stride.
 ///
-/// This ThreadMap is used by tensor core kernels for NCxHWx layout.
+/// This ThreadMap is used by tensor cell kernels for NCxHWx layout.
 template <
   typename Shape_,
   int Threads,

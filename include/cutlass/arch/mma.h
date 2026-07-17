@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates exposing architecture support for multiply-add operations
 */
@@ -43,6 +45,14 @@ namespace arch {
 
 /// Tag indicating the operation implied by MMA.
 struct OpMultiplyAdd;
+
+/// Tag indicating the input is converted to 2 (big and small) TF32 components
+//  Perform 3xTF32 or 4xTF32 for every F32 output element
+struct OpMultiplyAddFastF32;
+
+/// Tag indicating the input is converted to 2 (big and small) TF32 components
+//  Perform 3xTF32 or 4xTF32 for every complex<F32> output element
+struct OpMultiplyAddComplexFastF32;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,11 +91,11 @@ struct OpClassSimt;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Tag classifing operators as Tensor Core operations.
+/// Tag classifing operators as Tensor Cell operations.
 struct OpClassTensorOp;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-/// Tag classifing operators as WMMA Tensor Core operations
+/// Tag classifing operators as WMMA Tensor Cell operations
 struct OpClassWmmaTensorOp;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,14 +202,14 @@ struct SparseMma;
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 //
-// Specializations for each compute capability
+// Specializations for each architecture version
 //
 
-#include "cutlass/arch/mma_sm50.h"
-#include "cutlass/arch/mma_sm60.h"
-#include "cutlass/arch/mma_sm61.h"
-#include "cutlass/arch/mma_sm70.h" 
-#include "cutlass/arch/mma_sm75.h" 
-#include "cutlass/arch/mma_sm80.h"
-#include "cutlass/arch/mma_sparse_sm80.h"
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_ppu.h" 
+#include "cutlass/arch/mma_ppu.h" 
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_sparse_ppu.h"
 /////////////////////////////////////////////////////////////////////////////////////////////////

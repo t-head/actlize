@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear combination operations used by epilogues.
 */
@@ -86,6 +88,11 @@ public:
 
   /// If true, the 'T' tensor is stored
   static bool const kStoreT = StoreT;
+
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
 
   /// Host-constructable parameters structure
   struct Params {

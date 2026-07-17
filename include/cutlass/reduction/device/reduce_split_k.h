@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Kernel performing a reduction over densely packed tensors in global memory
 */
@@ -55,6 +57,10 @@ public:
 
   using WorkspaceTensorRef = typename ReductionKernel::WorkspaceTensorRef;
   using OutputTensorRef = typename ReductionKernel::OutputTensorRef;
+  using TensorRefExtra = typename ReductionKernel::TensorRefExtra;
+
+  static int const kExtraInputNum = ReductionKernel::kExtraInputNum;
+  static int const kExtraInputLoopNum = ReductionKernel::kExtraInputLoopNum;
 
   /// Argument structure
   struct Arguments {
@@ -65,12 +71,15 @@ public:
 
     MatrixCoord problem_size;
     int partitions;
-    size_t partition_stride;
+    CUsize partition_stride;
     WorkspaceTensorRef workspace;
     OutputTensorRef destination;
     OutputTensorRef source;
     typename OutputOp::Params output;
     typename ReductionOp::Params reduction;
+    #if SAIL_FUSE_OP_EXT
+    TensorRefExtra ref_Extra[kExtraInputNum];
+    #endif
 
     //
     // Methods
@@ -93,12 +102,15 @@ public:
     Arguments(
       MatrixCoord problem_size_,
       int partitions_,
-      size_t partition_stride_,
+      CUsize partition_stride_,
       WorkspaceTensorRef workspace_,
       OutputTensorRef destination_,
       OutputTensorRef source_,
       typename OutputOp::Params output_ = typename OutputOp::Params(),
       typename ReductionOp::Params reduction_ = typename ReductionOp::Params()
+      #if SAIL_FUSE_OP_EXT
+      , TensorRefExtra *pRef_Extra_NC = nullptr
+      #endif
     ):
       problem_size(problem_size_),
       partitions(partitions_),
@@ -109,6 +121,16 @@ public:
       output(output_),
       reduction(reduction_)
     {
+      #if SAIL_FUSE_OP_EXT
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < kExtraInputLoopNum; i++) {
+        if (pRef_Extra_NC) {
+          ref_Extra[i] = pRef_Extra_NC[i];
+        } else {
+          ref_Extra[i] = {nullptr, 0};
+        }
+      }
+      #endif
 
     }
 
@@ -129,7 +151,7 @@ public:
   }
 
   /// Gets the workspace size
-  static size_t get_workspace_size(Arguments const &args) {
+  static CUsize get_workspace_size(Arguments const &args) {
     // needs no additional workspace
     return 0;
   }
@@ -138,18 +160,23 @@ public:
   Status initialize(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
     // initialize the params structure from the arguments
     params_ = typename ReductionKernel::Params(
       args.problem_size,
       args.partitions,
       args.partition_stride,
+      0,
+      0,
       args.workspace,
       args.destination,
       args.source,
       args.output,
       args.reduction
+      #if SAIL_FUSE_OP_EXT
+      , args.ref_Extra
+      #endif
     );
 
     return Status::kSuccess;
@@ -170,7 +197,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     //
     // Launch reduction kernel
@@ -180,14 +207,14 @@ public:
 
     Kernel<ReductionKernel><<< grid, block, 0, stream >>>(params_);
 
-    cudaError_t result = cudaGetLastError();
+    hggcError_t result = hggcGetLastError();
 
-    return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
   }
 
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -195,9 +222,9 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
-    Status status = initialize(args, workspace);
+    Status status = initialize(args, workspace, stream);
     
     if (status == Status::kSuccess) {
       status = run(stream);

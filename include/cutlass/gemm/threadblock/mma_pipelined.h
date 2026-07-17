@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a double-buffered threadblock-scoped GEMM kernel.
 */
@@ -47,7 +49,7 @@ namespace threadblock {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
   /// Size of the Gemm problem - concept: gemm::GemmShape<>
   typename Shape_,
@@ -286,7 +288,7 @@ public:
 
         this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
         this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
-        
+
         this->warp_tile_iterator_A_.load(warp_frag_A[(warp_mma_k + 1) % 2]);
         this->warp_tile_iterator_B_.load(warp_frag_B[(warp_mma_k + 1) % 2]);
 
@@ -312,7 +314,6 @@ public:
                  warp_frag_B[warp_mma_k % 2], accum);
       }
     }
-
   }
 };
 

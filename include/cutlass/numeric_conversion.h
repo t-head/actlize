@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,11 +23,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
-/*! 
+
+/*!
     \file
     \brief Boost-like numeric conversion operator for CUTLASS numeric types
 */
 #pragma once
+
+#if !defined(__HGGCCC_RTC__)
+#include <cfenv>
+#endif
 
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
@@ -80,26 +86,102 @@ struct NumericConverter {
 // Partial specializations for float => int8_t
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
-template <FloatRoundStyle Round>
-struct NumericConverter<int8_t, float, Round> {
+
+#if defined(__HGGC_ARCH__) || defined(__HGGCCC_RTC__)
+template <>
+struct NumericConverter<int8_t, float, FloatRoundStyle::round_to_nearest> {
 
   using result_type = int8_t;
   using source_type = float;
-  static FloatRoundStyle const round_style = Round;
+  static FloatRoundStyle const round_style = FloatRoundStyle::round_to_nearest;
 
-  CUTLASS_HOST_DEVICE
+  CUTLASS_DEVICE
   static result_type convert(source_type const & s) {
 
-    result_type result = static_cast<int8_t>(s);
+    int32_t intermediate;
+    asm volatile("ppu.cvt.irtte.sat.s8.f32 %0, %1;" : "=r"(intermediate) : "f"(s));
 
-    return result;
+    return static_cast<result_type>(intermediate);
   }
 
-  CUTLASS_HOST_DEVICE
+  CUTLASS_DEVICE
   result_type operator()(source_type const &s) {
     return convert(s);
   }
 };
+
+template <>
+struct NumericConverter<int8_t, float, FloatRoundStyle::round_toward_zero> {
+
+  using result_type = int8_t;
+  using source_type = float;
+  static FloatRoundStyle const round_style =  FloatRoundStyle::round_toward_zero;
+
+  CUTLASS_DEVICE
+  static result_type convert(source_type const & s) {
+
+    int32_t intermediate;
+    asm volatile("ppu.cvt.irtz.sat.s8.f32 %0, %1;" : "=r"(intermediate) : "f"(s));
+
+    return static_cast<result_type>(intermediate);
+  }
+
+  CUTLASS_DEVICE
+  result_type operator()(source_type const &s) {
+    return convert(s);
+  }
+};
+
+#else
+template <>
+struct NumericConverter<int8_t, float, FloatRoundStyle::round_to_nearest> {
+
+  using result_type = int8_t;
+  using source_type = float;
+  static FloatRoundStyle const round_style = FloatRoundStyle::round_to_nearest;
+
+  static result_type convert(source_type const & s) {
+    std::fesetround(FE_TONEAREST);
+    int32_t intermediate = (int32_t)std::nearbyint(s);
+
+    // Low-end saturation
+    intermediate = std::max(intermediate, (int32_t)std::numeric_limits<int8_t>::lowest());
+
+    // High-end saturation
+    intermediate = std::min(intermediate, (int32_t)std::numeric_limits<int8_t>::max());
+    return static_cast<result_type>(intermediate);
+  }
+
+  result_type operator()(source_type const &s) {
+    return convert(s);
+  }
+};
+
+template <>
+struct NumericConverter<int8_t, float, FloatRoundStyle::round_toward_zero> {
+
+  using result_type = int8_t;
+  using source_type = float;
+  static FloatRoundStyle const round_style =  FloatRoundStyle::round_toward_zero;
+
+  static result_type convert(source_type const & s) {
+    std::fesetround(FE_TOWARDZERO);
+    int32_t intermediate = (int32_t)std::nearbyint(s);
+
+    // Low-end saturation
+    intermediate = std::max(intermediate, (int32_t)std::numeric_limits<int8_t>::lowest());
+
+    // High-end saturation
+    intermediate = std::min(intermediate, (int32_t)std::numeric_limits<int8_t>::max());
+
+    return static_cast<result_type>(intermediate);
+  }
+
+  result_type operator()(source_type const &s) {
+    return convert(s);
+  }
+};
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -173,6 +255,7 @@ struct NumericConverter<half_t, float, FloatRoundStyle::round_to_nearest> {
   }
 };
 
+
 /// Specialization for round-toward-zero
 template <>
 struct NumericConverter<half_t, float, FloatRoundStyle::round_toward_zero> {
@@ -185,7 +268,7 @@ struct NumericConverter<half_t, float, FloatRoundStyle::round_toward_zero> {
   CUTLASS_HOST_DEVICE
   static result_type convert(source_type const & flt) {
 
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     return half_t(__float2half_rz(flt));
   #else
     // software implementation rounds toward nearest even
@@ -233,7 +316,7 @@ struct NumericConverter<half_t, float, FloatRoundStyle::round_toward_zero> {
 
     return half_t::bitcast(u);
 
-  #endif // defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #endif // defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   }
 
   CUTLASS_HOST_DEVICE
@@ -295,7 +378,7 @@ struct NumericConverter<bfloat16_t, float, FloatRoundStyle::round_half_ulp_trunc
   static result_type convert(source_type const & s) {
     uint32_t x32 = reinterpret_cast<uint32_t const &>(s);
 
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
     if (::isfinite(s)) {
       x32 += 0x8000;
     }
@@ -385,7 +468,7 @@ struct NumericConverter<tfloat32_t, float, FloatRoundStyle::round_to_nearest> {
 
       // Note, the following is intentionally commented out. TF32
       // does not define the low order bits, so they may be left in
-      // an undefined state. 
+      // an undefined state.
       //
       // By not truncating these bit explicitly, we avoid an extra logical
       // operation.
@@ -470,6 +553,49 @@ struct NumericConverter<tfloat32_t, float, FloatRoundStyle::round_toward_zero> {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //
+// Conversion operator for float to tfloat32_t big and small values
+//
+/////////////////////////////////////////////////////////////////////////////////////////////////
+template <
+  FloatRoundStyle RoundBig = FloatRoundStyle::round_toward_zero,
+  FloatRoundStyle RoundSmall = FloatRoundStyle::round_half_ulp_truncate
+>
+struct NumericConverterFastF32 {
+
+  // result_type holds big tfloat32_t at idx(0) and small tfloat32_t at idx(1)
+  using result_type = Array<tfloat32_t, 2>;
+
+  // source data type
+  using source_type = float;
+
+  // rounding styles for big and small part
+  static FloatRoundStyle const kRoundBig = RoundBig;
+  static FloatRoundStyle const kRoundSmall = RoundSmall;
+
+  CUTLASS_HOST_DEVICE
+    static result_type convert(source_type const & source) {
+
+    result_type result;
+    NumericConverter<tfloat32_t, float, kRoundBig> convert_big_;
+    NumericConverter<tfloat32_t, float, kRoundSmall> convert_small_;
+
+    // convert and fill tfloat32_t big at idx 0
+    result[0] = convert_big_(source);
+
+    // convert and fill tfloat32_t small at idx 1
+    result[1] = convert_small_(source - static_cast<float>(result[0]));
+
+    return result;
+  }
+
+  CUTLASS_HOST_DEVICE
+    result_type operator()(source_type const &s) {
+    return convert(s);
+  }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//
 // Conversion and Clamp operator for Integers
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -491,12 +617,13 @@ struct NumericConverterClamp {
   CUTLASS_HOST_DEVICE
     static result_type convert(source_type const & s) {
     NumericConverter<result_type, source_type> convert_op;
-    result_type const kClamp_max =
-        (0x1U << (sizeof_bits<result_type>::value - 1)) - 1;
-    result_type const kClamp_min = -kClamp_max - 1;
-    bool is_int_min = !(s > kClamp_min);
-    bool is_int_max = !(s < kClamp_max);
-    return is_int_min ? kClamp_min : (is_int_max ? kClamp_max : convert_op(s));
+    result_type const kClamp_max = platform::numeric_limits<result_type>::max();
+    result_type const kClamp_min = platform::numeric_limits<result_type>::lowest();
+    if (s < (source_type)kClamp_min) 
+      return kClamp_min;
+    if (s > (source_type)kClamp_max)
+      return kClamp_max;
+    return convert_op(s);
   }
 
   CUTLASS_HOST_DEVICE
@@ -526,7 +653,7 @@ struct NumericConverterClamp<T, float> {
   CUTLASS_HOST_DEVICE
     static result_type convert(source_type const & s) {
 
-    NumericConverter<result_type, double> convert_op;
+    NumericConverter<result_type, float> convert_op;
     double kClamp_max, kClamp_min;
 
     if (platform::is_same<result_type, int32_t>::value ||
@@ -545,7 +672,7 @@ struct NumericConverterClamp<T, float> {
     source = fmax(source, kClamp_min);
     source = fmin(source, kClamp_max);
 
-    return convert_op(source);
+    return convert_op(float(source));
   }
 
   CUTLASS_HOST_DEVICE
@@ -626,14 +753,14 @@ struct NumericArrayConverter<half_t, float, 2, FloatRoundStyle::round_to_nearest
 
     Array<half_t, 2> result;
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       reinterpret_cast<__half2 &>(result) = __float22half2_rn(reinterpret_cast<float2 const &>(source));
     #else
       NumericConverter<half_t, float, round_style> convert_;
       result[0] = convert_(source[0]);
       result[1] = convert_(source[1]);
     #endif
-    
+
     return result;
   }
 
@@ -656,14 +783,14 @@ struct NumericArrayConverter<float, half_t, 2, Round> {
 
     Array<float, 2> result;
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       reinterpret_cast<float2 &>(result) = __half22float2(reinterpret_cast<__half2 const &>(source));
     #else
       NumericConverter<float, half_t, round_style> convert_;
       result[0] = convert_(source[0]);
       result[1] = convert_(source[1]);
     #endif
-    
+
     return result;
   }
 
@@ -756,10 +883,9 @@ struct NumericArrayConverter<float, half_t, N, Round> {
   }
 };
 
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Array<bfloat16_t, 2> <= Array<float, 2>, round to nearest
@@ -775,7 +901,7 @@ struct NumericArrayConverter<bfloat16_t, float, 2, FloatRoundStyle::round_to_nea
 
     unsigned d;
 
-    asm("cvt.rn.bf16x2.f32 %0, %1, %2;\n" : "=r"(d) : "f"(source[1]), "f"(source[0]) );
+    asm("ppu.cvt.rtte.bf16x2.f32 %0, %1, %2;\n" : "=r"(d) : "f"(source[1]), "f"(source[0]) );
 
     return reinterpret_cast<result_type const &>(d);
   }
@@ -828,14 +954,14 @@ struct NumericArrayConverter<bfloat16_t, float, N, Round> {
   }
 };
 
-#endif // if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+#endif // if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Conditional guards to enable partial specialization for packed integers 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 720) && \
-    ((__CUDACC_VER_MAJOR__ > 10) ||                     \
-     ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+// Conditional guards to enable partial specialization for packed integers
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && \
+    ((__HGGCCC_VER_MAJOR__ > 10) ||                     \
+     ((__HGGCCC_VER_MAJOR__ >= 10) && (__HGGCCC_VER_MINOR__ >= 2)))
 
 /// Partial specialization for Array<int8_t, 1> <= Array<int, 1>
 template <
@@ -849,12 +975,12 @@ struct NumericArrayConverter<int8_t, int, 1, Round> {
 
   CUTLASS_HOST_DEVICE
   static result_type convert(source_type const & source) {
-    NumericConverter<int8_t, int, Round> convert_element_;
+    NumericConverterClamp<int8_t, int> convert_element_;
 
     result_type result;
 
     result[0] = convert_element_(source[0]);
-   
+
     return result;
   }
 
@@ -880,7 +1006,7 @@ struct NumericArrayConverter<int8_t, int, 2, Round> {
     uint32_t tmp;
 
     asm volatile(
-      "cvt.pack.sat.s8.s32.b32   %0, %2, %1, 0;\n"
+      "ppu.cvt.pack.sat.s8.s32.b32   %0, %2, %1, 0;\n"
       : "=r"(tmp) : "r"(source[0]), "r"(source[1]));
 
     uint16_t out = (tmp & 0xffff);
@@ -910,8 +1036,8 @@ struct NumericArrayConverter<int8_t, int, 4, Round> {
 
     asm volatile(
       "{ .reg .u32 r4;"
-      "cvt.pack.sat.s8.s32.b32   r4, %4, %3, 0;"
-      "cvt.pack.sat.s8.s32.b32   %0, %2, %1, r4;"
+      "ppu.cvt.pack.sat.s8.s32.b32   r4, %4, %3, 0;"
+      "ppu.cvt.pack.sat.s8.s32.b32   %0, %2, %1, r4;"
       "}"
       : "=r"(out) : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]));
 
@@ -972,12 +1098,12 @@ struct NumericArrayConverter<uint8_t, int, 1, Round> {
 
   CUTLASS_HOST_DEVICE
   static result_type convert(source_type const & source) {
-    NumericConverter<uint8_t, int, Round> convert_element_;
+    NumericConverterClamp<uint8_t, int> convert_element_;
 
     result_type result;
 
     result[0] = convert_element_(source[0]);
-   
+
     return result;
   }
 
@@ -1003,7 +1129,7 @@ struct NumericArrayConverter<uint8_t, int, 2, Round> {
     uint32_t tmp;
 
     asm volatile(
-      "cvt.pack.sat.u8.s32.b32   %0, %2, %1, 0;\n"
+      "ppu.cvt.pack.sat.u8.s32.b32   %0, %2, %1, 0;\n"
       : "=r"(tmp) : "r"(source[0]), "r"(source[1]));
 
     uint16_t out = (tmp & 0xffff);
@@ -1033,8 +1159,8 @@ struct NumericArrayConverter<uint8_t, int, 4, Round> {
 
     asm volatile(
       "{ .reg .u32 r4;"
-      "cvt.pack.sat.u8.s32.b32   r4, %4, %3, 0;"
-      "cvt.pack.sat.u8.s32.b32   %0, %2, %1, r4;"
+      "ppu.cvt.pack.sat.u8.s32.b32   r4, %4, %3, 0;"
+      "ppu.cvt.pack.sat.u8.s32.b32   %0, %2, %1, r4;"
       "}"
       : "=r"(out) : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]));
 
@@ -1087,9 +1213,9 @@ struct NumericArrayConverter<uint8_t, int, N, Round> {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 750) && \
-    ((__CUDACC_VER_MAJOR__ > 10) ||                     \
-     ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && \
+    ((__HGGCCC_VER_MAJOR__ > 10) ||                     \
+     ((__HGGCCC_VER_MAJOR__ >= 10) && (__HGGCCC_VER_MINOR__ >= 2)))
 
 /// Partial specialization for Array<int4b_t, 8> <= Array<int, 8>
 template <
@@ -1108,10 +1234,10 @@ struct NumericArrayConverter<int4b_t, int, 8, Round> {
 
     asm volatile(
         "{ .reg .u32 r4;"
-        "cvt.pack.sat.s4.s32.b32   r4, %8, %7, 0;"
-        "cvt.pack.sat.s4.s32.b32   r4, %6, %5, r4;"
-        "cvt.pack.sat.s4.s32.b32   r4, %4, %3, r4;"
-        "cvt.pack.sat.s4.s32.b32   %0, %2, %1, r4;"
+        "ppu.cvt.pack.sat.s4.s32.b32   r4, %8, %7, 0;"
+        "ppu.cvt.pack.sat.s4.s32.b32   r4, %6, %5, r4;"
+        "ppu.cvt.pack.sat.s4.s32.b32   r4, %4, %3, r4;"
+        "ppu.cvt.pack.sat.s4.s32.b32   %0, %2, %1, r4;"
         "}"
         : "=r"(out)
         : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]),
@@ -1179,10 +1305,10 @@ struct NumericArrayConverter<uint4b_t, int, 8, Round> {
 
     asm volatile(
         "{ .reg .u32 r4;"
-        "cvt.pack.sat.u4.s32.b32   r4, %8, %7, 0;"
-        "cvt.pack.sat.u4.s32.b32   r4, %6, %5, r4;"
-        "cvt.pack.sat.u4.s32.b32   r4, %4, %3, r4;"
-        "cvt.pack.sat.u4.s32.b32   %0, %2, %1, r4;"
+        "ppu.cvt.pack.sat.u4.s32.b32   r4, %8, %7, 0;"
+        "ppu.cvt.pack.sat.u4.s32.b32   r4, %6, %5, r4;"
+        "ppu.cvt.pack.sat.u4.s32.b32   r4, %4, %3, r4;"
+        "ppu.cvt.pack.sat.u4.s32.b32   %0, %2, %1, r4;"
         "}"
         : "=r"(out)
         : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]),

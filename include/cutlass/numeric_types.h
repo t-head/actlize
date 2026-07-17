@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,14 +23,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! 
     \file
     \brief Top-level include for all CUTLASS numeric types.
 */
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cassert>
+#if defined(__HGGCCC_RTC__)
+#include "hggc/std/cassert"
 #else
 #include <assert.h>
 #endif
@@ -46,6 +48,20 @@ struct sizeof_bits {
   static int const value = sizeof(T) * 8;
 };
 
+
+template <size_t... Seq>
+struct index_sequence;
+
+template <size_t N, size_t... Next>
+struct index_sequence_helper : index_sequence_helper<N - 1, N - 1, Next...> {};
+
+template <size_t... Next>
+struct index_sequence_helper<0, 0, Next...> {
+  using type = index_sequence<0, Next...>;
+};
+
+template <size_t N>
+using make_index_sequence = typename index_sequence_helper<N>::type;
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 //

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines a canonical coordinate for rank=4 tensors offering named indices.
 */
@@ -105,6 +107,16 @@ struct Tensor4DCoord : public Coord<4> {
   /// Returns the channel of the coordinate
   CUTLASS_HOST_DEVICE
   Index & c() { return this->at(kC); }
+
+  // get the shape with continuous dim on first
+  // to compare with the stride to judge whether is continuous
+  Coord<4> get_ordered_shape(bool is_nhwc) {
+    if (is_nhwc) {
+      return Coord<4>({c(), w(), h(), n()});
+    } else {
+      return Coord<4>({w(), h(), c(), n()});
+    }
+  }
 
   //
   // Coord operators
@@ -247,6 +259,16 @@ struct Tensor5DCoord : public Coord<5> {
   /// Returns the channel of the coordinate
   CUTLASS_HOST_DEVICE
   Index & c() { return this->at(kC); }
+
+  // get the shape with continuous dim on first
+  // to compare with the stride to judge whether is continuous
+  Coord<5> get_ordered_shape(bool is_nhwc) {
+    if (is_nhwc) {
+      return Coord<5>({c(), w(), h(), d(), n()});
+    } else {
+      return Coord<5>({w(), h(), d(), c(), n()});
+    }
+  }
 
   //
   // Coord operators

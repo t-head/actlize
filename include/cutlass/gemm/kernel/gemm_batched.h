@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -29,6 +31,7 @@
 #pragma once
 
 #include "cutlass/cutlass.h"
+#include "cutlass/utils.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
@@ -53,6 +56,11 @@ struct GemmBatched {
   using OutputOp = typename Epilogue::OutputOp;
   using ThreadblockSwizzle = ThreadblockSwizzle_;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  #endif
+
   /// Warp count (concept: GemmShape)
   using WarpCount = typename Mma::WarpCount;
   static int const kThreadCount = 32 * WarpCount::kCount;
@@ -76,6 +84,11 @@ struct GemmBatched {
     typename OutputOp::Params epilogue;
     int batch_count;
     int gemm_k_iterations;
+    #if SAIL_FUSE_OP_EXT
+    typename Epilogue::OutputTileIterator::Params params_Extra[kExtraInputNum];
+    typename Epilogue::OutputTileIterator::TensorRef ref_Extra[kExtraInputNum];
+    int64_t stride_Epilogues[kExtraInputNum];
+    #endif
 
     //
     // Methods
@@ -98,6 +111,10 @@ struct GemmBatched {
       int64_t stride_D_,
       typename OutputOp::Params epilogue_,
       int batch_count_
+      #if SAIL_FUSE_OP_EXT
+      , typename Epilogue::OutputTileIterator::TensorRef *ref_Extra_ = nullptr
+      , int64_t *stride_Epilogues_ = nullptr
+      #endif
     ):
       problem_size(problem_size_),
       grid_tiled_shape(grid_tiled_shape_),
@@ -116,7 +133,18 @@ struct GemmBatched {
       epilogue(epilogue_),
       batch_count(batch_count_),
       gemm_k_iterations((problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK) {
-
+      #if SAIL_FUSE_OP_EXT
+      CUTLASS_PRAGMA_UNROLL
+      for (int i =0; i < kExtraInputLoopNum; i++) {
+        if (ref_Extra_) {
+          params_Extra[i] = ref_Extra_[i].layout();
+          ref_Extra[i] = ref_Extra_[i];
+        }
+        if (stride_Epilogues_) {
+          stride_Epilogues[i] = stride_Epilogues_[i];
+        }
+      }
+      #endif
     }
   };
 
@@ -151,7 +179,7 @@ struct GemmBatched {
     }
 
 
-    // Each CTA handles multiple batch indices to accommodate limited range of CUDA grid's Z dimension
+    // Each CTA handles multiple batch indices to accommodate limited range of device grid's Z dimension
     for (int batch_idx = threadblock_swizzle.get_batch_idx(); 
       batch_idx < params.batch_count; 
       batch_idx += gridDim.z) {
@@ -258,7 +286,18 @@ struct GemmBatched {
         lane_idx);
 
       // run efficient epilogue
+      #if SAIL_FUSE_OP_EXT
+      typename Epilogue::OutputTileIterator iterator_Extra[kExtraInputNum];
+
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < kExtraInputLoopNum; i++) {
+        iterator_Extra[i] = {params.params_Extra[i], params.ref_Extra[i].data(), params.problem_size.mn(), thread_idx, threadblock_offset};
+        iterator_Extra[i].add_pointer_offset(params.stride_Epilogues[i] * batch_idx);
+      }
+      epilogue.runEpilogue(output_op, iterator_D, accumulators, iterator_C, iterator_Extra);
+      #else
       epilogue(output_op, iterator_D, accumulators, iterator_C);
+      #endif
     }
   }
 };

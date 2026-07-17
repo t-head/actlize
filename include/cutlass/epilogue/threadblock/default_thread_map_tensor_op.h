@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief 
 
@@ -29,7 +31,7 @@
 
 #pragma once
 
-#include "predicated_tile_iterator.h"
+#include "cutlass/epilogue/threadblock/predicated_tile_iterator.h"
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/layout/pitch_linear.h"
 
@@ -47,7 +49,8 @@ template <
   typename WarpShape_,
   int PartitionsK,
   typename Element_,
-  int ElementsPerAccess
+  int ElementsPerAccess,
+  bool Transpose = false
 >
 struct DefaultThreadMapTensorOp {
 
@@ -85,11 +88,24 @@ struct DefaultThreadMapTensorOp {
   //
   // ThreadMap
   //
-  
+
+  using ThreadMapShape = typename platform::conditional<
+                          Transpose == false,
+                          OutputTileShape<ThreadblockShape::kN, Detail::kTensorOpRows, Detail::WarpCount::kM, 1, 1>,
+                          OutputTileShape<ThreadblockShape::kM, Detail::kTensorOpRows, Detail::WarpCount::kN, 1, 1>
+                         >::type;
+
+  using ThreadMapCount = typename platform::conditional<
+                          Transpose == false,
+                          OutputTileShape<1, WarpShape::kM / Detail::kTensorOpRows, 1, 1, WarpShape::kM / Detail::kTensorOpRows>,
+                          OutputTileShape<1, WarpShape::kN / Detail::kTensorOpRows, 1, 1, WarpShape::kN / Detail::kTensorOpRows>
+                         >::type;
+
+
   /// ThreadMap to be used by epilogue::PredicatedTileIterator satisfying concept OutputTileThreadMap
   using Type = OutputTileOptimalThreadMap <
-    OutputTileShape<ThreadblockShape::kN, Detail::kTensorOpRows, Detail::WarpCount::kM, 1, 1>,
-    OutputTileShape<1, WarpShape::kM / Detail::kTensorOpRows, 1, 1, WarpShape::kM / Detail::kTensorOpRows>,
+    ThreadMapShape,
+    ThreadMapCount,
     Detail::kThreads,
     kElementsPerAccess,
     sizeof_bits<Element>::value

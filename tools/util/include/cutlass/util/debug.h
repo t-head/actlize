@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -40,11 +41,11 @@
 /**
  * Formats and prints the given message to stdout
  */
-#if !defined(CUDA_LOG)
-#if !defined(__CUDA_ARCH__)
-#define CUDA_LOG(format, ...) printf(format, __VA_ARGS__)
+#if !defined(PPU_LOG)
+#if !defined(__HGGC_ARCH__)
+#define PPU_LOG(format, ...) printf(format, __VA_ARGS__)
 #else
-#define CUDA_LOG(format, ...)                              \
+#define PPU_LOG(format, ...)                              \
   printf("[block (%d,%d,%d), thread (%d,%d,%d)]: " format, \
          blockIdx.x,                                       \
          blockIdx.y,                                       \
@@ -59,11 +60,11 @@
 /**
  * Formats and prints the given message to stdout only if DEBUG is defined
  */
-#if !defined(CUDA_LOG_DEBUG)
+#if !defined(PPU_LOG_DEBUG)
 #ifdef DEBUG
-#define CUDA_LOG_DEBUG(format, ...) CUDA_LOG(format, __VA_ARGS__)
+#define PPU_LOG_DEBUG(format, ...) PPU_LOG(format, __VA_ARGS__)
 #else
-#define CUDA_LOG_DEBUG(format, ...)
+#define PPU_LOG_DEBUG(format, ...)
 #endif
 #endif
 
@@ -71,20 +72,20 @@
  * \brief The corresponding error message is printed to \p stderr (or \p stdout in device code)
  * along with the supplied source context.
  *
- * \return The CUDA error.
+ * \return The device error.
  */
-__host__ CUTLASS_DEVICE cudaError_t cuda_perror_impl(cudaError_t error,
+__host__ CUTLASS_DEVICE hggcError_t device_perror_impl(hggcError_t error,
                                                      const char* filename,
                                                      int line) {
   (void)filename;
   (void)line;
   if (error) {
-#if !defined(__CUDA_ARCH__)
+#if !defined(__HGGC_ARCH__)
     fprintf(
-        stderr, "CUDA error %d [%s, %d]: %s\n", error, filename, line, cudaGetErrorString(error));
+        stderr, "device error %d [%s, %d]: %s\n", error, filename, line, hggcGetErrorString(error));
     fflush(stderr);
 #else
-    printf("CUDA error %d [%s, %d]\n", error, filename, line);
+    printf("device error %d [%s, %d]\n", error, filename, line);
 #endif
   }
   return error;
@@ -93,16 +94,16 @@ __host__ CUTLASS_DEVICE cudaError_t cuda_perror_impl(cudaError_t error,
 /**
  * \brief Perror macro
  */
-#ifndef CUDA_PERROR
-#define CUDA_PERROR(e) cuda_perror_impl((cudaError_t)(e), __FILE__, __LINE__)
+#ifndef PPU_PERROR
+#define PPU_PERROR(e) device_perror_impl((hggcError_t)(e), __FILE__, __LINE__)
 #endif
 
 /**
  * \brief Perror macro with exit
  */
-#ifndef CUDA_PERROR_EXIT
-#define CUDA_PERROR_EXIT(e)                                     \
-  if (cuda_perror_impl((cudaError_t)(e), __FILE__, __LINE__)) { \
+#ifndef PPU_PERROR_EXIT
+#define PPU_PERROR_EXIT(e)                                     \
+  if (device_perror_impl((hggcError_t)(e), __FILE__, __LINE__)) { \
     exit(1);                                                    \
   }
 #endif
@@ -110,11 +111,11 @@ __host__ CUTLASS_DEVICE cudaError_t cuda_perror_impl(cudaError_t error,
 /**
  * \brief Perror macro only if DEBUG is defined
  */
-#ifndef CUDA_PERROR_DEBUG
+#ifndef PPU_PERROR_DEBUG
 #ifdef DEBUG
-#define CUDA_PERROR_DEBUG(e) CUDA_PERROR(e)
+#define PPU_PERROR_DEBUG(e) PPU_PERROR(e)
 #else
-#define CUDA_PERROR_DEBUG(e) (e)
+#define PPU_PERROR_DEBUG(e) (e)
 #endif
 #endif
 

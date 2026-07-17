@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,11 +23,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief This defines a "fragment" iterator for visiting the fragments of an accumulator tile
       that participate in one warp-level store operation.
 
-      Typically, the accumulator tile is the largest single block of register-backed storage 
+      Typically, the accumulator tile is the largest single block of register-backed storage
       within the kernel. Storing it to memory is best accomplished by partitioning it into
       smaller tiles and storing these sequentially.
 
@@ -50,7 +52,7 @@ namespace warp {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// 
+///
 template <
   typename WarpShape,         ///< shape of warp-level GEMM (concept: MatrixShape)
   typename OperatorShape,     ///< matrix multiply operation shape (concept: gemm::GemmShape)
@@ -82,12 +84,20 @@ public:
   using Policy = TensorOpPolicy<WarpShape, OperatorShape, Layout>;
 
   /// This is the fragment size produced by one access of the iterator.
+#if (defined(__HGGCCC__) || defined(__HGGCCC_RTC__)) && ACOMPUTE_VERSION == 10000
+  // Policy::OperatorCount::kColumn is half when mma size double, should *2 to maintain register size
+  // can't change Policy::kElementsPerAccess because it will affect smem padding
   using Fragment = Array<
-    complex<OperatorElementC>, 
+    complex<OperatorElementC>,
+    Policy::kRegPerFragmentRow * Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#else
+  using Fragment = Array<
+    complex<OperatorElementC>,
     Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#endif
 
   /// Size of one part of accumulator of 3-part accumulator in units of number of OperatorElementC
-  static int const kElementsAccumulatorPerPart = 
+  static int const kElementsAccumulatorPerPart =
     OperatorFragmentC::kElements * Policy::OperatorCount::kRow * Policy::OperatorCount::kColumn;
 
   /// Offset into the accumulator fragment part 1
@@ -102,7 +112,7 @@ public:
   /// This is the complete warp-level accumulator tile holding part1, part2, and part3
   using AccumulatorTile = Array<OperatorElementC, kElementsAccumulatorPerPart * 3>;
 
-  /// This is the complete warp-level accumulator tile holding final output of complex<T> type 
+  /// This is the complete warp-level accumulator tile holding final output of complex<T> type
   using OutputAccumulatorTile = Array<complex<OperatorElementC>, kElementsAccumulatorPerPart>;
 
   /// Number of times this iterator can be incremented
@@ -131,8 +141,8 @@ public:
 
   /// Constructs an iterator
   CUTLASS_HOST_DEVICE
-  FragmentIteratorGaussianComplexTensorOp(AccumulatorTile const &accum): 
-    accumulators_(reinterpret_cast<AccessType const *>(&accum)), 
+  FragmentIteratorGaussianComplexTensorOp(AccumulatorTile const &accum):
+    accumulators_(reinterpret_cast<AccessType const *>(&accum)),
     index_(0) {
   }
 
@@ -161,7 +171,7 @@ public:
     CUTLASS_PRAGMA_UNROLL
     for (int n = 0; n < Policy::OperatorCount::kColumn; ++n) {
 
-      int accumulator_access_offset = 
+      int accumulator_access_offset =
         index + n * Policy::kAccumulatorColumnStride / Policy::kElementsPerAccess;
 
       auto const & part1_accum_array = accumulators_[accumulator_access_offset + kPart1Index];
@@ -173,7 +183,7 @@ public:
       for (int i = 0; i < Policy::kElementsPerAccess; ++i) {
 
         frag_ptr[n][i].real() = part1_accum_array[i] - part3_accum_array[i];
-        frag_ptr[n][i].imag() = part1_accum_array[i] + part2_accum_array[i]; 
+        frag_ptr[n][i].imag() = part1_accum_array[i] + part2_accum_array[i];
       }
     }
   }

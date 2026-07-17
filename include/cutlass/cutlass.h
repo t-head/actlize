@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -43,18 +44,16 @@
 
 namespace cutlass {
 
+
+typedef size_t CUsize;
+//typedef int64_t  CUint64;
+//typedef uint64_t CUuint64;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__NVCC__) || (defined(__clang__) && defined(__CUDA__))
+// __HGGCCC__ is always defined in the PPU/hgcc build chain
 #define CUTLASS_HOST_DEVICE __forceinline__ __device__ __host__
 #define CUTLASS_DEVICE __forceinline__ __device__
-#elif defined(__CUDACC_RTC__)
-#define CUTLASS_HOST_DEVICE __forceinline__ __device__
-#define CUTLASS_DEVICE __forceinline__ __device__
-#else
-#define CUTLASS_HOST_DEVICE inline
-#define CUTLASS_DEVICE inline
-#endif
 
 /// Status code returned by CUTLASS operations
 enum class Status {
@@ -103,7 +102,6 @@ static char const* cutlassGetStatusString(cutlass::Status status) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// CUDA 10.1 introduces the mma instruction
 #if !defined(CUTLASS_ENABLE_TENSOR_CORE_MMA)
 #define CUTLASS_ENABLE_TENSOR_CORE_MMA 0
 #endif
@@ -114,14 +112,21 @@ static char const* cutlassGetStatusString(cutlass::Status status) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// CUTLASS_PRAGMA_(UNROLL|NO_UNROLL) optimization directives for the CUDA compiler.
-#if defined(__CUDA_ARCH__)
-  #if defined(__CUDACC_RTC__) || (defined(__clang__) && defined(__CUDA__))
+// CUTLASS_PRAGMA_(UNROLL|NO_UNROLL) optimization directives for the device compiler.
+#if defined(__HGGC_ARCH__)
+  #if defined(__HGGCCC_RTC__) || (defined(__clang__) && defined(__HGGC__))
     #define CUTLASS_PRAGMA_UNROLL _Pragma("unroll")
     #define CUTLASS_PRAGMA_NO_UNROLL _Pragma("unroll 1")
+    #define CUTLASS_PRAGMA_UNROLL_NUM(unroll_num) _Pragma(#unroll_num)
   #else
-    #define CUTLASS_PRAGMA_UNROLL #pragma unroll
-    #define CUTLASS_PRAGMA_NO_UNROLL #pragma unroll 1
+    #if SAIL_SIMULATE_CUTLASS_MMA
+      #define CUTLASS_PRAGMA_UNROLL
+      #define CUTLASS_PRAGMA_UNROLL_NUM(num)
+    #else
+      #define CUTLASS_PRAGMA_UNROLL _Pragma("unroll")
+      #define CUTLASS_PRAGMA_UNROLL_NUM(unroll_num) _Pragma(#unroll_num)
+    #endif
+    #define CUTLASS_PRAGMA_NO_UNROLL _Pragma("unroll 1")
   #endif
 
   #define CUTLASS_GEMM_LOOP CUTLASS_PRAGMA_NO_UNROLL
@@ -141,25 +146,21 @@ static const int NUM_THREADS_PER_HALF_WARP = NUM_THREADS_PER_WARP / 2;
 static const int NUM_THREADS_PER_QUAD = 4;
 static const int NUM_THREADS_PER_QUAD_PAIR = NUM_THREADS_PER_QUAD * 2;
 
-#if defined(__NVCC__) || (defined(__clang__) && defined(__CUDA__))
-
 /// Computes laneId within a warp
 CUTLASS_DEVICE
 int LaneId() {
   int ret; 
-  asm ("mov.u32 %0, %%laneid;" : "=r"(ret) : );
+  asm ("ppu.mov.u32 %0, %%laneid;" : "=r"(ret) : );
   return ret;
 }
 
-/// Computes SM number the thread is running on
+/// Computes CU number the thread is running on
 CUTLASS_DEVICE
 int SmId() {
   int ret; 
-  asm ("mov.u32 %0, %%smid;" : "=r"(ret) : );
+  asm ("ppu.mov.u32 %0, %%cuid;" : "=r"(ret) : );
   return ret;
 }
-
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

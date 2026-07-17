@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Statically sized array of elements that accommodates all CUTLASS-supported numeric types
            and is safe to use in a union.
@@ -58,6 +60,16 @@ public:
     uint32_t
   >::type;
 
+  using T_Storage = typename platform::conditional<
+    ((sizeof_bits<T>::value % 32) != 0),
+    typename platform::conditional<
+      ((sizeof_bits<T>::value % 16) != 0),
+      uint8_t,
+      uint16_t
+    >::type,
+    uint32_t
+  >::type;
+
   /// Element type
   using Element = T;
 
@@ -65,10 +77,10 @@ public:
   static int const kElementsPerStoredItem = (sizeof(Storage) * 8) / sizeof_bits<T>::value;
 
   /// Number of storage elements
-  static size_t const kStorageElements = N / kElementsPerStoredItem;
+  static CUsize const kStorageElements = N / kElementsPerStoredItem;
 
   /// Number of logical elements
-  static size_t const kElements = N;
+  static CUsize const kElements = N;
 
   /// Bitmask for covering one item
   static Storage const kMask = ((Storage(1) << sizeof_bits<T>::value) - 1);
@@ -78,7 +90,7 @@ public:
   //
 
   typedef T value_type;
-  typedef size_t size_type;
+  typedef CUsize size_type;
   typedef ptrdiff_t difference_type;
   typedef value_type *pointer;
   typedef value_type const *const_pointer;
@@ -108,8 +120,7 @@ public:
     /// Assignment
     CUTLASS_HOST_DEVICE
     reference &operator=(T x) {
-      Storage item = (reinterpret_cast<Storage const &>(x) & kMask);
-
+      Storage item = static_cast<Storage>(reinterpret_cast<T_Storage const &>(x)) & kMask;
       Storage kUpdateMask = Storage(~(kMask << (idx_ * sizeof_bits<T>::value)));
       *ptr_ = Storage(((*ptr_ & kUpdateMask) | (item << idx_ * sizeof_bits<T>::value)));
 

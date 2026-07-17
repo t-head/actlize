@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,19 +23,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*!
     \file
     \brief Defines a proxy class for storing Tensor Float 32 data type.
 */
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <cmath>
 #include <limits>
 #include <cstdint>
 #endif
 
 #include "cutlass/cutlass.h"
+
+#if (SAIL_TYPE_CONVERT == 1)
+  #include <hggc_mma.h>
+#endif
 
 namespace cutlass {
 
@@ -67,14 +73,26 @@ struct alignas(4) tfloat32_t {
   static tfloat32_t round_half_ulp_truncate(float const &s) {
     uint32_t x = reinterpret_cast<uint32_t const &>(s);
 
-    #if defined(__CUDA_ARCH__)
-    if (::isfinite(s)) {
-      x += 0x1000u;
-    }
+    #if defined(__HGGC_ARCH__)
+      #if SAIL_TYPE_CONVERT == 2
+        x += 0x1000u;
+      #elif SAIL_TYPE_CONVERT == 1
+        float temp = awmma::__float_to_tf32_rna(s);
+        x = *(reinterpret_cast<uint32_t *>(&temp));
+      #else
+        if (::isfinite(s)) {
+          x += 0x1000u;
+        }
+      #endif
+    #elif defined(__HGGC_ARCH__)
+      #if (SAIL_TYPE_CONVERT == 1) || (SAIL_TYPE_CONVERT == 0)
+      if (::isfinite(s))
+      #endif
+        x += 0x1000u;
     #else
-    if (std::isfinite(s)) {
-      x += 0x1000u;
-    }
+      if (std::isfinite(s)) {
+        x += 0x1000u;
+      }
     #endif
 
     return tfloat32_t::bitcast(x);
@@ -224,7 +242,7 @@ int fpclassify(cutlass::tfloat32_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::tfloat32_t sqrt(cutlass::tfloat32_t const& h) {
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
   return cutlass::tfloat32_t(sqrtf(float(h)));
 #else
   return cutlass::tfloat32_t(std::sqrt(float(h)));
@@ -253,7 +271,7 @@ tfloat32_t copysign(tfloat32_t const& a, tfloat32_t const& b) {
 
 namespace std {
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 /// Numeric limits
 template <>
 struct numeric_limits<cutlass::tfloat32_t> {

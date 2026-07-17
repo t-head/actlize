@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Metaprogram for determining the mapping of output elements to threads for epilogue tiles.
 
@@ -65,6 +67,58 @@ struct OutputTileShape {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+
+template <typename Iterations, typename Delta>
+struct OutputTileThreadMapHelpers {
+
+  /// Determines the iteration index of a vector access according to the thread map
+  CUTLASS_HOST_DEVICE
+  static void iteration_index(
+    int &column_idx,
+    int &row_idx,
+    int &group_idx,
+    int &cluster_idx,
+    int &tile_idx,
+    int iter_idx) {
+
+    column_idx = iter_idx % Iterations::kColumn;
+    int residual   = iter_idx / Iterations::kColumn;
+
+    row_idx    = residual % Iterations::kRow;
+    residual       = residual / Iterations::kRow;
+
+    group_idx  = residual % Iterations::kGroup;
+    residual       = residual / Iterations::kGroup;
+
+    cluster_idx = residual % Iterations::kCluster;
+    tile_idx    = residual / Iterations::kCluster;
+  }
+
+  /// Computes the offset of a given vector access
+  CUTLASS_HOST_DEVICE
+  static MatrixCoord iteration_offset(int iter_idx) {
+
+    int column_idx;
+    int row_idx;
+    int group_idx;
+    int cluster_idx;
+    int tile_idx;
+
+    iteration_index(column_idx, row_idx, group_idx, cluster_idx, tile_idx, iter_idx);
+
+    return
+      MatrixCoord(
+        row_idx     * Delta::kRow     +
+        group_idx   * Delta::kGroup   +
+        cluster_idx * Delta::kCluster +
+        tile_idx    * Delta::kTile,
+
+        column_idx  * Delta::kColumn);
+  }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template <
   typename ThreadMap_,
@@ -180,13 +234,21 @@ struct RowArrangement<Shape, WarpsRemaining, ElementsPerAccess, ElementSize, tru
     static int const kTargetAccessRows = kWarpSize / kTargetMemoryAccessWidth;
   };
 
-  static int const kAccessWidth = 
+
+#if ENABLE_AIU
+  static int const kAccessWidth =
+    (Detail::kTargetAccessRows > Detail::kShapeRow ?
+      kWarpSize / Detail::kShapeRow
+      : const_min(kWarpSize, kMemoryAccessSize / (kElementsPerAccess * kElementSize / 8)));
+#else
+  static int const kAccessWidth =
     (Detail::kTargetAccessRows > Detail::kShapeRow ?
       kWarpSize / Detail::kShapeRow
       : const_min(
           Detail::kShapeWidth,
         const_min(kWarpSize, kMemoryAccessSize / (kElementsPerAccess * kElementSize / 8))
         ));
+#endif
 
   static int const kAccessRows =
     (Detail::kTargetAccessRows > Detail::kShapeRow ?
@@ -196,10 +258,17 @@ struct RowArrangement<Shape, WarpsRemaining, ElementsPerAccess, ElementSize, tru
   static int const kIterationsRow = Detail::kShapeRow / kAccessRows;
   static int const kDeltaRow = kAccessRows;
 
+#if ENABLE_AIU
+  /// aiu need 128B unaligned supported, such as half 80/160 w/ alignment 8.
+  /// but require predition in store iterator.
+  static int const kIterationsColumn = ceil_div(Detail::kShapeWidth, kAccessWidth);
+#else
   static int const kIterationsColumn = Detail::kShapeWidth / kAccessWidth;
+  static_assert( kAccessWidth * kElementsPerAccess <= Shape::kColumn, "Accessing too many elements per access");
+#endif
+
   static int const kDeltaColumn = kAccessWidth * kElementsPerAccess;
 
-  static_assert( kAccessWidth * kElementsPerAccess <= Shape::kColumn, "Accessing too many elements per access");
   static_assert( kIterationsColumn > 0, "Iteration Count Column must be > 0" );
   static_assert( kIterationsRow > 0, "Iteration Count Row must be > 0" );
 
@@ -365,6 +434,11 @@ struct OutputTileOptimalThreadMap {
     );
   }
 
+  /// Computes the offset of a given vector access
+  CUTLASS_HOST_DEVICE
+  static MatrixCoord iteration_offset(int iter_idx) {
+    return OutputTileThreadMapHelpers<Iterations, Delta>::iteration_offset(iter_idx);
+  }
   /// Compacted thread map in which the 4D region is contiguous
   struct CompactedThreadMap {
 

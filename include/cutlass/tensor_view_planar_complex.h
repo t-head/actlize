@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines a structure containing strides and a pointer to tensor data.
 
@@ -36,7 +38,7 @@
 
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <cmath>
 #endif
 
@@ -215,7 +217,7 @@ class TensorViewPlanarComplex : public TensorRefPlanarComplex<Element_, Layout_>
 
   /// Returns the number of scalar elements needed to store tensor.
   CUTLASS_HOST_DEVICE
-  size_t capacity() const {
+  CUsize capacity() const {
     return Base::layout().capacity(extent_);
   }
 

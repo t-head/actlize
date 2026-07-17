@@ -1,27 +1,34 @@
-/******************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2011-2021, NVIDIA CORPORATION.  All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are not permitted.
+ * Redistribution and use in source and binary forms, with or without modification, are permitted
+ * provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright notice, this list of
+ *       conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright notice, this list of
+ *       conditions and the following disclaimer in the documentation and/or other materials
+ *       provided with the distribution.
+ *     * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
+ *       to endorse or promote products derived from this software without specific prior written
+ *       permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NVIDIA CORPORATION BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL NVIDIA CORPORATION BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TOR (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- ******************************************************************************/
+ **************************************************************************************************/
 
 #pragma once
 
 /**
  * \file
- * \brief C++ interface to CUDA device memory management functions.
+ * \brief C++ interface to device memory management functions.
  */
 
 #include <memory>
@@ -37,7 +44,7 @@ namespace device_memory {
  * Allocation lifetime
  ******************************************************************************/
 
-/// Allocate a buffer of \p count elements of type \p T on the current CUDA device
+/// Allocate a buffer of \p count elements of type \p T on the current device
 template <typename T>
 T* allocate(size_t count = 1) {
 
@@ -46,10 +53,10 @@ T* allocate(size_t count = 1) {
 
   bytes = count * sizeof(T);
 
-  cudaError_t cuda_error = cudaMalloc((void**)&ptr, bytes);
+  hggcError_t hggc_error = hggcMalloc((void**)&ptr, bytes);
 
-  if (cuda_error != cudaSuccess) {
-    throw cuda_exception("Failed to allocate memory", cuda_error);
+  if (hggc_error != hggcSuccess) {
+    throw hggc_exception("Failed to allocate memory", hggc_error);
   }
 
   return ptr;
@@ -59,9 +66,9 @@ T* allocate(size_t count = 1) {
 template <typename T>
 void free(T* ptr) {
   if (ptr) {
-    cudaError_t cuda_error = (cudaFree(ptr));
-    if (cuda_error != cudaSuccess) {
-      throw cuda_exception("Failed to free device memory", cuda_error);
+    hggcError_t hggc_error = (hggcFree(ptr));
+    if (hggc_error != hggcSuccess) {
+      throw hggc_exception("Failed to free device memory", hggc_error);
     }
   }
 }
@@ -71,34 +78,34 @@ void free(T* ptr) {
  ******************************************************************************/
 
 template <typename T>
-void copy(T* dst, T const* src, size_t count, cudaMemcpyKind kind) {
+void copy(T* dst, T const* src, size_t count, hggcMemcpyKind kind) {
   size_t bytes = count * sizeof_bits<T>::value / 8;
   if (bytes == 0 && count > 0)
     bytes = 1;
-  cudaError_t cuda_error = (cudaMemcpy(dst, src, bytes, kind));
-  if (cuda_error != cudaSuccess) {
-    throw cuda_exception("cudaMemcpy() failed", cuda_error);
+  hggcError_t hggc_error = (hggcMemcpy(dst, src, bytes, kind));
+  if (hggc_error != hggcSuccess) {
+    throw hggc_exception("hggcMemcpy() failed", hggc_error);
   }
 }
 
 template <typename T>
 void copy_to_device(T* dst, T const* src, size_t count = 1) {
-  copy(dst, src, count, cudaMemcpyHostToDevice);
+  copy(dst, src, count, hggcMemcpyHostToDevice);
 }
 
 template <typename T>
 void copy_to_host(T* dst, T const* src, size_t count = 1) {
-  copy(dst, src, count, cudaMemcpyDeviceToHost);
+  copy(dst, src, count, hggcMemcpyDeviceToHost);
 }
 
 template <typename T>
 void copy_device_to_device(T* dst, T const* src, size_t count = 1) {
-  copy(dst, src, count, cudaMemcpyDeviceToDevice);
+  copy(dst, src, count, hggcMemcpyDeviceToDevice);
 }
 
 template <typename T>
 void copy_host_to_host(T* dst, T const* src, size_t count = 1) {
-  copy(dst, src, count, cudaMemcpyHostToHost);
+  copy(dst, src, count, hggcMemcpyHostToHost);
 }
 
 /// Copies elements from device memory to host-side range
@@ -125,13 +132,13 @@ template <typename T>
 class DeviceAllocation {
 public:
 
-  /// Delete functor for CUDA device memory
+  /// Delete functor for device memory
   struct deleter {
     void operator()(T* ptr) {
-      cudaError_t cuda_error = (cudaFree(ptr));
-      if (cuda_error != cudaSuccess) {
+      hggcError_t hggc_error = (hggcFree(ptr));
+      if (hggc_error != hggcSuccess) {
         // noexcept
-        //                throw cuda_exception("cudaFree() failed", cuda_error);
+        //                throw hggc_exception("hggcFree() failed", hggc_error);
         return;
       }
     }
@@ -142,7 +149,7 @@ public:
   // Data members
   //
 
-  /// Number of elements of T allocated on the current CUDA device
+  /// Number of elements of T allocated on the current device
   size_t capacity;
 
   /// Smart pointer
@@ -175,11 +182,11 @@ public:
   /// Constructor: allocates no memory
   DeviceAllocation() : capacity(0) {}
 
-  /// Constructor: allocates \p capacity elements on the current CUDA device
+  /// Constructor: allocates \p capacity elements on the current device
   DeviceAllocation(size_t _capacity) : 
     smart_ptr(device_memory::allocate<T>(_capacity)), capacity(_capacity) {}
 
-  /// Constructor: allocates \p capacity elements on the current CUDA device taking ownership of the allocation
+  /// Constructor: allocates \p capacity elements on the current device taking ownership of the allocation
   DeviceAllocation(T *ptr, size_t _capacity) : smart_ptr(ptr), capacity(_capacity) {}
 
   /// Copy constructor

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Kernel performing a reduction over one or more ranks of an affine tensor
 */
@@ -167,10 +169,10 @@ struct TensorReduction {
     void *device_workspace_ptr = nullptr,
     ElementCompute reduction_identity = ElementCompute(),
     ReductionOp reduction_op = ReductionOp(),
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
 
     int64_t src_stride[3];
-    int64_t dst_stride[2];
+    int64_t dst_stride[3];
 
     switch (reduction_index) {
     case 0:
@@ -236,7 +238,7 @@ struct TensorReduction {
     void *device_workspace_ptr = nullptr,
     ElementCompute reduction_identity = ElementCompute(),
     ReductionOp reduction_op = ReductionOp(),
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
 
     return reduce(
       dst_ref, 

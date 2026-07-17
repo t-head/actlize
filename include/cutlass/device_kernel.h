@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for generic CUTLASS kernel.
 */
@@ -36,7 +38,9 @@ namespace cutlass {
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Generic CUTLASS kernel template.
-template <typename Operator>
+template <typename Operator, int MaxThreads = 512>
+// max 512 threads per thread block for RA/Spill issue
+__launch_bounds__(MaxThreads)
 __global__
 void Kernel(typename Operator::Params params) {
   // Dynamic shared memory base pointer

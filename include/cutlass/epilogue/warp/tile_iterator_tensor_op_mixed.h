@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,8 +23,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-    \brief 
+    \brief
 */
 
 #pragma once
@@ -32,7 +34,7 @@
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/pitch_linear.h"
 
-#include "cutlass/arch/memory_sm75.h"
+#include "cutlass/arch/memory_ppu.h"
 #include "cutlass/epilogue/warp/tensor_op_policy.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +47,7 @@ namespace warp {
 
 /// Template for reading and writing tiles of accumulators to shared memory. This is optimized
 /// for mixed-precision epilogues in which the accumulators are 32b in width, but the output
-/// data type is smaller. 
+/// data type is smaller.
 template <
   typename WarpShape_,            ///< shape of warp-level GEMM (concept: GemmShape)
   typename OperatorShape_,        ///< matrix multiply operation shape (concept: gemm::GemmShape)
@@ -78,9 +80,17 @@ public:
   >;
 
   /// This is the fragment size produced by one access of the iterator.
+#if ACOMPUTE_VERSION == 10000
+  // Policy::OperatorCount::kColumn is half when mma size double, should *2 to maintain register size
+  // can't change Policy::kElementsPerAccess because it will affect smem padding
   using Fragment = Array<
-    Element, 
+    Element,
+    Policy::kRegPerFragmentRow * Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#else
+  using Fragment = Array<
+    Element,
     Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#endif
 
   /// This is the complete warp-level accumulator tile.
   //using AccumulatorTile = typename Operator::FragmentC;
@@ -93,7 +103,7 @@ public:
     static int const kLanesInQuad = 4;
 
     /// Number of pointers needed to write accumulators
-    static int const kPointerCount = 
+    static int const kPointerCount =
       (OutputElementCount * sizeof_bits<Element>::value) / (const_min(128, OutputElementCount * sizeof_bits<Element>::value));
 
     static_assert(kPointerCount <= 4, "Can only accommodate four pointers at present.");
@@ -141,17 +151,20 @@ public:
     unsigned lane_id
   ):
     stride_(ref.stride()[0] / Policy::kElementsPerAccess),
-    warp_column_(0) { 
+    warp_column_(0) {
 
-    int quad_id = (lane_id / Detail::kLanesInQuad); 
+    int quad_id = (lane_id / Detail::kLanesInQuad);
     int lane_in_quad = (lane_id % Detail::kLanesInQuad);
 
     CUTLASS_PRAGMA_UNROLL
     for (int64_t i = 0; i < Detail::kPointerCount; ++i) {
       AccessType *ptr = reinterpret_cast<AccessType *>(ref.data()) + quad_id * stride_;
+#if ACOMPUTE_VERSION == 10000
+      ptr += lane_in_quad;
+#else
       int column_idx = (lane_in_quad % 2) + (((lane_in_quad / 2) + i) % Detail::kPointerCount) * 2;
-
       ptr += column_idx;
+#endif
 
       if (i == 0) {
         pointers_[0 % Detail::kPointerCount] = ptr;
@@ -183,10 +196,10 @@ public:
   ///< advances in units of whole tiles along the logical coordinate space of the tensor
   CUTLASS_HOST_DEVICE
   TileIteratorTensorOpMixed & add_tile_offset(TensorCoord const &tile_offset) {
-    
+
     CUTLASS_PRAGMA_UNROLL
     for (int64_t i = 0; i < Detail::kPointerCount; ++i) {
-      pointers_[i] += tile_offset.row() * Shape::kRow * stride_ + 
+      pointers_[i] += tile_offset.row() * Shape::kRow * stride_ +
         tile_offset.column() * Shape::kColumn / Policy::kElementsPerAccess;
     }
 
@@ -208,11 +221,22 @@ public:
     AccessType const *frag_ptr = reinterpret_cast<AccessType const *>(&frag);
 
     CUTLASS_PRAGMA_UNROLL
+#if ACOMPUTE_VERSION == 10000
+    // Policy::OperatorCount::kColumn is half when mma size is double
+    for (int64_t n = 0; n < Policy::OperatorCount::kColumn * Policy::kRegPerFragmentRow; ++n) {
+#else
     for (int64_t n = 0; n < Policy::OperatorCount::kColumn; ++n) {
+#endif
 
       int column_idx = warp_column_ + n * Detail::kLanesInQuad * Policy::kElementsPerAccess;
       int ptr_idx = ((column_idx * sizeof_bits<Element>::value) / 1024) % Detail::kPointerCount;
 
+#if ACOMPUTE_VERSION == 10000
+      AccessType *smem_ptr = pointers_[0];
+      const int permuted_n = ptr_idx == 0 ? n : n^1;
+      const int offset = permuted_n * Detail::kLanesInQuad + pointer_offset / Policy::kElementsPerAccess;
+      smem_ptr[offset] = frag_ptr[n];
+#else
       AccessType *ptr;
       if (ptr_idx == 0) {
         ptr = pointers_[0 % Detail::kPointerCount];
@@ -229,7 +253,7 @@ public:
 
       int offset = n * Detail::kLanesInQuad + pointer_offset / Policy::kElementsPerAccess;
 #if 0
-      // Using inline PTX to avoid generic memory
+      // Using inline device assembly to avoid generic memory
       AccessType *smem_ptr = pointers_[ptr_idx];
       smem_ptr[offset] = frag_ptr[n];
 #else
@@ -238,9 +262,10 @@ public:
       uint32_t offset_in_bytes = offset * sizeof(AccessType);
 
       asm volatile(
-        "{ .reg .u32 smem_ptr; add.u32 smem_ptr, %0, %1; st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
+        "{ .reg .u32 smem_ptr; ppu.add.u32 smem_ptr, %0, %1; ppu.st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
         : : "r"(smem_addr), "r"(offset_in_bytes), "r"(data[0]), "r"(data[1])
       );
+#endif
 #endif
     }
   }
@@ -258,7 +283,12 @@ public:
     AccessType *frag_ptr = reinterpret_cast<AccessType *>(&frag);
 
     CUTLASS_PRAGMA_UNROLL
+#if ACOMPUTE_VERSION == 10000
+    // Policy::OperatorCount::kColumn is half when mma size is double
+    for (int64_t n = 0; n < Policy::OperatorCount::kColumn * 2; ++n) {
+#else
     for (int64_t n = 0; n < Policy::OperatorCount::kColumn; ++n) {
+#endif
 
       int column_idx = warp_column_ + n * Detail::kLanesInQuad * Policy::kElementsPerAccess;
       int ptr_idx = ((column_idx * sizeof_bits<Element>::value) / 1024) % Detail::kPointerCount;
@@ -305,9 +335,17 @@ public:
   >;
 
   /// This is the fragment size produced by one access of the iterator.
+#if ACOMPUTE_VERSION == 10000
+  // Policy::OperatorCount::kColumn is half when mma size double, should *2 to maintain register size
+  // can't change Policy::kElementsPerAccess because it will affect smem padding
   using Fragment = Array<
-    Element, 
+    Element,
+    Policy::kRegPerFragmentRow * Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#else
+  using Fragment = Array<
+    Element,
     Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#endif
 
   /// This is the complete warp-level accumulator tile.
   //using AccumulatorTile = typename Operator::FragmentC;
@@ -322,7 +360,7 @@ public:
     /// Number of pointers needed to write accumulators
     static int const kPointerCount = 2;
 
-    /// Offsets added 
+    /// Offsets added
     static int const kOffsetCount = 4;
 
     static_assert(sizeof(Element) == 4, "This can only be used with 32b accumulator data types (f32, s32).");
@@ -366,9 +404,9 @@ public:
     TensorRef const &ref,
     unsigned lane_id
   ):
-    stride_(ref.stride()[0] / AccessType::kElements) { 
+    stride_(ref.stride()[0] / AccessType::kElements) {
 
-    int quad_id = (lane_id / Detail::kLanesInQuad); 
+    int quad_id = (lane_id / Detail::kLanesInQuad);
     int lane_in_quad = (lane_id % Detail::kLanesInQuad);
 
     CUTLASS_PRAGMA_UNROLL
@@ -377,7 +415,7 @@ public:
       int column_idx = lane_in_quad ^ (i * 2);
 
       ptr += column_idx;
-    
+
       if (i == 0) {
         pointers_[0] = ptr;
       }
@@ -407,13 +445,13 @@ public:
   ///< advances in units of whole tiles along the logical coordinate space of the tensor
   CUTLASS_HOST_DEVICE
   TileIteratorTensorOpMixed & add_tile_offset(TensorCoord const &tile_offset) {
-    
-    int ptr_offset = tile_offset.row() * Shape::kRow * stride_ + 
+
+    int ptr_offset = tile_offset.row() * Shape::kRow * stride_ +
       tile_offset.column() * Shape::kColumn / AccessType::kElements;
 
     pointers_[0] += ptr_offset;
     pointers_[1] += ptr_offset;
-    
+
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < Detail::kOffsetCount; ++i) {
       uniform_offset_[i] = (i ^ tile_offset.column()) * 4 * sizeof(AccessType);
@@ -450,22 +488,11 @@ public:
 
       int offset = (n / 4) * 16 + pointer_offset / AccessType::kElements;
 
-#if 0
       //
-      // Using inline PTX to avoid generic memory
+      // Using inline device assembly to avoid generic memory
       //
       AccessType *smem_ptr = pointers_[ptr_idx];
       smem_ptr[offset] = frag_ptr[n];
-#else
-      uint32_t smem_addr = arch::cutlass_get_smem_pointer(ptr);
-      uint32_t const *data = reinterpret_cast<uint32_t const *>(frag_ptr + n);
-      uint32_t offset_in_bytes = offset * sizeof(AccessType) + uniform_offset_[offset_idx];
-
-      asm volatile(
-        "{ .reg .u32 smem_ptr; add.u32 smem_ptr, %0, %1; st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
-        : : "r"(smem_addr), "r"(offset_in_bytes), "r"(data[0]), "r"(data[1])
-      );
-#endif
     }
   }
 
@@ -506,9 +533,17 @@ public:
   >;
 
   /// This is the fragment size produced by one access of the iterator.
+#if ACOMPUTE_VERSION == 10000
+  // Policy::OperatorCount::kColumn is half when mma size double, should *2 to maintain register size
+  // can't change Policy::kElementsPerAccess because it will affect smem padding
   using Fragment = Array<
-    Element, 
+    Element,
+    Policy::kRegPerFragmentRow * Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#else
+  using Fragment = Array<
+    Element,
     Policy::OperatorCount::kColumn * Policy::kElementsPerAccess>;
+#endif
 
   /// This is the complete warp-level accumulator tile.
   //using AccumulatorTile = typename Operator::FragmentC;
@@ -561,9 +596,9 @@ public:
     TensorRef const &ref,
     unsigned lane_id
   ):
-    stride_(ref.stride()[0] / AccessType::kElements) { 
+    stride_(ref.stride()[0] / AccessType::kElements) {
 
-    int quad_id = (lane_id / Detail::kLanesInQuad); 
+    int quad_id = (lane_id / Detail::kLanesInQuad);
     int lane_in_quad = (lane_id % Detail::kLanesInQuad);
 
     CUTLASS_PRAGMA_UNROLL
@@ -572,7 +607,7 @@ public:
       int column_idx = lane_in_quad ^ (i * 2);
 
       ptr += column_idx;
-    
+
       if (i == 0) {
         pointers_[0] = ptr;
       }
@@ -597,19 +632,19 @@ public:
   ///< advances in units of whole tiles along the logical coordinate space of the tensor
   CUTLASS_HOST_DEVICE
   TileIteratorTensorOpMixed & add_tile_offset(TensorCoord const &tile_offset) {
-    
-    int ptr_offset = tile_offset.row() * Shape::kRow * stride_ + 
+
+    int ptr_offset = tile_offset.row() * Shape::kRow * stride_ +
       tile_offset.column() * Shape::kColumn / AccessType::kElements;
 
     pointers_[0] += ptr_offset;
     pointers_[1] += ptr_offset;
-   
+
     if (tile_offset.column() % 2) {
       auto tmp = pointers_[0];
       pointers_[0] = pointers_[1];
       pointers_[1] = tmp;
     }
- 
+
     return *this;
   }
 
@@ -640,22 +675,11 @@ public:
 
       int offset = (n / 4) * 16 + pointer_offset / AccessType::kElements + (n % 4) * 4;
 
-#if 0
       //
-      // Using inline PTX to avoid generic memory
+      // Using inline device assembly to avoid generic memory
       //
       AccessType *smem_ptr = pointers_[ptr_idx];
       smem_ptr[offset] = frag_ptr[n];
-#else
-      uint32_t smem_addr = arch::cutlass_get_smem_pointer(ptr);
-      uint32_t const *data = reinterpret_cast<uint32_t const *>(frag_ptr + n);
-      uint32_t offset_in_bytes = offset * sizeof(AccessType);
-
-      asm volatile(
-        "{ .reg .u32 smem_ptr; add.u32 smem_ptr, %0, %1; st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
-        : : "r"(smem_addr), "r"(offset_in_bytes), "r"(data[0]), "r"(data[1])
-      );
-#endif
     }
   }
 

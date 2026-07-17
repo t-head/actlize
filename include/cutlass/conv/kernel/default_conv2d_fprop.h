@@ -1,9 +1,9 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
-namespace conv {
  *     * Redistributions of source code must retain the above copyright notice, this list of
  *       conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above copyright notice, this list of
@@ -25,20 +25,31 @@ namespace conv {
  **************************************************************************************************/
 
 /*! \file
-    \brief 
-    Default kernel-level implicit GEMM convolution definitions combine threadblock-scoped 
-      matrix multiply-add with the appropriate threadblock-scoped epilogue.  
+    \brief
+    Default kernel-level implicit GEMM convolution definitions combine threadblock-scoped
+      matrix multiply-add with the appropriate threadblock-scoped epilogue.
 */
 
 #pragma once
 
 #include "cutlass/cutlass.h"
+#if (defined(__HGGCCC__) || defined(__HGGCCC_RTC__))
+// include here to avoid sparse gemm use aiu swizzle
+#include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op_aiu.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_aiu.h"
+#include "cutlass/conv/threadblock/aiu/conv2d_fprop_activation_tile_access_iterator_aiu.h"
+#include "cutlass/conv/threadblock/aiu/conv2d_fprop_filter_tile_access_iterator_aiu.h"
+#include "cutlass/conv/threadblock/aiu/conv2d_fprop_activation_tile_access_iterator_optimized_small_channel_aiu.h"
+#include "cutlass/conv/threadblock/aiu/conv2d_fprop_filter_tile_access_iterator_optimized_small_channel_aiu.h"
+#endif
 #include "cutlass/conv/kernel/default_conv2d.h"
 
 #include "cutlass/conv/threadblock/conv2d_fprop_activation_tile_access_iterator_analytic.h"
 #include "cutlass/conv/threadblock/conv2d_fprop_filter_tile_access_iterator_analytic.h"
 #include "cutlass/conv/threadblock/conv2d_fprop_activation_tile_access_iterator_optimized.h"
 #include "cutlass/conv/threadblock/conv2d_fprop_filter_tile_access_iterator_optimized.h"
+#include "cutlass/conv/threadblock/conv2d_fprop_activation_tile_access_iterator_optimized_small_channel.h"
+#include "cutlass/conv/threadblock/conv2d_fprop_filter_tile_access_iterator_optimized_small_channel.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,14 +77,20 @@ template <
   int Stages,
   typename MathOperatorTag,
   conv::IteratorAlgorithm IteratorAlgorithm = IteratorAlgorithm::kAnalytic,
-  conv::StrideSupport StrideSupport = StrideSupport::kStrided
+  conv::StrideSupport StrideSupport = StrideSupport::kStrided,
+  /// Access granularity of A matrix in units of elements
+  int AlignmentA = 128 / cutlass::sizeof_bits<ElementA>::value,
+  /// Access granularity of B matrix in units of elements
+  int AlignmentB = 128 / cutlass::sizeof_bits<ElementB>::value,
+  int KernelSize = 0,
+  conv::KernelType kType = KernelType::kNormal
 > struct DefaultConv2dFprop;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-//                         OpClassTensorOp convolutions 
+//                         OpClassTensorOp convolutions
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm and multistage 
+/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm and multistage
 /// pipeline.
 template <
   typename ElementA,
@@ -90,7 +107,9 @@ template <
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
   int Stages,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -109,7 +128,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   Stages,
   MathOperatorTag,
-  IteratorAlgorithm::kAnalytic
+  IteratorAlgorithm::kAnalytic,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -120,48 +142,57 @@ struct DefaultConv2dFprop <
 
   // Define iterators over tiles from the A operand
   using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using AccessTypeA = cutlass::AlignedArray<ElementA, AlignmentA>;
   using IteratorA =
     cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorAnalytic<
       cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
       ElementA, LayoutA,
-      ThreadMapA
+      ThreadMapA,
+      AccessTypeA
     >;
 
   using SmemIteratorA = typename MmaCore::SmemIteratorA;
 
   // Define iterators over tiles from the B operand
   using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using AccessTypeB = cutlass::AlignedArray<ElementB, AlignmentB>;
   using IteratorB =
     cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorAnalytic<
       cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
       ElementB, LayoutB,
-      ThreadMapB
+      ThreadMapB,
+      AccessTypeB
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
   using WarpMmaTensorOp = typename MmaCore::MmaTensorOp;
   using MmaPolicy = typename MmaCore::MmaPolicy;
 
-  // Define the Mma
-  using Mma = threadblock::ImplicitGemmMultistage<
+  using Mma = typename threadblock::IgemmMultistageMainloop<
+    cutlass::conv::Operator::kFprop,
     ThreadblockShape,
+    WarpShape,
+    InstructionShape,
     IteratorA,
     SmemIteratorA,
     arch::CacheOperation::Always,
     IteratorB,
     SmemIteratorB,
-    arch::CacheOperation::Global,
+    arch::CacheOperation::Always,
     MmaPolicy,
-    Stages 
-  >;
+    Stages,
+    true,
+    false
+  >::Type;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOp<
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp,
     EpilogueOutputOp::kCount
   >::Epilogue;
@@ -177,7 +208,7 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm and multistage 
+/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm and multistage
 /// pipeline with interleaved layout.
 template <
   typename ElementA,
@@ -193,7 +224,9 @@ template <
   typename ThreadblockSwizzle,
   int Stages,
   typename MathOperatorTag,
-  int InterleavedK
+  int InterleavedK,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -212,13 +245,16 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   Stages,
   MathOperatorTag,
-  IteratorAlgorithm::kAnalytic
+  IteratorAlgorithm::kAnalytic,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
   using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
       ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
-      ElementB, layout::RowMajorInterleaved<InterleavedK>, 
+      ElementB, layout::RowMajorInterleaved<InterleavedK>,
       ElementAccumulator, LayoutC, arch::OpClassTensorOp,
       Stages, MathOperatorTag, true>;
 
@@ -251,7 +287,7 @@ struct DefaultConv2dFprop <
       ElementB, layout::TensorCxRSKx<InterleavedK>,
       ThreadMapB
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -268,14 +304,15 @@ struct DefaultConv2dFprop <
     SmemIteratorB,
     arch::CacheOperation::Global,
     MmaPolicy,
-    Stages 
+    Stages
   >;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultInterleavedConvEpilogue<
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp,
     EpilogueOutputOp::kCount,
     InterleavedK
@@ -308,7 +345,9 @@ template <
   typename InstructionShape,
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -327,7 +366,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   2,
   MathOperatorTag,
-  IteratorAlgorithm::kAnalytic
+  IteratorAlgorithm::kAnalytic,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -338,12 +380,14 @@ struct DefaultConv2dFprop <
 
   // Define iterators over tiles from the A operand
   using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using AccessTypeA = cutlass::AlignedArray<ElementA, AlignmentA>;
   using IteratorA =
     cutlass::conv::threadblock::TileIterator<
       cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorAnalytic<
         cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
         ElementA, LayoutA,
-        ThreadMapA
+        ThreadMapA,
+        AccessTypeA
       >
     >;
 
@@ -351,15 +395,17 @@ struct DefaultConv2dFprop <
 
   // Define iterators over tiles from the B operand
   using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using AccessTypeB = cutlass::AlignedArray<ElementB, AlignmentB>;
   using IteratorB =
     cutlass::conv::threadblock::TileIterator<
       cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorAnalytic<
         cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
         ElementB, LayoutB,
-        ThreadMapB
+        ThreadMapB,
+        AccessTypeB
       >
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -378,12 +424,13 @@ struct DefaultConv2dFprop <
     MmaPolicy
   >;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename detail::DefaultConvEpilogue<
     ArchTag,
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp
   >::Epilogue;
 
@@ -398,7 +445,7 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm and 2 stage 
+/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm and 2 stage
 /// pipeline with interleaved layout.
 template <
   typename ElementA,
@@ -413,7 +460,9 @@ template <
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
   typename MathOperatorTag,
-  int InterleavedK
+  int InterleavedK,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -432,13 +481,16 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   2,
   MathOperatorTag,
-  IteratorAlgorithm::kAnalytic
+  IteratorAlgorithm::kAnalytic,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
   using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
       ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
-      ElementB, layout::RowMajorInterleaved<InterleavedK>, 
+      ElementB, layout::RowMajorInterleaved<InterleavedK>,
       ElementAccumulator, LayoutC, arch::OpClassTensorOp,
       2, MathOperatorTag, true>;
 
@@ -475,7 +527,7 @@ struct DefaultConv2dFprop <
         ThreadMapB
       >
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -494,11 +546,12 @@ struct DefaultConv2dFprop <
     MmaPolicy
   >;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultInterleavedConvEpilogue<
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp,
     EpilogueOutputOp::kCount,
     InterleavedK
@@ -515,7 +568,7 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Optimzed IteratorAlgorithm and 
+/// Defines a kernel for Conv2dFprop specialzation for Optimzed IteratorAlgorithm and
 /// multistage pipeline.
 template <
   typename ElementA,
@@ -532,7 +585,10 @@ template <
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
   int Stages,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB,
+  int KernelSize
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -551,8 +607,16 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   Stages,
   MathOperatorTag,
-  IteratorAlgorithm::kOptimized
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB,
+  KernelSize
 > {
+
+  static bool const Transpose = platform::is_same<LayoutC, cutlass::layout::TensorNCHW>::value ? true : false;
+
+  static bool const Strided = false;
 
   // Define the core components from GEMM
   using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
@@ -568,47 +632,72 @@ struct DefaultConv2dFprop <
       cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
       ElementA,
       LayoutA,
-      ThreadMapA
+      ThreadMapA,
+      AlignmentA,
+      KernelSize
     >;
 
   using SmemIteratorA = typename MmaCore::SmemIteratorA;
 
-  // Define iterators over tiles from the B operand 
+  // Define iterators over tiles from the B operand
   using ThreadMapB = typename MmaCore::IteratorThreadMapB;
   using IteratorB =
     cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorOptimized<
       cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
       ElementB,
       LayoutB,
-      ThreadMapB
+      ThreadMapB,
+      AlignmentB,
+      KernelSize
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
   using WarpMmaTensorOp = typename MmaCore::MmaTensorOp;
   using MmaPolicy = typename MmaCore::MmaPolicy;
 
-  // Define the Mma
-  using Mma = threadblock::ImplicitGemmMultistage<
+  static cutlass::arch::CacheOperation::Kind const CacheOpA =
+      ((sizeof_bits<ElementA>::value * AlignmentA) == 128)
+          ? cutlass::arch::CacheOperation::Global
+          : cutlass::arch::CacheOperation::Always;
+  static cutlass::arch::CacheOperation::Kind const CacheOpB =
+      ((sizeof_bits<ElementB>::value * AlignmentB) == 128)
+          ? cutlass::arch::CacheOperation::Global
+          : cutlass::arch::CacheOperation::Always;
+
+  static bool const SkipWarps =
+          ThreadblockShape::kM * ThreadblockShape::kK / MmaCore::kWarpSize / (16 / sizeof(ElementA)) < MmaCore::WarpCount::kCount ||
+          ThreadblockShape::kN * ThreadblockShape::kK / MmaCore::kWarpSize / (16 / sizeof(ElementB)) < MmaCore::WarpCount::kCount
+          ? true : false;
+
+  using Mma = typename threadblock::IgemmMultistageMainloop<
+    cutlass::conv::Operator::kFprop,
     ThreadblockShape,
+    WarpShape,
+    InstructionShape,
     IteratorA,
     SmemIteratorA,
-    arch::CacheOperation::Always,
+    CacheOpA,
     IteratorB,
     SmemIteratorB,
-    arch::CacheOperation::Global,
+    CacheOpB,
     MmaPolicy,
-    Stages 
-  >;
+    Stages,
+    true,
+    SkipWarps
+  >::Type;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOp<
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp,
-    EpilogueOutputOp::kCount
+    EpilogueOutputOp::kCount,
+    Strided,
+    Transpose
   >::Epilogue;
 
   // Define the kernel
@@ -622,7 +711,7 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Optimzed IteratorAlgorithm and 
+/// Defines a kernel for Conv2dFprop specialzation for Optimzed IteratorAlgorithm and
 // multistage pipeline with interleaved layout.
 template <
   typename ElementA,
@@ -638,7 +727,9 @@ template <
   typename ThreadblockSwizzle,
   int Stages,
   typename MathOperatorTag,
-  int InterleavedK
+  int InterleavedK,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -657,7 +748,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   Stages,
   MathOperatorTag,
-  IteratorAlgorithm::kOptimized
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -679,7 +773,7 @@ struct DefaultConv2dFprop <
 
   using SmemIteratorA = typename MmaCore::SmemIteratorA;
 
-  // Define iterators over tiles from the B operand 
+  // Define iterators over tiles from the B operand
   using ThreadMapB = typename MmaCore::SmemThreadMapB;
   using IteratorB =
     cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorOptimized<
@@ -688,7 +782,7 @@ struct DefaultConv2dFprop <
       layout::TensorCxRSKx<InterleavedK>,
       ThreadMapB
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -705,14 +799,15 @@ struct DefaultConv2dFprop <
     SmemIteratorB,
     arch::CacheOperation::Global,
     MmaPolicy,
-    Stages 
+    Stages
   >;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultInterleavedConvEpilogue<
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp,
     EpilogueOutputOp::kCount,
     InterleavedK
@@ -745,7 +840,10 @@ template <
   typename InstructionShape,
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB,
+  int KernelSize
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -764,8 +862,16 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   2,
   MathOperatorTag,
-  IteratorAlgorithm::kOptimized
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB,
+  KernelSize
 > {
+
+  static bool const Transpose = platform::is_same<LayoutC, cutlass::layout::TensorNCHW>::value ? true : false;
+
+  static bool const Strided = false;
 
   // Define the core components from GEMM
   using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
@@ -781,7 +887,9 @@ struct DefaultConv2dFprop <
         cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
         ElementA,
         LayoutA,
-        ThreadMapA
+        ThreadMapA,
+        AlignmentA,
+        KernelSize
       >
     >;
 
@@ -795,10 +903,12 @@ struct DefaultConv2dFprop <
         cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
         ElementB,
         LayoutB,
-        ThreadMapB
+        ThreadMapB,
+        AlignmentA,
+        KernelSize
       >
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -817,13 +927,15 @@ struct DefaultConv2dFprop <
     MmaPolicy
   >;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename detail::DefaultConvEpilogue<
     ArchTag,
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
-    EpilogueOutputOp
+    kPartitionsK,
+    EpilogueOutputOp,
+    Transpose
   >::Epilogue;
 
   // Define the kernel
@@ -837,7 +949,7 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Optimized IteratorAlgorithm and 2 stage 
+/// Defines a kernel for Conv2dFprop specialzation for Optimized IteratorAlgorithm and 2 stage
 /// pipeline with interleaved layout.
 template <
   typename ElementA,
@@ -852,7 +964,9 @@ template <
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
   typename MathOperatorTag,
-  int InterleavedK
+  int InterleavedK,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -871,13 +985,16 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   2,
   MathOperatorTag,
-  IteratorAlgorithm::kOptimized
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
   using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
       ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
-      ElementB, layout::RowMajorInterleaved<InterleavedK>, 
+      ElementB, layout::RowMajorInterleaved<InterleavedK>,
       ElementAccumulator, LayoutC, arch::OpClassTensorOp,
       2, MathOperatorTag, true>;
 
@@ -904,7 +1021,7 @@ struct DefaultConv2dFprop <
         ThreadMapB
       >
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -923,11 +1040,12 @@ struct DefaultConv2dFprop <
     MmaPolicy
   >;
 
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultInterleavedConvEpilogue<
     ThreadblockShape,
     WarpMmaTensorOp,
-    1,
+    kPartitionsK,
     EpilogueOutputOp,
     EpilogueOutputOp::kCount,
     InterleavedK
@@ -945,8 +1063,8 @@ struct DefaultConv2dFprop <
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //                            OpClassSimt convolutions
 /////////////////////////////////////////////////////////////////////////////////////////////////
-/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm, 
-/// multi-stage pipeline, and FFMA-based mainloop for SM80
+/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm,
+/// multi-stage pipeline, and FFMA-based mainloop for PPU
 
 template <
   typename ElementA,
@@ -963,7 +1081,9 @@ template <
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
   int Stages,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -982,7 +1102,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   Stages,
   MathOperatorTag,
-  IteratorAlgorithm::kAnalytic
+  IteratorAlgorithm::kAnalytic,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -993,24 +1116,28 @@ struct DefaultConv2dFprop <
 
   // Define iterators over tiles from the A operand
   using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using AccessTypeA = cutlass::AlignedArray<ElementA, AlignmentA>;
   using IteratorA =
     cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorAnalytic<
       cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
       ElementA, LayoutA,
-      ThreadMapA
+      ThreadMapA,
+      AccessTypeA
     >;
 
   using SmemIteratorA = typename MmaCore::SmemIteratorA;
 
   // Define iterators over tiles from the B operand
   using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using AccessTypeB = cutlass::AlignedArray<ElementB, AlignmentB>;
   using IteratorB =
     cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorAnalytic<
       cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
       ElementB, LayoutB,
-      ThreadMapB
+      ThreadMapB,
+      AccessTypeB
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -1027,7 +1154,7 @@ struct DefaultConv2dFprop <
     SmemIteratorB,
     arch::CacheOperation::Always,
     MmaPolicy,
-    Stages 
+    Stages
   >;
 
   // Define the epilogue
@@ -1050,8 +1177,8 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Optimized IteratorAlgorithm, 
-/// multi-stage pipeline, and FFMA-based mainloop for SM80
+/// Defines a kernel for Conv2dFprop specialzation for Optimized IteratorAlgorithm,
+/// multi-stage pipeline, and FFMA-based mainloop for PPU
 
 template <
   typename ElementA,
@@ -1068,7 +1195,9 @@ template <
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
   int Stages,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -1087,7 +1216,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   Stages,
   MathOperatorTag,
-  IteratorAlgorithm::kOptimized
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -1117,7 +1249,7 @@ struct DefaultConv2dFprop <
       LayoutB,
       ThreadMapB
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -1134,7 +1266,7 @@ struct DefaultConv2dFprop <
     SmemIteratorB,
     arch::CacheOperation::Always,
     MmaPolicy,
-    Stages 
+    Stages
   >;
 
   // Define the epilogue
@@ -1157,8 +1289,8 @@ struct DefaultConv2dFprop <
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm, 
-/// 2 stage pipeline, and FFMA-based mainloop for SM50
+/// Defines a kernel for Conv2dFprop specialzation for Analytic IteratorAlgorithm,
+/// 2 stage pipeline, and FFMA-based mainloop for PPU
 template <
   typename ElementA,
   typename LayoutA,
@@ -1173,7 +1305,9 @@ template <
   typename InstructionShape,
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -1192,7 +1326,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   2,
   MathOperatorTag,
-  IteratorAlgorithm::kAnalytic
+  IteratorAlgorithm::kAnalytic,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -1203,12 +1340,14 @@ struct DefaultConv2dFprop <
 
   // Define iterators over tiles from the A operand
   using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using AccessTypeA = cutlass::AlignedArray<ElementA, AlignmentA>;
   using IteratorA =
     cutlass::conv::threadblock::TileIterator<
       cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorAnalytic<
         cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
         ElementA, LayoutA,
-        ThreadMapA
+        ThreadMapA,
+        AccessTypeA
       >
     >;
 
@@ -1216,15 +1355,17 @@ struct DefaultConv2dFprop <
 
   // Define iterators over tiles from the B operand
   using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using AccessTypeB = cutlass::AlignedArray<ElementB, AlignmentB>;
   using IteratorB =
     cutlass::conv::threadblock::TileIterator<
       cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorAnalytic<
         cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
         ElementB, LayoutB,
-        ThreadMapB
+        ThreadMapB,
+        AccessTypeB
       >
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -1242,7 +1383,6 @@ struct DefaultConv2dFprop <
     LayoutC,
     MmaPolicy
   >;
-
   // Define the epilogue
   using Epilogue = typename epilogue::threadblock::DefaultEpilogueSimt<
     ThreadblockShape,
@@ -1258,13 +1398,12 @@ struct DefaultConv2dFprop <
     ThreadblockSwizzle,
     conv::Operator::kFprop
   >;
-
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Defines a kernel for Conv2dFprop specialzation for Optimized IteratorAlgorithm, 
-/// 2 stage pipeline, and FFMA-based mainloop for SM50
+/// Defines a kernel for Conv2dFprop specialzation for Optimized IteratorAlgorithm,
+/// 2 stage pipeline, and FFMA-based mainloop for PPU
 template <
   typename ElementA,
   typename LayoutA,
@@ -1279,7 +1418,9 @@ template <
   typename InstructionShape,
   typename EpilogueOutputOp,
   typename ThreadblockSwizzle,
-  typename MathOperatorTag
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB
 >
 struct DefaultConv2dFprop <
   ElementA,
@@ -1298,7 +1439,10 @@ struct DefaultConv2dFprop <
   ThreadblockSwizzle,
   2,
   MathOperatorTag,
-  IteratorAlgorithm::kOptimized
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
 > {
 
   // Define the core components from GEMM
@@ -1332,7 +1476,7 @@ struct DefaultConv2dFprop <
         ThreadMapB
       >
     >;
-  
+
   using SmemIteratorB = typename MmaCore::SmemIteratorB;
 
   // Warp-level GEMM components
@@ -1368,6 +1512,642 @@ struct DefaultConv2dFprop <
   >;
 
 };
+
+// small channel realization
+template <
+  typename ElementA,
+  typename LayoutA,
+  typename ElementB,
+  typename LayoutB,
+  typename ElementC,
+  typename LayoutC,
+  typename ElementAccumulator,
+  typename OperatorClass,
+  typename ArchTag,
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename EpilogueOutputOp,
+  typename ThreadblockSwizzle,
+  int Stages,
+  typename MathOperatorTag,
+  // read how many rs position each time
+  int FoldNum,
+  bool FoldOnR,
+  conv::IteratorAlgorithm IteratorAlgorithm = IteratorAlgorithm::kAnalytic,
+  conv::StrideSupport StrideSupport = StrideSupport::kStrided,
+  /// Access granularity of A matrix in units of elements
+  int AlignmentA = 128 / cutlass::sizeof_bits<ElementA>::value,
+  /// Access granularity of B matrix in units of elements
+  int AlignmentB = 128 / cutlass::sizeof_bits<ElementB>::value
+> struct DefaultConv2dFpropSmallChannel;
+
+template <
+  typename ElementA,
+  typename LayoutA,
+  typename ElementB,
+  typename LayoutB,
+  typename ElementC,
+  typename LayoutC,
+  typename ElementAccumulator,
+  typename ArchTag,
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename EpilogueOutputOp,
+  typename ThreadblockSwizzle,
+  typename MathOperatorTag,
+  int FoldNum,
+  bool FoldOnR,
+  int AlignmentA,
+  int AlignmentB
+>
+struct DefaultConv2dFpropSmallChannel <
+  ElementA,
+  LayoutA,
+  ElementB,
+  LayoutB,
+  ElementC,
+  LayoutC,
+  ElementAccumulator,
+  arch::OpClassTensorOp,
+  ArchTag,
+  ThreadblockShape,
+  WarpShape,
+  InstructionShape,
+  EpilogueOutputOp,
+  ThreadblockSwizzle,
+  2,
+  MathOperatorTag,
+  FoldNum,
+  FoldOnR,
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
+> {
+
+  // Define the core components from GEMM
+  using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
+      ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::RowMajor,
+      ElementB, layout::ColumnMajor, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp,
+      2, MathOperatorTag>;
+
+  // Define iterators over tiles from the A operand
+  using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using IteratorA =
+    cutlass::conv::threadblock::TileIterator<
+      cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorOptimizedSmallChannel<
+        cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
+        ElementA,
+        LayoutA,
+        ThreadMapA,
+        FoldNum,
+        FoldOnR,
+        AlignmentA
+      >
+    >;
+
+  using SmemIteratorA = typename MmaCore::SmemIteratorA;
+
+  // Define iterators over tiles from the B operand
+  using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using IteratorB =
+    cutlass::conv::threadblock::TileIterator<
+      cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorOptimizedSmallChannel<
+        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
+        ElementB,
+        LayoutB,
+        ThreadMapB,
+        FoldNum,
+        AlignmentA
+      >
+    >;
+
+  using SmemIteratorB = typename MmaCore::SmemIteratorB;
+
+  // Warp-level GEMM components
+  using WarpMmaTensorOp = typename MmaCore::MmaTensorOp;
+  using MmaPolicy = typename MmaCore::MmaPolicy;
+
+  // Define the Mma
+  using Mma = threadblock::ImplicitGemmPipelined<
+    ThreadblockShape,
+    IteratorA,
+    SmemIteratorA,
+    IteratorB,
+    SmemIteratorB,
+    ElementC,
+    LayoutC,
+    MmaPolicy
+  >;
+
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+  // Define the epilogue
+  using Epilogue = typename detail::DefaultConvEpilogue<
+    ArchTag,
+    ThreadblockShape,
+    WarpMmaTensorOp,
+    kPartitionsK,
+    EpilogueOutputOp
+  >::Epilogue;
+
+  // Define the kernel
+  using Kernel = cutlass::conv::kernel::ImplicitGemmConvolution<
+    Mma,
+    Epilogue,
+    ThreadblockSwizzle,
+    conv::Operator::kFprop
+  >;
+};
+
+template <
+  typename ElementA,
+  typename LayoutA,
+  typename ElementB,
+  typename LayoutB,
+  typename ElementC,
+  typename LayoutC,
+  typename ElementAccumulator,
+  typename ArchTag,
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename EpilogueOutputOp,
+  typename ThreadblockSwizzle,
+  int Stages,
+  typename MathOperatorTag,
+  int FoldNum,
+  bool FoldOnR,
+  int AlignmentA,
+  int AlignmentB
+>
+struct DefaultConv2dFpropSmallChannel <
+  ElementA,
+  LayoutA,
+  ElementB,
+  LayoutB,
+  ElementC,
+  LayoutC,
+  ElementAccumulator,
+  arch::OpClassTensorOp,
+  ArchTag,
+  ThreadblockShape,
+  WarpShape,
+  InstructionShape,
+  EpilogueOutputOp,
+  ThreadblockSwizzle,
+  Stages,
+  MathOperatorTag,
+  FoldNum,
+  FoldOnR,
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB
+> {
+
+  // Define the core components from GEMM
+  using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
+    ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::RowMajor,
+    ElementB, layout::ColumnMajor, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp,
+    Stages, MathOperatorTag
+  >;
+
+  // Define iterators over tiles from the A operand
+  using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using IteratorA =
+    cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorOptimizedSmallChannel<
+      cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
+      ElementA,
+      LayoutA,
+      ThreadMapA,
+      FoldNum,
+      FoldOnR,
+      AlignmentA
+    >;
+
+  using SmemIteratorA = typename MmaCore::SmemIteratorA;
+
+  // Define iterators over tiles from the B operand
+  using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using IteratorB =
+    cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorOptimizedSmallChannel<
+      cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
+      ElementB,
+      LayoutB,
+      ThreadMapB,
+      FoldNum,
+      AlignmentB
+    >;
+
+  using SmemIteratorB = typename MmaCore::SmemIteratorB;
+
+  // Warp-level GEMM components
+  using WarpMmaTensorOp = typename MmaCore::MmaTensorOp;
+  using MmaPolicy = typename MmaCore::MmaPolicy;
+
+  static cutlass::arch::CacheOperation::Kind const CacheOpA =
+      ((sizeof_bits<ElementA>::value * AlignmentA) == 128)
+          ? cutlass::arch::CacheOperation::Global
+          : cutlass::arch::CacheOperation::Always;
+  static cutlass::arch::CacheOperation::Kind const CacheOpB =
+      ((sizeof_bits<ElementB>::value * AlignmentB) == 128)
+          ? cutlass::arch::CacheOperation::Global
+          : cutlass::arch::CacheOperation::Always;
+
+  // Define the Mma
+  using Mma = threadblock::ImplicitGemmMultistage<
+    ThreadblockShape,
+    IteratorA,
+    SmemIteratorA,
+    CacheOpA,
+    IteratorB,
+    SmemIteratorB,
+    CacheOpB,
+    MmaPolicy,
+    Stages
+  >;
+
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+  // Define the epilogue
+  using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOpArch<
+    ThreadblockShape,
+    WarpMmaTensorOp,
+    kPartitionsK,
+    EpilogueOutputOp,
+    EpilogueOutputOp::kCount,
+    ArchTag
+  >::Epilogue;
+
+  // Define the kernel
+  using Kernel = cutlass::conv::kernel::ImplicitGemmConvolution<
+    Mma,
+    Epilogue,
+    ThreadblockSwizzle,
+    conv::Operator::kFprop
+  >;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// test for aiu
+
+#if (defined(__HGGCCC__) || defined(__HGGCCC_RTC__)) && ACOMPUTE_VERSION == 10500
+
+template <
+  typename ElementA,
+  typename LayoutA,
+  typename ElementB,
+  typename LayoutB,
+  typename ElementC,
+  typename LayoutC,
+  typename ElementAccumulator,
+  typename OperatorClass,
+  typename ArchTag,
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename EpilogueOutputOp,
+  typename ThreadblockSwizzle,
+  int Stages,
+  typename MathOperatorTag,
+  conv::IteratorAlgorithm IteratorAlgorithm = IteratorAlgorithm::kAnalytic,
+  conv::StrideSupport StrideSupport = StrideSupport::kStrided,
+  /// Access granularity of A matrix in units of elements
+  int AlignmentA = 128 / cutlass::sizeof_bits<ElementA>::value,
+  /// Access granularity of B matrix in units of elements
+  int AlignmentB = 128 / cutlass::sizeof_bits<ElementB>::value,
+  int KernelSize = 0
+> struct DefaultConv2dFpropAiu;
+
+template <
+  typename ElementA,
+  typename LayoutA,
+  typename ElementB,
+  typename LayoutB,
+  typename ElementC,
+  typename LayoutC,
+  typename ElementAccumulator,
+  typename ArchTag,
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename EpilogueOutputOp,
+  typename ThreadblockSwizzle,
+  int Stages,
+  typename MathOperatorTag,
+  int AlignmentA,
+  int AlignmentB,
+  int KernelSize
+>
+struct DefaultConv2dFpropAiu <
+  ElementA,
+  LayoutA,
+  ElementB,
+  LayoutB,
+  ElementC,
+  LayoutC,
+  ElementAccumulator,
+  arch::OpClassTensorOp,
+  ArchTag,
+  ThreadblockShape,
+  WarpShape,
+  InstructionShape,
+  EpilogueOutputOp,
+  ThreadblockSwizzle,
+  Stages,
+  MathOperatorTag,
+  IteratorAlgorithm::kOptimized,
+  StrideSupport::kStrided,
+  AlignmentA,
+  AlignmentB,
+  KernelSize
+> {
+
+  static bool const Transpose = platform::is_same<LayoutC, cutlass::layout::TensorNCHW>::value ? true : false;
+
+  static bool const Strided = false;
+
+  // Define the core components from GEMM
+  using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
+    ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::RowMajor,
+    ElementB, layout::ColumnMajor, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp,
+    Stages, MathOperatorTag
+  >;
+
+  // Define iterators over tiles from the A operand
+  using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+  using IteratorA =
+    cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorAiu<
+      cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
+      ElementA,
+      LayoutA,
+      ThreadMapA,
+      AlignmentA,
+      KernelSize
+    >;
+
+  using SmemIteratorA = typename MmaCore::SmemIteratorA;
+
+  // Define iterators over tiles from the B operand
+  using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+  using IteratorB =
+    cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorAiu<
+      cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
+      ElementB,
+      LayoutB,
+      ThreadMapB,
+      AlignmentB,
+      KernelSize
+    >;
+
+  using SmemIteratorB = typename MmaCore::SmemIteratorB;
+
+  // Warp-level GEMM components
+  using WarpMmaTensorOp = typename MmaCore::MmaTensorOp;
+  using MmaPolicy = typename MmaCore::MmaPolicy;
+
+  static cutlass::arch::CacheOperation::Kind const CacheOpA =
+      ((sizeof_bits<ElementA>::value * AlignmentA) == 128)
+          ? cutlass::arch::CacheOperation::Global
+          : cutlass::arch::CacheOperation::Always;
+  static cutlass::arch::CacheOperation::Kind const CacheOpB =
+      ((sizeof_bits<ElementB>::value * AlignmentB) == 128)
+          ? cutlass::arch::CacheOperation::Global
+          : cutlass::arch::CacheOperation::Always;
+
+  static bool const SkipWarps =
+          ThreadblockShape::kM * ThreadblockShape::kK / MmaCore::kWarpSize / (16 / sizeof(ElementA)) < MmaCore::WarpCount::kCount ||
+          ThreadblockShape::kN * ThreadblockShape::kK / MmaCore::kWarpSize / (16 / sizeof(ElementB)) < MmaCore::WarpCount::kCount
+          ? true : false;
+
+  using WarpTileIteratorA = cutlass::gemm::warp::MmaTensorOpMultiplicandTileIteratorAiu<
+    cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
+    cutlass::MatrixShape<WarpShape::kM, WarpShape::kK>,
+    ElementA,
+    cutlass::MatrixShape<InstructionShape::kM, InstructionShape::kK>,
+    false
+  >;
+
+  using WarpTileIteratorB = cutlass::gemm::warp::MmaTensorOpMultiplicandTileIteratorAiu<
+    cutlass::MatrixShape<ThreadblockShape::kN, ThreadblockShape::kK>,
+    cutlass::MatrixShape<WarpShape::kN, WarpShape::kK>,
+    ElementB,
+    cutlass::MatrixShape<InstructionShape::kN, InstructionShape::kK>,
+    true
+  >;
+
+  // Define the Mma
+  using Mma = threadblock::ImplicitGemmMultistageAiu<
+    ThreadblockShape,
+    IteratorA,
+    SmemIteratorA,
+    CacheOpA,
+    IteratorB,
+    SmemIteratorB,
+    CacheOpB,
+    MmaPolicy,
+    Stages,
+    WarpTileIteratorA,
+    WarpTileIteratorB,
+    true,
+    SkipWarps
+  >;
+
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+  // Define the epilogue
+  using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOp<
+    ThreadblockShape,
+    WarpMmaTensorOp,
+    kPartitionsK,
+    EpilogueOutputOp,
+    EpilogueOutputOp::kCount,
+    Strided,
+    Transpose
+  >::Epilogue;
+
+  // Define the kernel
+  using Kernel = cutlass::conv::kernel::ImplicitGemmConvolution<
+    Mma,
+    Epilogue,
+    ThreadblockSwizzle,
+    conv::Operator::kFprop
+  >;
+};
+
+// template <
+//   typename ElementA,
+//   typename LayoutA,
+//   typename ElementB,
+//   typename LayoutB,
+//   typename ElementC,
+//   typename LayoutC,
+//   typename ElementAccumulator,
+//   typename OperatorClass,
+//   typename ArchTag,
+//   typename ThreadblockShape,
+//   typename WarpShape,
+//   typename InstructionShape,
+//   typename EpilogueOutputOp,
+//   typename ThreadblockSwizzle,
+//   int Stages,
+//   typename MathOperatorTag,
+//   // read how many rs position each time
+//   int FoldNum,
+//   bool FoldOnR,
+//   conv::IteratorAlgorithm IteratorAlgorithm = IteratorAlgorithm::kAnalytic,
+//   conv::StrideSupport StrideSupport = StrideSupport::kStrided,
+//   /// Access granularity of A matrix in units of elements
+//   int AlignmentA = 128 / cutlass::sizeof_bits<ElementA>::value,
+//   /// Access granularity of B matrix in units of elements
+//   int AlignmentB = 128 / cutlass::sizeof_bits<ElementB>::value
+// > struct DefaultConv2dFpropSmallChannelAiu;
+
+// template <
+//   typename ElementA,
+//   typename LayoutA,
+//   typename ElementB,
+//   typename LayoutB,
+//   typename ElementC,
+//   typename LayoutC,
+//   typename ElementAccumulator,
+//   typename ArchTag,
+//   typename ThreadblockShape,
+//   typename WarpShape,
+//   typename InstructionShape,
+//   typename EpilogueOutputOp,
+//   typename ThreadblockSwizzle,
+//   int Stages,
+//   typename MathOperatorTag,
+//   int FoldNum,
+//   bool FoldOnR,
+//   int AlignmentA,
+//   int AlignmentB
+// >
+// struct DefaultConv2dFpropSmallChannelAiu <
+//   ElementA,
+//   LayoutA,
+//   ElementB,
+//   LayoutB,
+//   ElementC,
+//   LayoutC,
+//   ElementAccumulator,
+//   arch::OpClassTensorOp,
+//   ArchTag,
+//   ThreadblockShape,
+//   WarpShape,
+//   InstructionShape,
+//   EpilogueOutputOp,
+//   ThreadblockSwizzle,
+//   Stages,
+//   MathOperatorTag,
+//   FoldNum,
+//   FoldOnR,
+//   IteratorAlgorithm::kOptimized,
+//   StrideSupport::kStrided,
+//   AlignmentA,
+//   AlignmentB
+// > {
+
+//   // Define the core components from GEMM
+//   using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
+//     ThreadblockShape, WarpShape, InstructionShape, ElementA, layout::RowMajor,
+//     ElementB, layout::ColumnMajor, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp,
+//     Stages, MathOperatorTag
+//   >;
+
+//   // Define iterators over tiles from the A operand
+//   using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+//   using IteratorA =
+//     cutlass::conv::threadblock::Conv2dFpropActivationTileAccessIteratorOptimizedSmallChannelAiu<
+//       cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
+//       ElementA,
+//       LayoutA,
+//       ThreadMapA,
+//       FoldNum,
+//       FoldOnR,
+//       AlignmentA
+//     >;
+
+//   using SmemIteratorA = typename MmaCore::SmemIteratorA;
+
+//   // Define iterators over tiles from the B operand
+//   using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+//   using IteratorB =
+//     cutlass::conv::threadblock::Conv2dFpropFilterTileAccessIteratorOptimizedSmallChannelAiu<
+//       cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
+//       ElementB,
+//       LayoutB,
+//       ThreadMapB,
+//       FoldNum,
+//       AlignmentB
+//     >;
+
+//   using SmemIteratorB = typename MmaCore::SmemIteratorB;
+
+//   // Warp-level GEMM components
+//   using WarpMmaTensorOp = typename MmaCore::MmaTensorOp;
+//   using MmaPolicy = typename MmaCore::MmaPolicy;
+
+//   static cutlass::arch::CacheOperation::Kind const CacheOpA =
+//       ((sizeof_bits<ElementA>::value * AlignmentA) == 128)
+//           ? cutlass::arch::CacheOperation::Global
+//           : cutlass::arch::CacheOperation::Always;
+//   static cutlass::arch::CacheOperation::Kind const CacheOpB =
+//       ((sizeof_bits<ElementB>::value * AlignmentB) == 128)
+//           ? cutlass::arch::CacheOperation::Global
+//           : cutlass::arch::CacheOperation::Always;
+
+//   using WarpTileIteratorA = cutlass::gemm::warp::MmaTensorOpMultiplicandTileIteratorAiu<
+//     cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>,
+//     cutlass::MatrixShape<WarpShape::kM, WarpShape::kK>,
+//     ElementA,
+//     cutlass::MatrixShape<InstructionShape::kM, InstructionShape::kK>
+//   >;
+
+//   using WarpTileIteratorB = cutlass::gemm::warp::MmaTensorOpMultiplicandTileIteratorAiu<
+//     cutlass::MatrixShape<ThreadblockShape::kN, ThreadblockShape::kK>,
+//     cutlass::MatrixShape<WarpShape::kN, WarpShape::kK>,
+//     ElementB,
+//     cutlass::MatrixShape<InstructionShape::kN, InstructionShape::kK>
+//   >;
+
+//   // Define the Mma
+//   using Mma = threadblock::ImplicitGemmMultistageAiu<
+//     ThreadblockShape,
+//     IteratorA,
+//     SmemIteratorA,
+//     CacheOpA,
+//     IteratorB,
+//     SmemIteratorB,
+//     CacheOpB,
+//     MmaPolicy,
+//     Stages,
+//     WarpTileIteratorA,
+//     WarpTileIteratorB,
+//     true,
+//     false
+//   >;
+
+//   static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+//   // Define the epilogue
+//   using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOp<
+//     ThreadblockShape,
+//     WarpMmaTensorOp,
+//     kPartitionsK,
+//     EpilogueOutputOp,
+//     EpilogueOutputOp::kCount
+//   >::Epilogue;
+
+//   // Define the kernel
+//   using Kernel = cutlass::conv::kernel::ImplicitGemmConvolution<
+//     Mma,
+//     Epilogue,
+//     ThreadblockSwizzle,
+//     conv::Operator::kFprop
+//   >;
+// };
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

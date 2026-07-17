@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines layout functions used by TensorRef and derived classes. 
 
@@ -40,8 +42,8 @@
 #include "cutlass/layout/tensor.h"
 #include "cutlass/layout/vector.h"
 
-#include "cutlass/layout/tensor_op_multiplicand_sm70.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm75.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu.h"
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -37,7 +38,7 @@
 
 namespace cutlass {
 
-/// This is needed for the interleaved integer tensor core kernels.  The purpose
+/// This is needed for the interleaved integer tensor cell kernels.  The purpose
 /// is to use skip the shared memory part in the epilogue.
 template <int Interleaved, typename Element, typename Layout>
 void reorder_column(TensorRef<Element, Layout> dest,
@@ -74,11 +75,17 @@ void reorder_convK(TensorRef<Element, Layout> dest,
         mappedDest, mappedSrc, problem_size);
 }
 
-/// This is needed for the sparse tensor core kernels.  The purpose
+/// This is needed for the sparse tensor cell kernels.  The purpose
 /// is to use ldmatrix to load from shared memory to the register file.
 template <typename Element, typename LayoutDest, typename LayoutSrc>
 void reorder_meta(TensorRef<Element, LayoutDest> dest,
                   TensorRef<Element, LayoutSrc> src,
+                  cutlass::gemm::GemmCoord problem_size);
+
+/// A matrix compression recorder, input is row major
+template <typename Element, typename LayoutDest>
+void reorder_meta(TensorRef<Element, LayoutDest> dest,
+                  TensorRef<Element, layout::RowMajor> src,
                   cutlass::gemm::GemmCoord problem_size) {
   for (int m = 0; m < problem_size.m(); m++) {
     for (int k = 0; k < problem_size.k(); k++) {
@@ -102,4 +109,51 @@ void reorder_meta(TensorRef<Element, LayoutDest> dest,
     }
   }
 }
+
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+/// B matrix compression recorder, input is column major
+template <typename Element, typename LayoutDest>
+void reorder_meta(TensorRef<Element, LayoutDest> dest,
+                  TensorRef<Element, layout::ColumnMajor> src,
+                  cutlass::gemm::GemmCoord problem_size) {
+  for (int n = 0; n < problem_size.n(); n++) {
+    for (int k = 0; k < problem_size.k(); k++) {
+      // First reorder the column.
+      int group = (sizeof(Element) == 2) ? 32 : 16;
+      int interweave = (sizeof(Element) == 2) ? 4 : 2;
+
+      int dest_col = n / group * group + (n % 8) * interweave + (n % group) / 8;
+      int dest_row = k;
+
+      // Next swizzle the 2x2 blocks from Z to N.
+      if (((dest_col % 2) == 0) && ((dest_row % 2) == 1)) {
+        ++dest_col;
+        --dest_row;
+      } else if (((dest_col % 2) == 1) && ((dest_row % 2) == 0)) {
+        --dest_col;
+        ++dest_row;
+      }
+      dest.at({dest_row, dest_col}) = src.at({k, n});
+    }
+  }
+}
+
+template <typename Element, typename LayoutDest>
+void reorder_meta_linear(TensorRef<Element, LayoutDest> dest,
+                  TensorRef<Element, layout::ColumnMajor> src,
+                  cutlass::gemm::GemmCoord problem_size) {
+  for (int k = 0; k < problem_size.k(); k++) {
+    for (int n = 0; n < problem_size.n(); n++) {
+      int group = (sizeof(Element) == 2) ? 64 : 32;
+      int interweave = (sizeof(Element) == 2) ? 8 : 4;
+
+      int dest_col = n / group * group + (n % 8) * interweave + (n % group) / 8;
+      int dest_row = k;
+
+      dest.at({dest_row, dest_col}) = src.at({k, n});
+    }
+  }
+}
+#endif
+
 } // namespace cutlass

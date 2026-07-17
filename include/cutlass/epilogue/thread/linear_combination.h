@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear combination operations used by epilogues.
 */
@@ -69,6 +71,12 @@ public:
   using ComputeFragment = Array<ElementCompute, kCount>;
 
   static FloatRoundStyle const kRound = Round;
+  static const ScaleType::Kind kScale = Scale;
+
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
 
   /// Host-constructable parameters structure
   struct Params {
@@ -108,15 +116,21 @@ public:
     Params(
       ElementCompute const *alpha_ptr,
       ElementCompute const *beta_ptr
+#if SAIL_TMP_WORKAROUND
+    ): alpha(alpha_ptr ? *alpha_ptr : 0), beta(beta_ptr ? *beta_ptr : 0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
+#else
     ): alpha(0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
-
+#endif
     }
 
     CUTLASS_HOST_DEVICE
     Params(
       ElementCompute const *alpha_ptr
+#if SAIL_TMP_WORKAROUND
+    ): alpha(alpha_ptr ? *alpha_ptr : 0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(nullptr) {
+#else
     ): alpha(0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(nullptr) {
-
+#endif
     }
   };
 
@@ -134,9 +148,13 @@ public:
   /// Constructs the function object, possibly loading from pointers in host memory
   CUTLASS_HOST_DEVICE
   LinearCombination(Params const &params) {
-
+#if SAIL_TMP_WORKAROUND
+    alpha_ = params.alpha;
+    beta_ = params.beta;
+#else
     alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
     beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+#endif
   }
 
   /// Returns true if source is needed
@@ -148,6 +166,16 @@ public:
 
     return beta_ != ElementCompute(0);
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  bool is_invariant() const {
+    if (Scale == ScaleType::NoBetaScaling) return false;
+
+    return (alpha_ == ElementCompute(1) && beta_ == ElementCompute(0));
+  }
+#endif
 
   /// Functionally required for serial reduction in the epilogue
   CUTLASS_HOST_DEVICE

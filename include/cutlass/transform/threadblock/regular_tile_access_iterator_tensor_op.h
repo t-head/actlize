@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing computing the addresses of storing of tiles
    from pitch-linear rank=2 tensors.
@@ -32,7 +34,7 @@
 #include "cutlass/array.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/layout/pitch_linear.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm75.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu.h"
 #include "cutlass/matrix_coord.h"
 #include "cutlass/matrix_shape.h"
 #include "cutlass/tensor_ref.h"
@@ -54,11 +56,11 @@ namespace threadblock {
 ///            WriteableContiguousTileIteratorConcept
 ///
 template <typename Shape_, typename Element_, int AdvanceRank,
-          typename ThreadMap_, int Alignment>
+          typename ThreadMap_, int Alignment, int Crosswise>
 class RegularTileAccessIterator<
     Shape_, Element_,
     layout::TensorOpMultiplicandCongruous<sizeof_bits<Element_>::value,
-                                          int(128 / sizeof(Element_))>,
+                                          Crosswise>,
     AdvanceRank, ThreadMap_, Alignment> {
  public:
   static_assert(
@@ -70,9 +72,10 @@ class RegularTileAccessIterator<
   using Element = Element_;
   using Layout =
       layout::TensorOpMultiplicandCongruous<sizeof_bits<Element_>::value,
-                                            int(128 / sizeof(Element_))>;
+                                            Crosswise>;
   static int const kAdvanceRank = AdvanceRank;
   static int const kAlignment = Alignment;
+  static int const kCrosswise = Crosswise;
 
   using Index = typename Layout::Index;
   using LongIndex = typename Layout::LongIndex;
@@ -168,9 +171,16 @@ class RegularTileAccessIterator<
     AccessType *access_ptr = pointer_[iteration_strided_ & 1];
     int stride_idx = (iteration_strided_ & ~1);
 
+#if ACOMPUTE_VERSION == 10500 && defined(ACOMPUTE_AIU2ASYNC)
+    // iteration_contiguous_ assumed to be 0 for kCrosswise less than 128B
+    int access_offset = stride_idx * ThreadMap::Delta::kStrided * kCrosswise / ThreadMap::kElementsPerAccess +
+                        iteration_contiguous_ * ThreadMap::Delta::kContiguous * Shape::kStrided /
+                            ThreadMap::kElementsPerAccess;
+#else
     int access_offset = stride_idx * ThreadMap::Delta::kStrided * stride_ +
                         iteration_contiguous_ * ThreadMap::Delta::kContiguous /
                             ThreadMap::kElementsPerAccess;
+#endif
 
     char *access_byte_ptr =
         reinterpret_cast<char *>(access_ptr + access_offset);
@@ -213,6 +223,7 @@ class RegularTileAccessIterator<
   /// Adds a tile offset
   CUTLASS_DEVICE
   void add_tile_offset(TensorCoord const &coord) {
+    // assume coord.contiguous() 0
     add_pointer_offset(coord.contiguous() * Shape::kContiguous +
                        coord.strided() * Shape::kStrided * stride_ *
                            Layout::kElementsPerAccess);
@@ -229,11 +240,11 @@ class RegularTileAccessIterator<
 ///            WriteableContiguousTileIteratorConcept
 ///
 template <typename Shape_, typename Element_, int AdvanceRank,
-          typename ThreadMap_, int Alignment>
+          typename ThreadMap_, int Alignment, int Crosswise>
 class RegularTileAccessIterator<
     Shape_, Element_,
     layout::ColumnMajorTensorOpMultiplicandCongruous<
-        sizeof_bits<Element_>::value, int(128 / sizeof(Element_))>,
+        sizeof_bits<Element_>::value, Crosswise>,
     AdvanceRank, ThreadMap_, Alignment> {
  public:
   static_assert(
@@ -244,7 +255,7 @@ class RegularTileAccessIterator<
   using Shape = Shape_;
   using Element = Element_;
   using Layout = layout::ColumnMajorTensorOpMultiplicandCongruous<
-      sizeof_bits<Element_>::value, int(128 / sizeof(Element_))>;
+      sizeof_bits<Element_>::value, Crosswise>;
   static int const kAdvanceRank = AdvanceRank;
   static int const kAlignment = Alignment;
 
@@ -260,7 +271,7 @@ class RegularTileAccessIterator<
   using UnderlyingIterator = RegularTileAccessIterator<
       layout::PitchLinearShape<Shape::kRow, Shape::kColumn>, Element,
       layout::TensorOpMultiplicandCongruous<sizeof_bits<Element_>::value,
-                                            int(128 / sizeof(Element_))>,
+                                            Crosswise>,
       (kAdvanceRank == 0 ? 0 : 1), ThreadMap_>;
 
   using AccessType = typename UnderlyingIterator::AccessType;
@@ -275,7 +286,11 @@ class RegularTileAccessIterator<
   RegularTileAccessIterator(TensorRef ref,  ///< Pointer to start of tensor
                             int thread_id   ///< ID of each participating thread
                             )
+#if ACOMPUTE_VERSION == 10500 && defined(ACOMPUTE_AIU2ASYNC)
+      : iterator_({ref.data(), {ref.stride(0), Shape::kColumn}}, thread_id) {}
+#else
       : iterator_({ref.data(), ref.stride()}, thread_id) {}
+#endif
 
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
@@ -326,11 +341,11 @@ class RegularTileAccessIterator<
 ///            WriteableContiguousTileIteratorConcept
 ///
 template <typename Shape_, typename Element_, int AdvanceRank,
-          typename ThreadMap_, int Alignment>
+          typename ThreadMap_, int Alignment, int Crosswise>
 class RegularTileAccessIterator<
     Shape_, Element_,
     layout::RowMajorTensorOpMultiplicandCongruous<sizeof_bits<Element_>::value,
-                                                  int(128 / sizeof(Element_))>,
+                                                  Crosswise>,
     AdvanceRank, ThreadMap_, Alignment> {
  public:
   static_assert(
@@ -341,7 +356,7 @@ class RegularTileAccessIterator<
   using Shape = Shape_;
   using Element = Element_;
   using Layout = layout::RowMajorTensorOpMultiplicandCongruous<
-      sizeof_bits<Element_>::value, int(128 / sizeof(Element_))>;
+      sizeof_bits<Element_>::value, Crosswise>;
   static int const kAdvanceRank = AdvanceRank;
   static int const kAlignment = Alignment;
 
@@ -357,7 +372,7 @@ class RegularTileAccessIterator<
   using UnderlyingIterator = RegularTileAccessIterator<
       layout::PitchLinearShape<Shape::kColumn, Shape::kRow>, Element,
       layout::TensorOpMultiplicandCongruous<sizeof_bits<Element_>::value,
-                                            int(128 / sizeof(Element_))>,
+                                            Crosswise>,
       (kAdvanceRank == 0 ? 1 : 0), ThreadMap_>;
 
   using AccessType = typename UnderlyingIterator::AccessType;
@@ -372,7 +387,11 @@ class RegularTileAccessIterator<
   RegularTileAccessIterator(TensorRef ref,  ///< Pointer to start of tensor
                             int thread_id   ///< ID of each participating thread
                             )
+#if ACOMPUTE_VERSION == 10500 && defined(ACOMPUTE_AIU2ASYNC)
+      : iterator_({ref.data(), {ref.stride(0), Shape::kRow}}, thread_id) {}
+#else
       : iterator_({ref.data(), ref.stride()}, thread_id) {}
+#endif
 
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
@@ -556,12 +575,19 @@ class RegularTileAccessIterator<Shape_, Element_,
     AccessType *access_ptr = pointer_[iteration_strided_ & 1];
     int stride_idx = (iteration_strided_ & ~1);
 
+#if ACOMPUTE_VERSION == 10500 && defined(ACOMPUTE_AIU2ASYNC)
+    int access_offset =
+        stride_idx * ThreadMap::Delta::kStrided * (kCrosswise / Layout::kElementsPerAccess) +
+        iteration_contiguous_ * (ThreadMap::Delta::kContiguous / kCrosswise) *
+            Layout::TileShape::kContiguous;
+#else
     int access_offset =
         stride_idx * ThreadMap::Delta::kStrided * stride_ / Layout::kFactor +
         // kCrosswise elements in the contiguous dimension would span to a
         // shared memory cache line.
         iteration_contiguous_ * (ThreadMap::Delta::kContiguous / kCrosswise) *
             Layout::TileShape::kContiguous;
+#endif
     char *access_byte_ptr =
         reinterpret_cast<char *>(access_ptr + access_offset);
     return reinterpret_cast<AccessType *>(access_byte_ptr + byte_offset_);
@@ -603,10 +629,18 @@ class RegularTileAccessIterator<Shape_, Element_,
   /// Adds a tile offset
   CUTLASS_DEVICE
   void add_tile_offset(TensorCoord const &coord) {
+#if ACOMPUTE_VERSION == 10500 && defined(ACOMPUTE_AIU2ASYNC)
+    // stride_ here not stage * blockK but single blockK, assume coord.strided() 0 here
+    add_pointer_offset(coord.contiguous() * Shape::kStrided * kCrosswise +
+                       coord.strided() * Shape::kStrided * stride_ *
+                           Layout::kElementsPerAccess);
+
+#else
     add_pointer_offset(coord.contiguous() * sections_per_stage_ * stride_ *
                            ThreadMap::kElementsPerAccess / sections_ +
                        coord.strided() * Shape::kStrided * stride_ *
                            Layout::kElementsPerAccess);
+#endif
   }
 };
 
@@ -635,6 +669,102 @@ class RegularTileAccessIterator<
   using Shape = Shape_;
   using Element = Element_;
   using Layout = layout::ColumnMajorTensorOpMultiplicandCrosswise<
+      sizeof_bits<Element_>::value, Crosswise>;
+  static int const kAdvanceRank = AdvanceRank;
+  static int const kAlignment = Alignment;
+
+  using Index = typename Layout::Index;
+  using LongIndex = typename Layout::LongIndex;
+
+  using TensorRef = TensorRef<Element, Layout>;
+  using TensorCoord = typename Layout::TensorCoord;
+
+  using ThreadMap = ThreadMap_;
+
+  /// Underlying iterator type
+  using UnderlyingIterator = RegularTileAccessIterator<
+      layout::PitchLinearShape<Shape::kRow, Shape::kColumn>, Element,
+      layout::TensorOpMultiplicandCrosswise<sizeof_bits<Element_>::value,
+                                            Crosswise>,
+      (kAdvanceRank == 0 ? 0 : 1), ThreadMap_>;
+
+  using AccessType = typename UnderlyingIterator::AccessType;
+
+ private:
+  /// Underlying iterator
+  UnderlyingIterator iterator_;
+
+ public:
+  /// Construct a TileIterator with zero threadblock offset
+  CUTLASS_HOST_DEVICE
+  RegularTileAccessIterator(TensorRef ref,  ///< Pointer to start of tensor
+                            int thread_id   ///< ID of each participating thread
+                            )
+      : iterator_({ref.data(), ref.stride()}, thread_id) {}
+
+  /// Overrides the internal iteration index
+  CUTLASS_HOST_DEVICE
+  void set_iteration_index(int index) { iterator_.set_iteration_index(index); }
+
+  /// Adds a pointer offset in units of Element
+  CUTLASS_HOST_DEVICE
+  void add_pointer_offset(LongIndex pointer_offset) {
+    iterator_.add_pointer_offset(pointer_offset);
+  }
+
+  /// Returns a pointer
+  CUTLASS_HOST_DEVICE
+  AccessType *get() const {
+    return reinterpret_cast<AccessType *>(iterator_.get());
+  }
+
+  /// Adds a tile offset
+  CUTLASS_DEVICE
+  void add_tile_offset(TensorCoord const &coord) {
+    iterator_.add_tile_offset({coord.row(), coord.column()});
+  }
+
+  /// Advances to the next tile in memory.
+  CUTLASS_HOST_DEVICE
+  RegularTileAccessIterator &operator++() {
+    ++iterator_;
+    return *this;
+  }
+
+  /// Advances to the next tile in memory.
+  CUTLASS_HOST_DEVICE
+  RegularTileAccessIterator operator++(int) {
+    RegularTileAccessIterator prev(*this);
+    ++iterator_;
+
+    return prev;
+  }
+};
+
+
+/// Tile Iterator specialized for column-major crosswise TensorOp formats.
+///
+///
+/// Satisfies: ForwardTileIteratorConcept |
+///            ReadableContiguousTileIteratorConcept |
+///            WriteableContiguousTileIteratorConcept
+///
+template <typename Shape_, typename Element_, int AdvanceRank,
+          typename ThreadMap_, int Alignment, int Crosswise>
+class RegularTileAccessIterator<
+    Shape_, Element_,
+    layout::ColumnMajorTensorOpMultiplicandCrosswiseCol32x2R4R4<
+        sizeof_bits<Element_>::value, Crosswise>,
+    AdvanceRank, ThreadMap_, Alignment> {
+ public:
+  static_assert(
+      AdvanceRank == 0 || AdvanceRank == 1,
+      "Specialization for column-major iterator may along advance along the "
+      "columns(rank=0) or rows(rank=1) dimension.");
+
+  using Shape = Shape_;
+  using Element = Element_;
+  using Layout = layout::ColumnMajorTensorOpMultiplicandCrosswiseCol32x2R4R4<
       sizeof_bits<Element_>::value, Crosswise>;
   static int const kAdvanceRank = AdvanceRank;
   static int const kAlignment = Alignment;

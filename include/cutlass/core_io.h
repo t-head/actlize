@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Helpers for printing cutlass/core objects
 */
@@ -44,14 +46,14 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Output operator for CUDA built-in dim3 type
+/// Output operator for device built-in dim3 type
 inline std::ostream &operator<<(std::ostream &out, dim3 d) {
   return out << d.x << ", " << d.y << ", " << d.z;
 }
 
-/// Output operator for CUDA built-in error type
-inline std::ostream &operator<<(std::ostream &out, cudaError_t error) {
-  return out << cudaGetErrorString(error);
+/// Output operator for device built-in error type
+inline std::ostream &operator<<(std::ostream &out, hggcError_t error) {
+  return out << hggcGetErrorString(error);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

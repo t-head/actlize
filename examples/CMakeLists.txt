@@ -1,3 +1,4 @@
+# Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
 # Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -32,7 +33,8 @@ function(cutlass_example_add_executable NAME)
   set(multiValueArgs DEPENDS DEPENDEES TEST_COMMAND_OPTIONS)
   cmake_parse_arguments(_ "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  cutlass_add_executable(${NAME} ${__UNPARSED_ARGUMENTS})
+  cutlass_add_executable(${NAME} ${__UNPARSED_ARGUMENTS}
+    EXTRA_DEV_INCLUDES "-I${CUTLASS_EXAMPLES_COMMON_SOURCE_DIR}")
 
   add_dependencies(cutlass_examples ${NAME})
 
@@ -67,22 +69,29 @@ endfunction()
 foreach(EXAMPLE
   00_basic_gemm
   01_cutlass_utilities
-  02_dump_reg_shmem
-  03_visualize_layout
-  04_tile_iterator
-  05_batched_gemm
-  06_splitK_gemm
-  07_volta_tensorop_gemm
-  08_turing_tensorop_gemm
-  09_turing_tensorop_conv2dfprop
-  10_planar_complex
-  11_planar_complex_array
-  12_gemm_bias_relu
-  13_two_tensor_op_fusion  
-  14_ampere_tf32_tensorop_gemm
-  15_ampere_sparse_tensorop_gemm
-  16_ampere_tensorop_conv2dfprop
-  17_fprop_per_channel_bias
+  02_tile_iterator
+  03_batched_gemm
+  04_splitK_gemm
+  05_gemm_bias_relu
+  06_ppu_tf32_tensorop_gemm
+  07_ppu_tensorop_conv2dfprop
+  08_fprop_per_channel_bias
+  09_gemm_bias_leakyrelu
+  10_gemm_add_biasadd_leakyrelu
+  11_gemm_add_biasadd_mul_biasadd_leakyrelu
+  12_gemm_add_scale_biasadd_leakyrelu
+  13_gemm_add_rsqrt_mul_biasadd_leakyrelu
+  14_splitK_gemm_add_biasadd_mul_biasadd_leakyrelu
+  15_gemm_biasadd_gelu
+  16_batched_gemm_biasadd_relu
+  17_conv_add_biasadd_relu
+  18_conv_add_biasadd_scale_biasadd_relu
+  19_conv_scale_biasadd_relu
+  20_conv_abs_scale_biasadd_relu
+  21_conv_add_biasadd_scale_biasadd_relu_legacy
+  22_conv_scale_biasadd_add_relu
+  23_conv_scale_biasadd_relu
+  24_conv_biasadd_relu
   )
 
   add_subdirectory(${EXAMPLE})

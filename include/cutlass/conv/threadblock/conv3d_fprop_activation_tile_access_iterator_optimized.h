@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM A (activation tile) 
     matrix from memory.
@@ -60,7 +62,8 @@ template <
   typename Shape_,
   typename Element_,
   typename Layout_,
-  typename ThreadMap_
+  typename ThreadMap_,
+  int AccessSize = ThreadMap_::kElementsPerAccess
 >
 class Conv3dFpropActivationTileAccessIteratorOptimized {
 public:
@@ -74,7 +77,7 @@ public:
   using Layout = Layout_;
   using TensorCoord = typename Layout::TensorCoord;
   using ThreadMap = ThreadMap_;
-  using AccessType = AlignedArray<Element, ThreadMap::kElementsPerAccess>;
+  using AccessType = AlignedArray<Element, AccessSize>;
   using TensorRef = cutlass::TensorRef<Element, Layout>;
   using Index = typename Layout::Index;
   using LongIndex = typename Layout::LongIndex;
@@ -97,12 +100,15 @@ public:
 
   using Params = Conv3dFpropActivationIteratorOptimizedParams<Layout>;
 
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
+
 private:
 
   Conv3dFpropActivationIteratorOptimizedParams<Layout> const &params_;
   Conv3dProblemSize const &problem_size_;
   LongIndex iteration_contiguous_;
   LongIndex iteration_strided_;
+  LongIndex iteration_vector_;
 
   // One pointer per access
   char const *pointer_[ThreadMap::Iterations::kStrided];
@@ -114,7 +120,7 @@ private:
   int filter_c_;
 
   // mask for t, r, and s
-  Index masks_[ThreadMap::Iterations::kStrided][3];
+  Index masks_[ThreadMap::Iterations::kStrided][kAccessesPerVector][3];
 
 public:
 
@@ -192,7 +198,11 @@ public:
         int d = offset_z[s_idx] * problem_size_.stride_d - problem_size_.pad_d + t_ * problem_size_.dilation_d;
 
         bool pred = (offset_n[s_idx] < problem_size_.N && d >= 0 && d < problem_size_.D);
-        masks_[s_idx][0] |= (pred << t);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+          masks_[s_idx][v_idx][0] |= (pred << t);
+        }
       }
     }   
 
@@ -210,7 +220,11 @@ public:
         int h = offset_p[s_idx] * problem_size_.stride_h - problem_size_.pad_h + r_ * problem_size_.dilation_h;
 
         bool pred = (h >= 0 && h < problem_size_.H);
-        masks_[s_idx][1] |= (pred << r);
+        
+        CUTLASS_PRAGMA_UNROLL
+        for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+          masks_[s_idx][v_idx][1] |= (pred << r);
+        }
       }
     }  
 
@@ -228,12 +242,17 @@ public:
         int w = offset_q[s_idx] * problem_size_.stride_w - problem_size_.pad_w + s_ * problem_size_.dilation_w;
 
         bool pred = (w >= 0 && w < problem_size_.W);
-        masks_[s_idx][2] |= (pred << s);
+        
+        CUTLASS_PRAGMA_UNROLL
+        for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+          masks_[s_idx][v_idx][2] |= (pred << s);
+        }
       }
     }
 
-    if (filter_c_ >= problem_size.C) {
-      clear_mask();
+    CUTLASS_PRAGMA_UNROLL
+    for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+      clear_mask_(filter_c_ + v_idx * AccessSize >= problem_size_.C, v_idx);
     }
 
     set_iteration_index(0);
@@ -284,64 +303,64 @@ private:
 
   /// Clears the predicates
   CUTLASS_HOST_DEVICE
-  void clear_mask_(bool clear) {
+  void clear_mask_(bool clear, int index) {
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
 
-      // We are using inline PTX assembly here to avoid an CUDA C++ compilation
+      // We are using inline device assembly assembly here to avoid an device C++ compilation
       // artifact in which control flow instructions are generated. Instead, our
       // intent is to predicate the mov instructions.
-      #if defined(__CUDA_ARCH__)
+      #if defined(__HGGC_ARCH__)
       asm volatile(
           "{\n"
           "  .reg .pred p;\n"
           "  .reg .u32  m;"
-          "  mov.u32 m, %2;"
-          "  setp.ne.b32 p, %1, 0;\n"
-          "  @p mov.u32 m, 0;\n"
-          "  mov.u32 %0, m;\n"
+          "  ppu.mov.u32 m, %2;"
+          "  ppu.cmpp.ne.b32 p, %1, 0;\n"
+          "  @p ppu.mov.u32 m, 0;\n"
+          "  ppu.mov.u32 %0, m;\n"
           "}\n" 
         :
-          "=r"(masks_[s][0])
+          "=r"(masks_[s][index][0])
        : 
           "r"((int)clear),
-          "r"(masks_[s][0])
+          "r"(masks_[s][index][0])
       );
       asm volatile(
           "{\n"
           "  .reg .pred p;\n"
           "  .reg .u32  m;"
-          "  mov.u32 m, %2;"
-          "  setp.ne.b32 p, %1, 0;\n"
-          "  @p mov.u32 m, 0;\n"
-          "  mov.u32 %0, m;\n"
+          "  ppu.mov.u32 m, %2;"
+          "  ppu.cmpp.ne.b32 p, %1, 0;\n"
+          "  @p ppu.mov.u32 m, 0;\n"
+          "  ppu.mov.u32 %0, m;\n"
           "}\n" 
         :
-          "=r"(masks_[s][1])
+          "=r"(masks_[s][index][1])
        : 
           "r"((int)clear),
-          "r"(masks_[s][1])
+          "r"(masks_[s][index][1])
       );
       asm volatile(
           "{\n"
           "  .reg .pred p;\n"
           "  .reg .u32  m;"
-          "  mov.u32 m, %2;"
-          "  setp.ne.b32 p, %1, 0;\n"
-          "  @p mov.u32 m, 0;\n"
-          "  mov.u32 %0, m;\n"
+          "  ppu.mov.u32 m, %2;"
+          "  ppu.cmpp.ne.b32 p, %1, 0;\n"
+          "  @p ppu.mov.u32 m, 0;\n"
+          "  ppu.mov.u32 %0, m;\n"
           "}\n" 
         :
-          "=r"(masks_[s][2])
+          "=r"(masks_[s][index][2])
        : 
           "r"((int)clear),
-          "r"(masks_[s][2])
+          "r"(masks_[s][index][2])
       );
       #else
         if (clear) {
-          masks_[s][0] = 0;
-          masks_[s][1] = 0;
-          masks_[s][2] = 0;
+          masks_[s][index][0] = 0;
+          masks_[s][index][1] = 0;
+          masks_[s][index][2] = 0;
         }
       #endif
     }
@@ -352,8 +371,11 @@ public:
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
   void set_iteration_index(Index index) {
-    iteration_contiguous_ = index % ThreadMap::Iterations::kContiguous;
-    iteration_strided_ = index / ThreadMap::Iterations::kContiguous;
+    iteration_vector_ = index % kAccessesPerVector;
+    int residual_access = index / kAccessesPerVector;
+
+    iteration_contiguous_ = residual_access % ThreadMap::Iterations::kContiguous;
+    iteration_strided_ = residual_access / ThreadMap::Iterations::kContiguous;
   }
 
   /// Adds a pointer offset in units of element
@@ -366,6 +388,9 @@ public:
   void advance() { 
 
     int next_idx = 0;
+#if SAIL_TMP_WORKAROUND
+    int inc_next = params_.inc_next[0];
+#endif
  
     // moves to the next tile
     ++filter_s_;
@@ -374,6 +399,9 @@ public:
       filter_s_ = 0;
       ++filter_r_;
       next_idx = 1;
+#if SAIL_TMP_WORKAROUND
+        inc_next = params_.inc_next[1];
+#endif
 
       if (filter_r_ == problem_size_.R) {
         filter_r_ = 0;
@@ -381,21 +409,34 @@ public:
 
         if (filter_t_ < problem_size_.T) {
           next_idx = 2;
+#if SAIL_TMP_WORKAROUND
+          inc_next = params_.inc_next[2];
+#endif
         } 
         else {
           filter_t_ = 0;
           next_idx = 3;
+#if SAIL_TMP_WORKAROUND
+          inc_next = params_.inc_next[3];
+#endif
         } 
       }
     }
 
+#if SAIL_TMP_WORKAROUND
+    add_byte_offset_(inc_next);
+#else
     add_byte_offset_(params_.inc_next[next_idx]);
+#endif
       
     if (next_idx == 3) {  
       filter_c_ += params_.filter_c_delta;
     }
 
-    clear_mask_(filter_c_ >= problem_size_.C);
+    CUTLASS_PRAGMA_UNROLL
+    for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+      clear_mask_(filter_c_ + v_idx * AccessSize >= problem_size_.C, v_idx);
+    }
   }
 
   /// Clears the predicates
@@ -403,9 +444,12 @@ public:
   void clear_mask() {
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
-      masks_[s][0] = Mask(0);
-      masks_[s][1] = Mask(0);
-      masks_[s][2] = Mask(0);
+      CUTLASS_PRAGMA_UNROLL
+      for (int v = 0; v < kAccessesPerVector; ++v) {
+        masks_[s][v][0] = Mask(0);
+        masks_[s][v][1] = Mask(0);
+        masks_[s][v][2] = Mask(0);
+      }
     }
   }
 
@@ -413,21 +457,28 @@ public:
   bool valid() {
 
     return 
-      (masks_[iteration_strided_][0] & (Index(1) << filter_t_)) &&
-      (masks_[iteration_strided_][1] & (Index(1) << filter_r_)) &&
-      (masks_[iteration_strided_][2] & (Index(1) << filter_s_));
+      (masks_[iteration_strided_][iteration_vector_][0] & (Index(1) << filter_t_)) &&
+      (masks_[iteration_strided_][iteration_vector_][1] & (Index(1) << filter_r_)) &&
+      (masks_[iteration_strided_][iteration_vector_][2] & (Index(1) << filter_s_));
   }
 
   /// Returns a pointer to the vector starting at the current coordinate
   CUTLASS_HOST_DEVICE
   AccessType const *get() const {
 
-    return reinterpret_cast<AccessType const *>(pointer_[iteration_strided_]);
+    return reinterpret_cast<AccessType const *>(pointer_[iteration_strided_]) + iteration_vector_;
   }
 
   /// Increments to the next memory access
   CUTLASS_HOST_DEVICE
   Conv3dFpropActivationTileAccessIteratorOptimized &operator++() {
+
+    ++iteration_vector_;
+    if (iteration_vector_ < kAccessesPerVector) {
+      return *this;
+    }
+
+    iteration_vector_ = 0;
 
     ++iteration_contiguous_;
     if (iteration_contiguous_ < ThreadMap::Iterations::kContiguous) {
@@ -449,7 +500,7 @@ public:
   static Status can_implement(Conv3dProblemSize const &problem_size) {
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.C % (128/sizeof_bits<Element>::value)) {
+    if (problem_size.C % AccessSize) {
       return Status::kErrorInvalidProblem;
     }
 

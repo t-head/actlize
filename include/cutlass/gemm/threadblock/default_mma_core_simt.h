@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines basic properties needed by CTA-level GEMMs assuming expectations about data
       layout of the global memory fragments, data types, and internal tile sizes.
@@ -59,11 +61,16 @@ namespace detail {
 // The goal is for each thread's tile of elements to be as square as possible
 // for performance (4x4 will be faster than 2x8).
 template<typename WarpShape>
+CUTLASS_HOST_DEVICE
 constexpr int simt_get_warp_threads_m() {
-    return (WarpShape::kM > WarpShape::kN) ? 8 : 4;
+    return (WarpShape::kM == 1) ? 1 : 
+           (WarpShape::kM == 2) ? 2 : 
+           (WarpShape::kM == 4) ? 4 : 
+           (WarpShape::kM > WarpShape::kN) ? 8 : 4;
 }
 
 /// Computes padding in shared memory to perform efficient transpose without bank conflicts.
+CUTLASS_HOST_DEVICE
 constexpr int simt_transpose_padding(int threads, int crosswise, int size_in_bits) {
   return (size_in_bits >= 32 ?
       threads / crosswise / (size_in_bits / 32) :

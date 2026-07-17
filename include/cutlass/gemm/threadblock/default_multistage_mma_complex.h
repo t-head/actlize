@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -31,10 +32,10 @@
 
 #include "cutlass/arch/arch.h"
 #include "cutlass/cutlass.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm80.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/transform/threadblock/predicated_tile_iterator.h"
-#include "cutlass/gemm/threadblock/default_multistage_mma_complex_core_sm80.h"
+#include "cutlass/gemm/threadblock/default_multistage_mma_complex_core_ppu.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 

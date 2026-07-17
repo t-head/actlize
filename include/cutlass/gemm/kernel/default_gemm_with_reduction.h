@@ -1,16 +1,17 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
- *   * Redistributions of source code must retain the above copyright notice, this list of
- *     conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright notice, this list of
- *     conditions and the following disclaimer in the documentation and/or other materials
- *     provided with the distribution.
- *   * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
- *     to endorse or promote products derived from this software without specific prior written
- *     permission.
+ *     * Redistributions of source code must retain the above copyright notice, this list of
+ *       conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright notice, this list of
+ *       conditions and the following disclaimer in the documentation and/or other materials
+ *       provided with the distribution.
+ *     * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
+ *       to endorse or promote products derived from this software without specific prior written
+ *       permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
@@ -112,108 +113,6 @@ struct DefaultGemmWithReduction {
 
   // Replace epilogue
   using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWithReductionTensorOp<
-    typename GemmBase::Epilogue::Shape,
-    typename GemmBase::Epilogue::WarpMmaOperator,
-    GemmBase::Epilogue::kPartitionsK,
-    ElementC_,
-    EpilogueOutputOp,
-    EpilogueReductionOp,
-    GemmBase::Epilogue::kElementsPerAccess
-  >::Epilogue;
-
-  // Compose the GEMM kernel
-  using GemmKernel = GemmWithFusedEpilogue<
-    typename GemmBase::Mma,
-    Epilogue,
-    ThreadblockSwizzle
-  >;
-};
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Parital specialization: ArchTag = cutlass::arch::Sm70
-///
-///
-template <
-  /// Element type for A matrix operand
-  typename ElementA_,
-  /// Layout type for A matrix operand
-  typename LayoutA_,
-  /// Complex elementwise transformation on A operand
-  ComplexTransform TransformA,
-  /// Access granularity of A matrix in units of elements
-  int kAlignmentA,
-  /// Element type for B matrix operand
-  typename ElementB_,
-  /// Layout type for B matrix operand
-  typename LayoutB_,
-  /// Complex elementwise transformation on B operand
-  ComplexTransform TransformB,
-  /// Access granularity of B matrix in units of elements
-  int kAlignmentB,
-  /// Element type for C and D matrix operands
-  typename ElementC_,
-  /// Layout type for C and D matrix operands
-  typename LayoutC_,
-  /// Element type for internal accumulation
-  typename ElementAccumulator,
-  /// Operator class tag
-  typename OperatorClass,
-  /// Threadblock-level tile size (concept: GemmShape)
-  typename ThreadblockShape,
-  /// Warp-level tile size (concept: GemmShape)
-  typename WarpShape,
-  /// Warp-level tile size (concept: GemmShape)
-  typename InstructionShape,
-  /// Epilogue output operator
-  typename EpilogueOutputOp,
-  /// Epilogue reduction operator
-  typename EpilogueReductionOp,
-  /// Threadblock-level swizzling operator
-  typename ThreadblockSwizzle,
-  /// Number of stages used in the pipelined mainloop
-  int Stages,
-  /// Operation performed by GEMM
-  typename Operator,
-  ///
-  typename Enable
->
-struct DefaultGemmWithReduction<
-  ElementA_, LayoutA_, TransformA, kAlignmentA, 
-  ElementB_, LayoutB_, TransformB, kAlignmentB,
-  ElementC_, LayoutC_,
-  ElementAccumulator,
-  OperatorClass,
-  cutlass::arch::Sm70,
-  ThreadblockShape,
-  WarpShape,
-  InstructionShape,
-  EpilogueOutputOp,
-  EpilogueReductionOp,
-  ThreadblockSwizzle,
-  Stages,
-  Operator,
-  Enable
-  >  {
-
-  using GemmBase = typename DefaultGemmUniversal<
-    ElementA_, LayoutA_, TransformA, kAlignmentA,
-    ElementB_, LayoutB_, TransformB, kAlignmentB,
-    ElementC_, LayoutC_, ElementAccumulator,
-    OperatorClass,
-    cutlass::arch::Sm70,
-    ThreadblockShape,
-    WarpShape,
-    InstructionShape,
-    EpilogueOutputOp,
-    ThreadblockSwizzle,
-    Stages,
-    Operator
-  >::GemmKernel;
-
-  // Replace epilogue
-  using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWithReductionVoltaTensorOp<
     typename GemmBase::Epilogue::Shape,
     typename GemmBase::Epilogue::WarpMmaOperator,
     GemmBase::Epilogue::kPartitionsK,

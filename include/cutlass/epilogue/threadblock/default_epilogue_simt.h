@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using SIMT.
 
@@ -37,6 +39,7 @@
 #include "cutlass/array.h"
 
 #include "cutlass/gemm/gemm.h"
+#include "cutlass/gemm/warp/mma.h"
 
 #include "cutlass/epilogue/thread/linear_combination.h"
 #include "cutlass/epilogue/thread/linear_combination_clamp.h"
@@ -44,6 +47,7 @@
 #include "cutlass/epilogue/thread/linear_combination_gelu.h"
 #include "cutlass/epilogue/thread/linear_combination_sigmoid.h"
 #include "cutlass/epilogue/thread/linear_combination_planar_complex.h"
+#include "cutlass/epilogue/thread/linear_combination_epilogue_fuse.h"
 
 #include "cutlass/epilogue/thread/conversion_op.h"
 #include "cutlass/epilogue/thread/reduction_op.h"
@@ -57,6 +61,10 @@
 #include "cutlass/epilogue/threadblock/predicated_tile_iterator.h"
 #include "cutlass/epilogue/threadblock/shared_load_iterator.h"
 #include "cutlass/epilogue/threadblock/epilogue.h"
+
+#include "cutlass/epilogue/threadblock/predicated_tile_iterator_direct_conv.h"
+#include "cutlass/epilogue/threadblock/shared_load_iterator_pitch_liner.h"
+#include "cutlass/epilogue/threadblock/epilogue_depthwise.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -123,7 +131,7 @@ struct DefaultEpilogueSimt {
     ElementAccumulator
   >;
 
-  /// Hard-coded padding elements added 
+  /// Hard-coded padding elements added
   using Padding = typename WarpTileIterator::Padding;
 
   //
@@ -142,6 +150,94 @@ struct DefaultEpilogueSimt {
   >;
 };
 
+/// Defines sensible defaults for epilogues for SimtOps.
+template <typename Shape_,        // ThreadBlock Shape
+          typename WarpMmaSimt_,  // mma_depthwise_simt
+          typename OutputOp_,
+          int ElementsPerAccess_,
+          typename ThreadOutputShape_ = cutlass::conv::TensorNHWCShape<1, 1, 1, 1>,
+          typename ThreadBlockOutputShape_ = cutlass::conv::TensorNHWCShape<1, 1, 1, 1> >
+struct DefaultDirectConvEpilogueSimt {
+  using Shape = Shape_;
+  using WarpMmaSimt = WarpMmaSimt_;
+  using WarpShape = typename WarpMmaSimt::Shape;
+  using OutputOp = OutputOp_;
+  using ThreadOutputShape = ThreadOutputShape_;
+  using ThreadBlockOutputShape = ThreadBlockOutputShape_;
+  static int const kElementsPerAccess = ElementsPerAccess_;
+
+
+  using ElementOutput = typename OutputOp::ElementOutput;
+  using LayoutC = typename WarpMmaSimt::LayoutC;
+  using ElementAccumulator = typename WarpMmaSimt::ElementC;
+
+  /// Number of threads total
+  using WarpCount = gemm::GemmShape<
+    Shape::kM / WarpShape::kM,
+    Shape::kN / WarpShape::kN
+  >;
+
+  static int const kWarpSize = cutlass::gemm::warp::WarpSize<arch::OpClassSimt>::value;
+
+  static int const kThreads = WarpCount::kCount * kWarpSize;
+
+  //
+  // Thread map
+  //
+
+  using OutputTileThreadMap = cutlass::transform::PitchLinearStripminedThreadMap<
+    layout::PitchLinearShape<ThreadBlockOutputShape::kC, ThreadBlockOutputShape::kNHW>,
+    kThreads,
+    kElementsPerAccess
+  >;
+
+  using OutputTileIterator = cutlass::epilogue::threadblock::PredicatedTileIteratorDirectConv<
+    OutputTileThreadMap,
+    ElementOutput,
+    ThreadOutputShape,
+    ThreadBlockOutputShape
+  >;
+
+  using AccumulatorFragmentIterator = cutlass::epilogue::warp::FragmentIteratorSimt<
+    typename WarpMmaSimt::Shape,
+    typename WarpMmaSimt::ThreadMma,
+    layout::RowMajor,
+    typename WarpMmaSimt::Policy
+  >;
+
+  using WarpTileIterator = cutlass::epilogue::warp::TileIteratorSimtDirect2dConv<
+    typename WarpMmaSimt::Shape,
+    ThreadOutputShape,
+    ThreadBlockOutputShape,
+    typename WarpMmaSimt::ThreadMma,
+    ElementAccumulator,
+    layout::RowMajor,
+    typename WarpMmaSimt::Policy
+  >;
+
+  using SharedLoadIterator = cutlass::epilogue::threadblock::SharedLoadIteratorPitchLiner<
+    OutputTileThreadMap,
+    ElementAccumulator
+  >;
+
+  /// Hard-coded padding elements added
+  using Padding = typename WarpTileIterator::Padding;
+  //
+  // Define the epilogue
+  //
+  using Epilogue = cutlass::epilogue::threadblock::EpilogueDepthwise<
+    Shape,
+    ThreadOutputShape,
+    ThreadBlockOutputShape,
+    WarpMmaSimt,
+    OutputTileIterator,
+    AccumulatorFragmentIterator,
+    WarpTileIterator,
+    SharedLoadIterator,
+    OutputOp,
+    Padding
+  >;
+};
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace threadblock

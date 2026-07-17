@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -24,10 +25,10 @@
  **************************************************************************************************/
 
 /*! \file
-    \brief 
+    \brief
       Default kernel-level GEMM definitions combine threadblock-scoped matrix multiply-add with
       the appropriate threadblock-scoped epilogue.
-  
+
       Note, CUTLASS epilogues universally target row-major outputs. Column-major outputs are
       accommodated by exchanging A and B operands and assuming transposed layouts. Partial
       specializations here choose 'device::GemmTransposed' to implement this functionality.
@@ -39,7 +40,6 @@
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/numeric_types.h"
-#include "cutlass/arch/wmma.h"
 
 #include "cutlass/epilogue/threadblock/epilogue.h"
 #include "cutlass/epilogue/thread/linear_combination.h"
@@ -47,21 +47,16 @@
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/kernel/gemm.h"
 #include "cutlass/gemm/kernel/gemm_pipelined.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm75.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm70.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm80.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
 #include "cutlass/gemm/threadblock/default_mma.h"
 #include "cutlass/gemm/threadblock/default_mma_core_simt.h"
 #include "cutlass/gemm/threadblock/threadblock_swizzle.h"
 
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_simt.h"
 #include "cutlass/transform/threadblock/predicated_tile_iterator.h"
-
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-#include "cutlass/epilogue/threadblock/default_epilogue_wmma_tensor_op.h"
-#endif //CUTLASS_ARCH_WMMA_ENABLED
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -111,13 +106,15 @@ template <
     /// epilogue
     bool SplitKSerial,
     /// Operation performed by GEMM
-    typename Operator>
+    typename Operator,
+    ///
+    typename Enable = void>
 struct DefaultGemm;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for Ampere Architecture
+/// Partial specialization for PPU Architecture
 template <
     /// Element type for A matrix operand
     typename ElementA,
@@ -154,13 +151,13 @@ template <
     typename Operator>
 struct DefaultGemm<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementC,
                    layout::RowMajor, ElementAccumulator, arch::OpClassTensorOp,
-                   arch::Sm80, ThreadblockShape, WarpShape, InstructionShape,
+                   arch::PPU0010, ThreadblockShape, WarpShape, InstructionShape,
                    EpilogueOutputOp, ThreadblockSwizzle, Stages, SplitKSerial,
                    Operator> {
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
-      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, arch::Sm80,
+      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, arch::PPU0010,
       ThreadblockShape, WarpShape, InstructionShape, Stages,
       Operator>::ThreadblockMma;
 
@@ -168,16 +165,16 @@ struct DefaultGemm<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignment
 
   /// Define the epilogue
   using Epilogue =
-      typename cutlass::epilogue::threadblock::DefaultEpilogueTensorOp<
+      typename cutlass::epilogue::threadblock::DefaultEpilogueTensorOpArch<
           ThreadblockShape, typename Mma::Operator, kPartitionsK, EpilogueOutputOp,
-          EpilogueOutputOp::kCount>::Epilogue;
+          EpilogueOutputOp::kCount, arch::PPU0010>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
   using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for Turing Architecture
+/// Partial specialization for PPU Architecture
 template <
   /// Element type for A matrix operand
   typename ElementA,
@@ -216,7 +213,7 @@ struct DefaultGemm<
   ElementC, layout::RowMajor,
   ElementAccumulator,
   arch::OpClassTensorOp,
-  arch::Sm75,
+  arch::PPU0010,
   ThreadblockShape,
   WarpShape,
   InstructionShape,
@@ -238,7 +235,7 @@ struct DefaultGemm<
     ElementAccumulator,
     layout::RowMajor,
     arch::OpClassTensorOp,
-    arch::Sm75,
+    arch::PPU0010,
     ThreadblockShape,
     WarpShape,
     InstructionShape,
@@ -263,7 +260,7 @@ struct DefaultGemm<
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for Ampere Integer Matrix Multiply Interleaved layout
+/// Partial specialization for PPU Integer Matrix Multiply Interleaved layout
 template <
     /// Element type for A matrix operand
     typename ElementA,
@@ -298,7 +295,7 @@ struct DefaultGemm<
     ElementA, layout::ColumnMajorInterleaved<InterleavedK>, kAlignmentA,
     ElementB, layout::RowMajorInterleaved<InterleavedK>, kAlignmentB, ElementC,
     layout::ColumnMajorInterleaved<InterleavedK>, int32_t,
-    arch::OpClassTensorOp, arch::Sm80, ThreadblockShape, WarpShape,
+    arch::OpClassTensorOp, arch::PPU0010, ThreadblockShape, WarpShape,
     InstructionShape, EpilogueOutputOp, ThreadblockSwizzle, Stages,
     SplitKSerial, Operator> {
   using LayoutA = layout::ColumnMajorInterleaved<InterleavedK>;
@@ -310,7 +307,7 @@ struct DefaultGemm<
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
-      ElementAccumulator, LayoutC, arch::OpClassTensorOp, arch::Sm80,
+      ElementAccumulator, LayoutC, arch::OpClassTensorOp, arch::PPU0010,
       ThreadblockShape, WarpShape, InstructionShape, Stages, Operator,
       true>::ThreadblockMma;
 
@@ -320,7 +317,71 @@ struct DefaultGemm<
   using Epilogue = typename cutlass::epilogue::threadblock::
       DefaultInterleavedEpilogueTensorOp<
           ThreadblockShape, typename Mma::Operator, kPartitionsK, EpilogueOutputOp,
-          64 / sizeof_bits<ElementC>::value, InterleavedK>::Epilogue;
+          EpilogueOutputOp::kCount, InterleavedK>::Epilogue;
+
+  /// Define the kernel-level GEMM operator.
+  using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+};
+
+/// Partial specialization for PPU Integer Matrix Multiply Interleaved layout
+/// Used to support acblasLt layout ACBLASLT_ORDER_COL32_2R_4R4
+template <
+    /// Element type for A matrix operand
+    typename ElementA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Element type for B matrix operand
+    typename ElementB,
+    /// Access granularity of B matrix in units of elements
+    int kAlignmentB,
+    /// Element type for C and D matrix operands
+    typename ElementC,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Epilogue output operator
+    typename EpilogueOutputOp,
+    /// Threadblock-level swizzling operator
+    typename ThreadblockSwizzle,
+    /// Number of stages used in the pipelined mainloop
+    int Stages,
+    /// Number of Interleaved k
+    int InterleavedK,
+    /// If true, kernel is configured to support serial reduction in the
+    /// epilogue
+    bool SplitKSerial,
+    /// Operation performed by GEMM
+    typename Operator>
+struct DefaultGemm<
+    ElementA, layout::ColumnMajorInterleaved<InterleavedK>, kAlignmentA,
+    ElementB, layout::RowMajorInterleavedCol32x2R4R4<InterleavedK>, kAlignmentB, ElementC,
+    layout::ColumnMajorInterleaved<InterleavedK>, int32_t,
+    arch::OpClassTensorOp, arch::PPU0010, ThreadblockShape, WarpShape,
+    InstructionShape, EpilogueOutputOp, ThreadblockSwizzle, Stages,
+    SplitKSerial, Operator> {
+  using LayoutA = layout::ColumnMajorInterleaved<InterleavedK>;
+  using LayoutB = layout::RowMajorInterleavedCol32x2R4R4<InterleavedK>;
+  using LayoutC = layout::ColumnMajorInterleaved<InterleavedK>;
+
+  using ElementAccumulator = int32_t;
+
+  /// Define the threadblock-scoped matrix multiply-accumulate
+  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+      ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
+      ElementAccumulator, LayoutC, arch::OpClassTensorOp, arch::PPU0010,
+      ThreadblockShape, WarpShape, InstructionShape, Stages, Operator,
+      true>::ThreadblockMma;
+
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+
+  /// Define the epilogue
+  using Epilogue = typename cutlass::epilogue::threadblock::
+      DefaultInterleavedEpilogueTensorOp<
+          ThreadblockShape, typename Mma::Operator, kPartitionsK, EpilogueOutputOp,
+          EpilogueOutputOp::kCount, InterleavedK>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
   using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
@@ -328,7 +389,7 @@ struct DefaultGemm<
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for Turing Integer Matrix Multiply Interleaved layout
+/// Partial specialization for PPU Integer Matrix Multiply Interleaved layout
 template <
     /// Element type for A matrix operand
     typename ElementA,
@@ -361,7 +422,7 @@ struct DefaultGemm<ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
                    kAlignmentA, ElementB,
                    layout::RowMajorInterleaved<InterleavedK>, kAlignmentB,
                    ElementC, layout::ColumnMajorInterleaved<InterleavedK>,
-                   int32_t, arch::OpClassTensorOp, arch::Sm75, ThreadblockShape,
+                   int32_t, arch::OpClassTensorOp, arch::PPU0010, ThreadblockShape,
                    WarpShape, InstructionShape, EpilogueOutputOp,
                    ThreadblockSwizzle, 2, SplitKSerial, Operator> {
   using LayoutA = layout::ColumnMajorInterleaved<InterleavedK>;
@@ -373,7 +434,7 @@ struct DefaultGemm<ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementAccumulator, LayoutC,
-      arch::OpClassTensorOp, arch::Sm75, ThreadblockShape, WarpShape,
+      arch::OpClassTensorOp, arch::PPU0010, ThreadblockShape, WarpShape,
       InstructionShape, 2, Operator, true>::ThreadblockMma;
 
   static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
@@ -382,92 +443,69 @@ struct DefaultGemm<ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
   using Epilogue = typename cutlass::epilogue::threadblock::
       DefaultInterleavedEpilogueTensorOp<
           ThreadblockShape, typename Mma::Operator, kPartitionsK, EpilogueOutputOp,
-          64 / sizeof_bits<ElementC>::value, InterleavedK>::Epilogue;
+          EpilogueOutputOp::kCount, InterleavedK>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
   using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
-////////////////////////////////////////////////////////////////////////////////
 
-
-/// Partial specialization for Volta architecture
+/// Partial specialization for PPU Integer Matrix Multiply Interleaved layout
+/// Used to support acblasLt layout ACBLASLT_ORDER_COL32_2R_4R4
 template <
-  /// Element type for A matrix operand
-  typename ElementA,
-  /// Layout type for A matrix operand
-  typename LayoutA,
-  /// Access granularity of A matrix in units of elements
-  int kAlignmentA,
-  /// Element type for B matrix operand
-  typename ElementB,
-  /// Layout type for B matrix operand
-  typename LayoutB,
-  /// Access granularity of B matrix in units of elements
-  int kAlignmentB,
-  /// Element type for C and D matrix operands
-  typename ElementC,
-  /// Element type for internal accumulation
-  typename ElementAccumulator,
-  /// Threadblock-level tile size (concept: GemmShape)
-  typename ThreadblockShape,
-  /// Warp-level tile size (concept: GemmShape)
-  typename WarpShape,
-  /// Epilogue output operator
-  typename EpilogueOutputOp,
-  /// Threadblock-level swizzling operator
-  typename ThreadblockSwizzle,
-  /// If true, kernel is configured to support serial reduction in the epilogue
-  bool SplitKSerial,
-  /// Operation performed by GEMM
-  typename Operator
->
-struct DefaultGemm<
-  ElementA, LayoutA, kAlignmentA,
-  ElementB, LayoutB, kAlignmentB,
-  ElementC, layout::RowMajor,
-  ElementAccumulator,
-  arch::OpClassTensorOp,
-  arch::Sm70,
-  ThreadblockShape,
-  WarpShape,
-  GemmShape<8, 8, 4>,
-  EpilogueOutputOp,
-  ThreadblockSwizzle,
-  2,
-  SplitKSerial,
-  Operator
-> {
+    /// Element type for A matrix operand
+    typename ElementA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Element type for B matrix operand
+    typename ElementB,
+    /// Access granularity of B matrix in units of elements
+    int kAlignmentB,
+    /// Element type for C and D matrix operands
+    typename ElementC,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Epilogue output operator
+    typename EpilogueOutputOp,
+    /// Threadblock-level swizzling operator
+    typename ThreadblockSwizzle,
+    /// Number of Interleaved k
+    int InterleavedK,
+    /// If true, kernel is configured to support serial reduction in the
+    /// epilogue
+    bool SplitKSerial,
+    /// Operation performed by GEMM
+    typename Operator>
+struct DefaultGemm<ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
+                   kAlignmentA, ElementB,
+                   layout::RowMajorInterleavedCol32x2R4R4<InterleavedK>, kAlignmentB,
+                   ElementC, layout::ColumnMajorInterleaved<InterleavedK>,
+                   int32_t, arch::OpClassTensorOp, arch::PPU0010, ThreadblockShape,
+                   WarpShape, InstructionShape, EpilogueOutputOp,
+                   ThreadblockSwizzle, 2, SplitKSerial, Operator> {
+  using LayoutA = layout::ColumnMajorInterleaved<InterleavedK>;
+  using LayoutB = layout::RowMajorInterleavedCol32x2R4R4<InterleavedK>;
+  using LayoutC = layout::ColumnMajorInterleaved<InterleavedK>;
+
+  using ElementAccumulator = int32_t;
 
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMma<
-    ElementA,
-    LayoutA,
-    kAlignmentA,
-    ElementB,
-    LayoutB,
-    kAlignmentB,
-    ElementAccumulator,
-    layout::RowMajor,
-    arch::OpClassTensorOp,
-    arch::Sm70,
-    ThreadblockShape,
-    WarpShape,
-    GemmShape<8, 8, 4>,
-    2,
-    Operator
-  >::ThreadblockMma;
+      ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementAccumulator, LayoutC,
+      arch::OpClassTensorOp, arch::PPU0010, ThreadblockShape, WarpShape,
+      InstructionShape, 2, Operator, true>::ThreadblockMma;
 
   static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
 
   /// Define the epilogue
-  using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueVoltaTensorOp<
-    ThreadblockShape,
-    typename Mma::Operator,
-    kPartitionsK,
-    EpilogueOutputOp,
-    EpilogueOutputOp::kCount
-  >::Epilogue;
+  using Epilogue = typename cutlass::epilogue::threadblock::
+      DefaultInterleavedEpilogueTensorOp<
+          ThreadblockShape, typename Mma::Operator, kPartitionsK, EpilogueOutputOp,
+          EpilogueOutputOp::kCount, InterleavedK>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
   using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
@@ -527,7 +565,8 @@ struct DefaultGemm<
     ThreadblockSwizzle,
     2,
     SplitKSerial,
-    Operator> {
+    Operator,
+    typename platform::enable_if< ! platform::is_same<ArchTag, arch::PPU0010>::value >::type > {
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMma<
       ElementA,
@@ -539,7 +578,7 @@ struct DefaultGemm<
       ElementAccumulator,
       layout::RowMajor,
       arch::OpClassSimt,
-      arch::Sm50,
+      arch::PPU0010,
       ThreadblockShape,
       WarpShape,
       GemmShape<1, 1, 1>,
@@ -563,7 +602,7 @@ struct DefaultGemm<
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for Ampere
+/// Partial specialization for PPU
 template <
     /// Element type for A matrix operand
     typename ElementA,
@@ -605,7 +644,7 @@ struct DefaultGemm<ElementA,
                    layout::RowMajor,
                    ElementAccumulator,
                    arch::OpClassSimt,
-                   arch::Sm80,
+                   arch::PPU0010,
                    ThreadblockShape,
                    WarpShape,
                    GemmShape<1, 1, 1>,
@@ -618,7 +657,7 @@ struct DefaultGemm<ElementA,
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
-      ElementAccumulator, layout::RowMajor, arch::OpClassSimt, arch::Sm80,
+      ElementAccumulator, layout::RowMajor, arch::OpClassSimt, arch::PPU0010,
       ThreadblockShape, WarpShape, GemmShape<1, 1, 1>, Stages,
       Operator>::ThreadblockMma;
 
@@ -690,7 +729,7 @@ struct DefaultGemm<int8_t, LayoutA, kAlignmentA, int8_t, LayoutB, kAlignmentB,
       ElementAccumulator,
       LayoutC,
       arch::OpClassSimt,
-      arch::Sm50,
+      arch::PPU0010,
       ThreadblockShape,
       WarpShape,
       InstructionShape,
@@ -712,90 +751,6 @@ struct DefaultGemm<int8_t, LayoutA, kAlignmentA, int8_t, LayoutB, kAlignmentB,
   /// Define the kernel-level GEMM operator.
   using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
-
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-////////////////////////////////////////////////////////////////////////////////
-/// Partial specialization for Wmma Gemm Kernel
-template <
-    ///< Element type for A matrix operand
-    typename ElementA,
-    /// Layout type for A matrix operand
-    typename LayoutA,
-    /// Access granularity of A matrix in units of elements
-    int kAlignmentA,
-    /// Element type for B matrix operand
-    typename ElementB,
-    /// Layout type for B matrix operand
-    typename LayoutB,
-    /// Access granularity of A matrix in units of elements
-    int kAlignmentB,
-    /// Element type for C and D matrix operands
-    typename ElementC,
-    /// Layout type for C and D matrix operands
-    typename LayoutC,
-    /// Element type for internal accumulation
-    typename ElementAccumulator,
-    /// Tag indicating architecture to tune for
-    typename ArchTag,
-    /// Threadblock-level tile size (concept: GemmShape)
-    typename ThreadblockShape,
-    /// Warp-level tile size (concept: GemmShape)
-    typename WarpShape,
-    /// Warp-level tile size (concept: GemmShape)
-    typename InstructionShape,
-    /// Epilogue output operator
-    typename EpilogueOutputOp,
-    /// Threadblock-level swizzling operator
-    typename ThreadblockSwizzle,
-    /// Number of stages used in the pipelined mainloop
-    int Stages,
-    /// If true, kernel is configured to support serial reduction in the
-    /// epilogue
-    bool SplitKSerial,
-    /// Operation performed by GEMM
-    typename Operator> 
-struct DefaultGemm<
-  ElementA, LayoutA, kAlignmentA, 
-  ElementB, LayoutB, kAlignmentB, 
-  ElementC, LayoutC, 
-  ElementAccumulator, 
-  arch::OpClassWmmaTensorOp,
-  ArchTag, 
-  ThreadblockShape, WarpShape, InstructionShape,
-  EpilogueOutputOp, 
-  ThreadblockSwizzle, 
-  Stages, 
-  SplitKSerial,
-  Operator> {
-  /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
-      ElementA, LayoutA, kAlignmentA,
-      ElementB, LayoutB, kAlignmentB,
-      ElementAccumulator, LayoutC, 
-      arch::OpClassWmmaTensorOp, 
-      ArchTag,
-      ThreadblockShape, 
-      WarpShape, 
-      InstructionShape, 
-      Stages,
-      Operator>::ThreadblockMma;
-
-  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
-
-  /// Define the epilogue 
-  using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWmmaTensorOp<
-      ThreadblockShape,
-      typename Mma::Operator, 
-      kPartitionsK, 
-      EpilogueOutputOp,
-      EpilogueOutputOp::kCount
-  >::Epilogue;
-
-  /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
-};
-////////////////////////////////////////////////////////////////////////////////
-#endif //CUTLASS_ARCH_WMMA_ENABLED
 
 ////////////////////////////////////////////////////////////////////////////////
 

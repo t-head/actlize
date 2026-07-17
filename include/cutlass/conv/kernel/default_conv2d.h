@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -33,14 +34,25 @@
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/threadblock/default_mma.h"
 #include "cutlass/gemm/threadblock/threadblock_swizzle.h"
+#include "cutlass/conv/threadblock/threadblock_swizzle.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_simt.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/conv/convolution.h"
 #include "cutlass/conv/threadblock/conv2d_tile_iterator.h"
 #include "cutlass/conv/threadblock/implicit_gemm_pipelined.h"
 #include "cutlass/conv/threadblock/implicit_gemm_multistage.h"
+#include "cutlass/conv/threadblock/implicit_gemm_fprop_fusion_multistage.h"
 #include "cutlass/conv/kernel/implicit_gemm_convolution.h"
+#include "cutlass/conv/threadblock/implicit_gemm_sparse_multistage.h"
+#include "cutlass/conv/kernel/implicit_gemm_convolution_sparse.h"
+#include "cutlass/conv/kernel/implicit_gemm_convolution_group.h"
+#include "cutlass/conv/kernel/implicit_gemm_convolution_fusion.h"
+#include "cutlass/conv/threadblock/implicit_gemm_multistage_group.h"
+
+#if SAIL_PPU_MMA
+#include "cutlass/conv/threadblock/implicit_gemm_multistage_aiu.h"
+#endif
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -56,40 +68,46 @@ template <
   typename Shape,
   typename WarpMmaTensorOp,
   int PartitionsK,
-  typename OutputOp
+  typename OutputOp,
+  bool Transpose = false
 >
 struct DefaultConvEpilogue {
+  using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOpArch<
+    Shape,
+    WarpMmaTensorOp,
+    1,
+    OutputOp,
+    OutputOp::kCount,
+    ArchTag
+#if SAIL_DGRAD_STRIDE_OPT
+    , 0,
+#endif
+    Transpose
+  >::Epilogue;
+};
+
+#if SAIL_DGRAD_STRIDE_OPT
+// epilogue for conv dgrad with stride!=1
+template <
+  typename ArchTag,
+  typename Shape,
+  typename WarpMmaTensorOp,
+  int PartitionsK,
+  typename OutputOp,
+  bool Transpose = false
+>
+struct DefaultConvEpilogueStrided {
   using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOp<
     Shape,
     WarpMmaTensorOp,
     1,
     OutputOp,
-    OutputOp::kCount
-  >::Epilogue;
-};
-
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename OutputOp
->
-struct DefaultConvEpilogue<
-  arch::Sm70,
-  Shape,
-  WarpMmaTensorOp,
-  PartitionsK,
-  OutputOp
-> {
-
-  using Epilogue = typename epilogue::threadblock::DefaultEpilogueVoltaTensorOp<
-    Shape,
-    WarpMmaTensorOp,
+    OutputOp::kCount,
     1,
-    OutputOp,
-    OutputOp::kCount
+    Transpose
   >::Epilogue;
 };
+#endif
 
 } // namespace detail
 

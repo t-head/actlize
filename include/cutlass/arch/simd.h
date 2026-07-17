@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates exposing SIMD operators
 */
@@ -110,10 +112,5 @@ Accumulator dot(Array<T, N> const &a, Array<T, N> const &b, Accumulator accum) {
 
 } // namespace arch
 } // namespace cutlass
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include "simd_sm60.h"
-#include "simd_sm61.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

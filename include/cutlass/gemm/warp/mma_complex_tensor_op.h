@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,9 +23,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations targeting
-      Tensor Cores.
+      Tensor Cells.
 */
 
 #pragma once
@@ -37,9 +39,9 @@
 #include "cutlass/matrix_shape.h"
 #include "cutlass/functional.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h"
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -48,8 +50,8 @@
 #include "cutlass/gemm/warp/mma_tensor_op.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
-#include "cutlass/gemm/warp/mma_complex_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu.h"
+#include "cutlass/gemm/warp/mma_complex_tensor_op_tile_iterator_ppu.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -395,7 +397,7 @@ public:
   /// Storage for C tile, the accumulator. Note, regardless of multiplicand type, this
   /// storage arrangement is to be considered 'planar complex' in the sense that all real-valued
   /// parts are stored consecutively followed by all imaginary parts. This matches the structure
-  /// of Tensor Cores which are always real-valued matrix multiplies.
+  /// of Tensor Cells which are always real-valued matrix multiplies.
   using FragmentC = typename IteratorC::Fragment;
 
   static_assert(
@@ -689,7 +691,7 @@ public:
   /// Storage for C tile, the accumulator. Note, regardless of multiplicand type, this
   /// storage arrangement is to be considered 'planar complex' in the sense that all real-valued
   /// parts are stored consecutively followed by all imaginary parts. This matches the structure
-  /// of Tensor Cores which are always real-valued matrix multiplies.
+  /// of Tensor Cells which are always real-valued matrix multiplies.
   using FragmentC = typename IteratorC::Fragment;
 
 private:

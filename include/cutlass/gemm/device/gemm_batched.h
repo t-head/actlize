@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -38,6 +40,12 @@
 
 #include "cutlass/gemm/kernel/default_gemm.h"
 #include "cutlass/gemm/device/default_gemm_configuration.h"
+
+#include "cutlass/gemm/kernel/default_gemm_splitk_parallel.h"
+
+#include "cutlass/epilogue/thread/conversion_op.h"
+#include "cutlass/reduction/kernel/reduce_split_k.h"
+#include "cutlass/reduction/thread/reduction_operators.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -76,7 +84,7 @@ namespace device {
   input to the computation. This is distinct from the kernel-level Params structure pattern
   which contains application-specific precomputed state needed by the device code.
 
-  Example of a CUTLASS GEMM operator implementing the functionality of cuBLAS's SGEMM NN
+  Example of a CUTLASS GEMM operator implementing the functionality of acBLAS's SGEMM NN
   is as follows:
 
     //
@@ -133,9 +141,9 @@ namespace device {
       /// Operator class tag
       typename OperatorClass,
       
-      /// Tag indicating architecture to tune for.  This is the minimum SM that
+      /// Tag indicating architecture to tune for.  This is the minimum CU that
       /// supports the intended feature. The device kernel can be built
-      /// targeting any SM larger than this number.
+      /// targeting any CU larger than this number.
       typename ArchTag,
       
       /// Threadblock-level tile size (concept: GemmShape)
@@ -176,7 +184,7 @@ template <
     /// Operator class tag
     typename OperatorClass_ = arch::OpClassSimt,
     /// Tag indicating architecture to tune for
-    typename ArchTag_ = arch::Sm70,
+    typename ArchTag_ = arch::PPU0010,
     /// Threadblock-level tile size (concept: GemmShape)
     typename ThreadblockShape_ = typename DefaultGemmConfiguration<
         OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
@@ -224,6 +232,11 @@ class GemmBatched {
   using ElementC = ElementC_;
   using LayoutC = LayoutC_;
   using TensorRefC = TensorRef<ElementC const, LayoutC>;
+  #if SAIL_FUSE_OP_EXT
+  using ElementFuseInExtra = ElementC;
+  using LayoutExtra = LayoutC_;
+  using TensorRefExtra = TensorRef<ElementFuseInExtra const, LayoutExtra>;
+  #endif
   using TensorRefD = TensorRef<ElementC, LayoutC>;
   using ElementAccumulator = ElementAccumulator_;
   using OperatorClass = OperatorClass_;
@@ -238,6 +251,11 @@ class GemmBatched {
   static int const kAlignmentB = AlignmentB;
   static int const kAlignmentC = EpilogueOutputOp::kCount;
   using Operator = Operator_;
+
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = EpilogueOutputOp::kExtraEpilogueInputs > 0 ? EpilogueOutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<EpilogueOutputOp>::value;
+  #endif
 
   /// Define the kernel
   using DefaultGemmKernel = typename kernel::DefaultGemm<
@@ -278,6 +296,10 @@ class GemmBatched {
     int64_t stride_B;
     TensorRef<ElementC const, LayoutC> ref_C;
     int64_t stride_C;
+    #if SAIL_FUSE_OP_EXT
+    TensorRefExtra ref_Extra[kExtraInputNum];
+    int64_t stride_Epilogues[kExtraInputNum];
+    #endif
     TensorRef<ElementC, LayoutC> ref_D;
     int64_t stride_D;
     typename EpilogueOutputOp::Params epilogue;
@@ -305,6 +327,10 @@ class GemmBatched {
       int64_t stride_D_,
       typename EpilogueOutputOp::Params epilogue_,
       int batch_count_
+      #if SAIL_FUSE_OP_EXT
+      , TensorRefExtra *pref_Extra_ = nullptr
+      , int64_t *pstride_Epilogues_ = nullptr
+      #endif
     ):
       problem_size(problem_size_),
       ref_A(ref_A_),
@@ -316,7 +342,23 @@ class GemmBatched {
       ref_D(ref_D_),
       stride_D(stride_D_),
       epilogue(epilogue_),
-      batch_count(batch_count_) { }
+      batch_count(batch_count_) { 
+        #if SAIL_FUSE_OP_EXT
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < kExtraInputLoopNum; i++) {
+          if (pref_Extra_) {
+            ref_Extra[i] = pref_Extra_[i];
+          } else {
+            ref_Extra[i] = {nullptr, 0};
+          }
+          if (pstride_Epilogues_) {
+            stride_Epilogues[i] = pstride_Epilogues_[i];
+          } else {
+            stride_Epilogues[i] = 0;
+          }
+        }
+        #endif
+      }
   };
 
 private:
@@ -355,16 +397,25 @@ public:
       return Status::kErrorMisalignedOperand;
     }
 
+    #if SAIL_FUSE_OP_EXT
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      if (args.ref_Extra[i].good() && (!TensorRef_aligned(args.ref_Extra[i], kAlignmentC) || (args.stride_Epilogues[i] % kAlignmentC))) {
+        return Status::kErrorMisalignedOperand;
+      }
+    }
+    #endif
+
     return Status::kSuccess;
   }
 
   /// Gets the workspace size
-  static size_t get_workspace_size(Arguments const &args) {
+  static CUsize get_workspace_size(Arguments const &args) {
     return 0;
   }
 
   /// Initializes GEMM state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
 
     // Determine grid shape
     ThreadblockSwizzle threadblock_swizzle;
@@ -373,6 +424,16 @@ public:
       args.problem_size,
       {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
       args.batch_count);
+
+    #if SAIL_FUSE_OP_EXT
+    TensorRef<ElementFuseInExtra, LayoutExtra> ref_Extra_NC[kExtraInputNum];
+    int64_t stride_Epilogues_NC[kExtraInputNum];
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      ref_Extra_NC[i] = args.ref_Extra[i].non_const_ref();
+      stride_Epilogues_NC[i] = args.stride_Epilogues[i];
+    }
+    #endif
 
     // Initialize the Params structure
     params_ = typename GemmKernel::Params{
@@ -383,11 +444,15 @@ public:
       args.ref_B.non_const_ref(),
       args.stride_B,
       args.ref_C.non_const_ref(),
-      args.stride_C,
+      args.stride_C, 
       args.ref_D,
       args.stride_D,
       args.epilogue,
       args.batch_count
+      #if SAIL_FUSE_OP_EXT
+      , ref_Extra_NC
+      , stride_Epilogues_NC
+      #endif
     };
 
     return Status::kSuccess;
@@ -399,49 +464,56 @@ public:
     params_.ref_A.reset(args.ref_A.non_const_ref().data());
     params_.ref_B.reset(args.ref_B.non_const_ref().data());
     params_.ref_C.reset(args.ref_C.non_const_ref().data());
-    params_.ref_D.reset(args.ref_D.data()); 
+    params_.ref_D.reset(args.ref_D.data());
+    #if SAIL_FUSE_OP_EXT
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      params_.ref_Extra[i] = args.ref_Extra[i].non_const_ref();
+    }
+    #endif
+    params_.epilogue = args.epilogue;
 
     return Status::kSuccess;
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     ThreadblockSwizzle threadblock_swizzle;
 
     dim3 grid = threadblock_swizzle.get_grid_shape(params_.grid_tiled_shape);
     dim3 block(GemmKernel::kThreadCount, 1, 1);
 
-    cudaError_t result;
+    hggcError_t result;
 
     int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
     if (smem_size >= (48 << 10)) {
-      result = cudaFuncSetAttribute(Kernel<GemmKernel>,
-                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+      result = hggcFuncSetAttribute(Kernel<GemmKernel>,
+                                    hggcFuncAttributeMaxDynamicSharedMemorySize,
                                     smem_size);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
 
-      result = cudaFuncSetAttribute(
+      result = hggcFuncSetAttribute(
           Kernel<GemmKernel>,
-          cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+          hggcFuncAttributePreferredSharedMemoryCarveout, 100);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
     }
 
     cutlass::Kernel<GemmKernel><<<grid, block, smem_size, stream>>>(params_);
 
-    result = cudaGetLastError();
+    result = hggcGetLastError();
 
-    return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -449,9 +521,9 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
-    Status status = initialize(args, workspace);
+    Status status = initialize(args, workspace, stream);
     
     if (status == Status::kSuccess) {
       status = run(stream);
@@ -530,6 +602,11 @@ public:
   using ElementC = ElementC_;
   using LayoutC = layout::ColumnMajor;
   using TensorRefC = TensorRef<ElementC const, LayoutC>;
+  #if SAIL_FUSE_OP_EXT
+  using ElementFuseInExtra = ElementC;
+  using LayoutExtra = LayoutC;
+  using TensorRefExtra = TensorRef<ElementFuseInExtra const, LayoutExtra>;
+  #endif
   using TensorRefD = TensorRef<ElementC, LayoutC>;
   using ElementAccumulator = ElementAccumulator_;
   using OperatorClass = OperatorClass_;
@@ -545,6 +622,12 @@ public:
   static int const kAlignmentB = AlignmentB;
   static int const kAlignmentC = EpilogueOutputOp::kCount;
   static bool const kSplitKSerial = false;
+  using Operator = Operator_;
+
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = EpilogueOutputOp::kExtraEpilogueInputs > 0 ? EpilogueOutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<EpilogueOutputOp>::value;
+  #endif
 
   //
   using UnderlyingOperator = GemmBatched< 
@@ -561,6 +644,673 @@ public:
     WarpShape,
     InstructionShape,
     EpilogueOutputOp,
+    ThreadblockSwizzle,
+    Stages,
+    kAlignmentB,
+    kAlignmentA
+  >;
+
+  using UnderlyingArguments = typename UnderlyingOperator::Arguments;
+  using GemmKernel = typename UnderlyingOperator::GemmKernel;
+
+  /// Argument structure
+  struct Arguments {
+
+    //
+    // Data members
+    //
+
+    GemmCoord problem_size;
+    TensorRef<ElementA const, LayoutA> ref_A;
+    int64_t stride_A;
+    TensorRef<ElementB const, LayoutB> ref_B;
+    int64_t stride_B;
+    TensorRef<ElementC const, LayoutC> ref_C;
+    int64_t stride_C;
+    #if SAIL_FUSE_OP_EXT
+    TensorRefExtra ref_Extra[kExtraInputNum];
+    int64_t stride_Epilogues[kExtraInputNum];
+    #endif
+    TensorRef<ElementC, LayoutC> ref_D;
+    int64_t stride_D;
+    typename EpilogueOutputOp::Params epilogue;
+    int batch_count;
+
+    //
+    // Methods
+    //
+
+    /// Default ctor
+    CUTLASS_HOST_DEVICE
+    Arguments() { }
+
+    /// Constructs an Arguments structure 
+    CUTLASS_HOST_DEVICE
+    Arguments(
+      GemmCoord problem_size_,
+      TensorRef<ElementA const, LayoutA> ref_A_,
+      int64_t stride_A_,
+      TensorRef<ElementB const, LayoutB> ref_B_,
+      int64_t stride_B_,
+      TensorRef<ElementC const, LayoutC> ref_C_,
+      int64_t stride_C_,
+      TensorRef<ElementC, LayoutC> ref_D_,
+      int64_t stride_D_,
+      typename EpilogueOutputOp::Params epilogue_,
+      int batch_count_
+      #if SAIL_FUSE_OP_EXT
+      , TensorRefExtra *pref_Extra_ = nullptr
+      , int64_t *pstride_Epilogues = nullptr
+      #endif
+    ):
+      problem_size(problem_size_),
+      ref_A(ref_A_),
+      stride_A(stride_A_),
+      ref_B(ref_B_),
+      stride_B(stride_B_),
+      ref_C(ref_C_),
+      stride_C(stride_C_),
+      ref_D(ref_D_),
+      stride_D(stride_D_),
+      epilogue(epilogue_),
+      batch_count(batch_count_) {
+        #if SAIL_FUSE_OP_EXT
+          CUTLASS_PRAGMA_UNROLL
+          for (int i = 0; i < kExtraInputLoopNum; i++) {
+            if (pref_Extra_) {
+              ref_Extra[i] = pref_Extra_[i];
+            } else {
+              ref_Extra[i] = {nullptr, 0};
+            }
+            if (pstride_Epilogues) {
+              stride_Epilogues[i] = pstride_Epilogues[i];
+            } else {
+              stride_Epilogues[i] = 0;
+            }
+          }
+        #endif
+      }
+  };
+
+private:
+
+  UnderlyingOperator underlying_operator_;
+
+public:
+
+  /// Constructs the GEMM.
+  GemmBatched() { }
+
+  /// Helper to construct a transposed equivalent for the underying GEMM operator
+  static UnderlyingArguments to_underlying_arguments(Arguments const &args) {
+
+    #if SAIL_FUSE_OP_EXT
+    TensorRef<typename UnderlyingOperator::ElementFuseInExtra const, typename UnderlyingOperator::LayoutExtra> ref_Extra_NC[kExtraInputNum];
+    int64_t stride_Epilogues_NC[kExtraInputNum];
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      ref_Extra_NC[i] = {args.ref_Extra[i].non_const_ref().data(), args.ref_Extra[i].non_const_ref().stride(0)};
+      stride_Epilogues_NC[i] = args.stride_Epilogues[i];
+    }
+    #endif
+
+    return UnderlyingArguments(
+      {args.problem_size.n(), args.problem_size.m(), args.problem_size.k()},
+      {args.ref_B.data(), args.ref_B.stride(0)},
+      args.stride_B,
+      {args.ref_A.data(), args.ref_A.stride(0)},
+      args.stride_A,
+      {args.ref_C.data(), args.ref_C.stride(0)},
+      args.stride_C,
+      {args.ref_D.data(), args.ref_D.stride(0)},
+      args.stride_D,
+      args.epilogue,
+      args.batch_count
+      #if SAIL_FUSE_OP_EXT
+      ,ref_Extra_NC
+      ,stride_Epilogues_NC
+      #endif
+    );
+  }
+
+  /// Determines whether the GEMM can execute the given problem.
+  static Status can_implement(Arguments const &args) {
+
+    return UnderlyingOperator::can_implement(to_underlying_arguments(args));
+  }
+
+  /// Gets the workspace size
+  static CUsize get_workspace_size(Arguments const &args) {
+    
+    return UnderlyingOperator::get_workspace_size(to_underlying_arguments(args));
+  }
+
+  /// Initializes GEMM state from arguments.
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
+
+    return underlying_operator_.initialize(to_underlying_arguments(args), workspace, stream);
+  }
+
+  /// Lightweight update given a subset of arguments
+  Status update(Arguments const &args, void *workspace = nullptr) {
+
+    return underlying_operator_.update(to_underlying_arguments(args), workspace);
+  }
+
+  /// Runs the kernel using initialized state.
+  Status run(hggcStream_t stream = nullptr) {
+
+    return underlying_operator_.run(stream);
+  }
+
+  /// Runs the kernel using initialized state.
+  Status operator()(hggcStream_t stream = nullptr) {
+    return run(stream);
+  }
+
+  /// Runs the kernel using initialized state.
+  Status operator()(
+    Arguments const &args, 
+    void *workspace = nullptr, 
+    hggcStream_t stream = nullptr) {
+    
+    Status status = initialize(args, workspace, stream);
+    
+    if (status == Status::kSuccess) {
+      status = run(stream);
+    }
+
+    return status;
+  }
+
+};
+
+template <
+    /// Element type for A matrix operand
+    typename ElementA_,
+    /// Layout type for A matrix operand
+    typename LayoutA_,
+    /// Element type for B matrix operand
+    typename ElementB_,
+    /// Layout type for B matrix operand
+    typename LayoutB_,
+    /// Element type for C and D matrix operands
+    typename ElementC_,
+    /// Layout type for C and D matrix operands
+    typename LayoutC_,
+    /// Element type for internal accumulation
+    typename ElementAccumulator_ = ElementC_,
+    /// Operator class tag
+    typename OperatorClass_ = arch::OpClassSimt,
+    /// Tag indicating architecture to tune for
+    typename ArchTag_ = arch::PPU0010,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape_ = typename DefaultGemmConfiguration<
+        OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
+        ElementAccumulator_>::ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape_ = typename DefaultGemmConfiguration<
+        OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
+        ElementAccumulator_>::WarpShape,
+    /// Instruction-level tile size (concept: GemmShape)
+    typename InstructionShape_ = typename DefaultGemmConfiguration<
+        OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
+        ElementAccumulator_>::InstructionShape,
+    /// Epilogue output operator
+    typename EpilogueOutputOp_ = typename DefaultGemmConfiguration<
+        OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
+        ElementAccumulator_>::EpilogueOutputOp,
+    typename ConvertScaledOp_ = cutlass::epilogue::thread::Convert<
+        ElementAccumulator_,
+        DefaultGemmConfiguration<OperatorClass_, ArchTag_, ElementA_, ElementB_,
+                                 ElementAccumulator_,
+                                 ElementAccumulator_>::EpilogueOutputOp::kCount,
+        ElementAccumulator_>,
+    typename ReductionOp_ = cutlass::reduction::thread::ReduceAdd<
+        ElementAccumulator_, typename EpilogueOutputOp_::ElementAccumulator,
+        EpilogueOutputOp_::kCount>,
+    /// Threadblock-level swizzling operator
+    typename ThreadblockSwizzle_ = threadblock::GemmBatchedIdentityThreadblockSwizzle,
+    /// Number of stages used in the pipelined mainloop
+    int Stages =
+        DefaultGemmConfiguration<OperatorClass_, ArchTag_, ElementA_, ElementB_,
+                                 ElementC_, ElementAccumulator_>::kStages,
+    /// Access granularity of A matrix in units of elements
+    int AlignmentA =
+        DefaultGemmConfiguration<OperatorClass_, ArchTag_, ElementA_, ElementB_,
+                                 ElementC_, ElementAccumulator_>::kAlignmentA,
+    /// Access granularity of B matrix in units of elements
+    int AlignmentB =
+        DefaultGemmConfiguration<OperatorClass_, ArchTag_, ElementA_, ElementB_,
+                                 ElementC_, ElementAccumulator_>::kAlignmentB,
+    /// Operation performed by GEMM
+    typename Operator_ = typename DefaultGemmConfiguration<
+        OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
+        ElementAccumulator_>::Operator
+>
+class GemmBatchedReduceParallel {
+ public:
+
+  using ElementA = ElementA_;
+  using LayoutA = LayoutA_;
+  using TensorRefA = TensorRef<ElementA const, LayoutA>;
+  using ElementB = ElementB_;
+  using LayoutB = LayoutB_;
+  using TensorRefB = TensorRef<ElementB const, LayoutB>;
+  using ElementC = ElementC_;
+  using LayoutC = LayoutC_;
+  using TensorRefC = TensorRef<ElementC const, LayoutC>;
+  using TensorRefD = TensorRef<ElementC, LayoutC>;
+  using ElementAccumulator = ElementAccumulator_;
+  using OperatorClass = OperatorClass_;
+  using ArchTag = ArchTag_;
+  using ThreadblockShape = ThreadblockShape_;
+  using WarpShape = WarpShape_;
+  using InstructionShape = InstructionShape_;
+  using EpilogueOutputOp = EpilogueOutputOp_;
+  using ConvertScaledOp = ConvertScaledOp_;
+  using ReductionOp = ReductionOp_;
+  using ThreadblockSwizzle = ThreadblockSwizzle_;
+  static int const kStages = Stages;
+  static int const kAlignmentA = AlignmentA;
+  static int const kAlignmentB = AlignmentB;
+  static int const kAlignmentC = EpilogueOutputOp::kCount;
+  using Operator = Operator_;
+
+
+  /// Define the kernel
+  using DefaultGemmKernel = typename kernel::DefaultGemmSplitKParallel<
+    ElementA,
+    LayoutA,
+    kAlignmentA,
+    ElementB,
+    LayoutB,
+    kAlignmentB,
+    ElementAccumulator,
+    LayoutC,
+    ElementAccumulator,
+    OperatorClass,
+    ArchTag,
+    ThreadblockShape,
+    WarpShape,
+    InstructionShape,
+    ConvertScaledOp,
+    ThreadblockSwizzle,
+    kStages,
+    Operator
+  >::GemmKernel;
+
+  using GemmKernel = kernel::GemmBatched<typename DefaultGemmKernel::Mma, typename DefaultGemmKernel::Epilogue, ThreadblockSwizzle>;
+
+  using ReductionKernel = cutlass::reduction::kernel::ReduceSplitK<
+    cutlass::MatrixShape<4, 32 * EpilogueOutputOp::kCount>,
+    EpilogueOutputOp,
+    ReductionOp
+  >;
+
+  /// Argument structure
+  struct Arguments {
+
+    //
+    // Data members
+    //
+
+    GemmCoord problem_size;
+    TensorRef<ElementA const, LayoutA> ref_A;
+    int64_t stride_A;
+    TensorRef<ElementB const, LayoutB> ref_B;
+    int64_t stride_B;
+    TensorRef<ElementC const, LayoutC> ref_C;
+    int64_t stride_C;
+    TensorRef<ElementC, LayoutC> ref_D;
+    int64_t stride_D;
+    typename EpilogueOutputOp::Params epilogue;
+    int batch_count;
+    typename ConvertScaledOp::Params convert;
+    typename ReductionOp::Params reduction;
+
+    //
+    // Methods
+    //
+
+    /// Default ctor
+    CUTLASS_HOST_DEVICE
+    Arguments() { }
+
+    /// Constructs an Arguments structure 
+    CUTLASS_HOST_DEVICE
+    Arguments(
+      GemmCoord problem_size_,
+      TensorRef<ElementA const, LayoutA> ref_A_,
+      int64_t stride_A_,
+      TensorRef<ElementB const, LayoutB> ref_B_,
+      int64_t stride_B_,
+      TensorRef<ElementC const, LayoutC> ref_C_,
+      int64_t stride_C_,
+      TensorRef<ElementC, LayoutC> ref_D_,
+      int64_t stride_D_,
+      typename EpilogueOutputOp::Params epilogue_,
+      int batch_count_,
+      typename ConvertScaledOp::Params convert_ = 
+        typename ConvertScaledOp::Params(),
+      typename ReductionOp::Params reduction_ =
+        typename ReductionOp::Params()
+    ):
+      problem_size(problem_size_),
+      ref_A(ref_A_),
+      stride_A(stride_A_),
+      ref_B(ref_B_),
+      stride_B(stride_B_),
+      ref_C(ref_C_),
+      stride_C(stride_C_),
+      ref_D(ref_D_),
+      stride_D(stride_D_),
+      epilogue(epilogue_),
+      batch_count(batch_count_),
+      convert(convert_),
+      reduction(reduction_) {
+      }
+  };
+
+private:
+
+  /// Kernel parameters object
+  typename GemmKernel::Params gemm_params_;
+
+  typename ReductionKernel::Params reduction_params_;
+
+public:
+
+  /// Constructs the GEMM.
+  GemmBatchedReduceParallel() { }
+
+  /// Determines whether the GEMM can execute the given problem.
+  static Status can_implement(Arguments const &args) {
+    if (args.stride_D != 0) {
+      return Status::kErrorInvalidProblem;
+    }
+
+    if (!TensorRef_aligned(args.ref_A, kAlignmentA) || (args.stride_A % kAlignmentA)) {
+      return Status::kErrorMisalignedOperand;
+    }
+
+    if (!TensorRef_aligned(args.ref_B, kAlignmentB) || (args.stride_B % kAlignmentB)) {
+      return Status::kErrorMisalignedOperand;
+    }
+
+    if (!TensorRef_aligned(args.ref_C, kAlignmentC) || (args.stride_C % kAlignmentC)) {
+      return Status::kErrorMisalignedOperand;
+    }
+
+    if (!TensorRef_aligned(args.ref_D, kAlignmentC) || (args.stride_D % kAlignmentC)) {
+      return Status::kErrorMisalignedOperand;
+    }
+
+    if ((args.problem_size.m() % kAlignmentA) || (args.problem_size.k() % kAlignmentA) ||
+      (args.problem_size.n() % kAlignmentB) || (args.problem_size.k() % kAlignmentB) ||
+      (args.problem_size.m() % kAlignmentC) || (args.problem_size.n() % kAlignmentC)) {
+
+      return Status::kErrorMisalignedOperand;
+    }
+
+
+    return Status::kSuccess;
+  }
+
+  /// Gets the workspace size
+  static CUsize get_workspace_size(Arguments const &args) {
+    if (args.batch_count > 1) {
+      // should reduce output, ensure batch not exceed in conv
+      return sizeof(ElementAccumulator_) * size_t(args.problem_size.m()) * size_t(args.problem_size.n()) * args.batch_count;
+    } else {
+      return 0;
+    }
+  }
+
+  /// Initializes GEMM state from arguments.
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
+
+    // Determine grid shape
+    ThreadblockSwizzle threadblock_swizzle;
+
+    cutlass::gemm::GemmCoord grid_shape = threadblock_swizzle.get_tiled_shape(
+      args.problem_size,
+      {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
+      args.batch_count);
+
+    TensorRef<ElementAccumulator_, layout::RowMajor> ref_workspace(
+      static_cast<ElementAccumulator_ *>(workspace), 
+      args.problem_size.n());
+
+    int64_t partition_stride = int64_t(args.problem_size.m()) * int64_t(args.problem_size.n());
+
+    // Initialize the Params structure
+    gemm_params_ = typename GemmKernel::Params{
+      args.problem_size,
+      grid_shape,
+      args.ref_A.non_const_ref(),
+      args.stride_A,
+      args.ref_B.non_const_ref(),
+      args.stride_B,
+      ref_workspace,
+      args.stride_C,
+      ref_workspace,
+      partition_stride,
+      args.convert,
+      args.batch_count
+    };
+
+
+    reduction_params_ = typename ReductionKernel::Params(
+      args.problem_size.mn(),
+      grid_shape.k(),
+      partition_stride,
+      0,
+      0,
+      ref_workspace,
+      args.ref_D,
+      args.ref_C.non_const_ref(),
+      args.epilogue,
+      args.reduction
+    );
+
+    return Status::kSuccess;
+  }
+
+  /// Lightweight update given a subset of arguments
+  Status update(Arguments const &args, void *workspace = nullptr) {
+
+    gemm_params_.ref_A.reset(args.ref_A.non_const_ref().data());
+    gemm_params_.ref_B.reset(args.ref_B.non_const_ref().data());
+    gemm_params_.ref_D.reset(static_cast<ElementAccumulator_ *>(workspace));
+
+    reduction_params_.workspace.reset(static_cast<ElementAccumulator_ *>(workspace));
+    reduction_params_.destination.reset(args.ref_D.data());
+    reduction_params_.source.reset(args.ref_C.non_const_ref().data());
+    reduction_params_.output = args.epilogue;
+    reduction_params_.reduction = args.reduction;
+
+    return Status::kSuccess;
+  }
+
+  /// Runs the kernel using initialized state.
+  Status run(hggcStream_t stream = nullptr) {
+
+    ThreadblockSwizzle threadblock_swizzle;
+
+    dim3 grid = threadblock_swizzle.get_grid_shape(gemm_params_.grid_tiled_shape);
+    dim3 block(GemmKernel::kThreadCount, 1, 1);
+
+    hggcError_t result;
+
+    int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
+    if (smem_size >= (48 << 10)) {
+      result = hggcFuncSetAttribute(Kernel<GemmKernel>,
+                                    hggcFuncAttributeMaxDynamicSharedMemorySize,
+                                    smem_size);
+
+      if (result != hggcSuccess) {
+        return Status::kErrorInternal;
+      }
+
+      result = hggcFuncSetAttribute(
+          Kernel<GemmKernel>,
+          hggcFuncAttributePreferredSharedMemoryCarveout, 100);
+
+      if (result != hggcSuccess) {
+        return Status::kErrorInternal;
+      }
+    }
+
+    cutlass::Kernel<GemmKernel><<<grid, block, smem_size, stream>>>(gemm_params_);
+
+    //
+    // Launch reduction kernel
+    //
+
+    block = ReductionKernel::block_shape();
+    grid = ReductionKernel::grid_shape(gemm_params_.problem_size.mn());
+
+    Kernel<ReductionKernel><<< grid, block, 0, stream >>>(reduction_params_);
+
+    result = hggcGetLastError();
+
+    if (result != hggcSuccess) {
+      return Status::kErrorInternal;
+    }
+
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
+  }
+
+  /// Runs the kernel using initialized state.
+  Status operator()(hggcStream_t stream = nullptr) {
+    return run(stream);
+  }
+
+  /// Runs the kernel using initialized state.
+  Status operator()(
+    Arguments const &args, 
+    void *workspace = nullptr, 
+    hggcStream_t stream = nullptr) {
+    
+    Status status = initialize(args, workspace, stream);
+    
+    if (status == Status::kSuccess) {
+      status = run(stream);
+    }
+
+    return status;
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+/// Parital specialization for column-major output exchanges problem size and operand.
+template <
+  /// Element type for A matrix operand
+  typename ElementA_,
+  /// Layout type for A matrix operand
+  typename LayoutA_,
+  /// Element type for B matrix operand
+  typename ElementB_,
+  /// Layout type for B matrix operand
+  typename LayoutB_,
+  /// Element type for C and D matrix operands
+  typename ElementC_,
+  /// Element type for internal accumulation
+  typename ElementAccumulator_,
+  /// Operator class tag
+  typename OperatorClass_,
+  /// Tag indicating architecture to tune for
+  typename ArchTag_,
+  /// Threadblock-level tile size (concept: GemmShape)
+  typename ThreadblockShape_,
+  /// Warp-level tile size (concept: GemmShape)
+  typename WarpShape_,
+  /// Warp-level tile size (concept: GemmShape)
+  typename InstructionShape_,
+  /// Epilogue output operator
+  typename EpilogueOutputOp_,
+  typename ConvertScaledOp_,
+  typename ReductionOp_,
+  /// Threadblock-level swizzling operator
+  typename ThreadblockSwizzle_,
+  /// Number of stages used in the pipelined mainloop
+  int Stages,
+  /// Access granularity of A matrix in units of elements
+  int AlignmentA,
+  /// Access granularity of B matrix in units of elements
+  int AlignmentB,
+  typename Operator_
+>
+class GemmBatchedReduceParallel<
+  ElementA_,
+  LayoutA_,
+  ElementB_,
+  LayoutB_,
+  ElementC_,
+  layout::ColumnMajor,
+  ElementAccumulator_,
+  OperatorClass_,
+  ArchTag_,
+  ThreadblockShape_,
+  WarpShape_,
+  InstructionShape_,
+  EpilogueOutputOp_,
+  ConvertScaledOp_,
+  ReductionOp_,
+  ThreadblockSwizzle_,
+  Stages,
+  AlignmentA,
+  AlignmentB,
+  Operator_
+> {
+public:
+
+  using ElementA = ElementA_;
+  using LayoutA = LayoutA_;
+  using TensorRefA = TensorRef<ElementA const, LayoutA>;
+  using ElementB = ElementB_;
+  using LayoutB = LayoutB_;
+  using TensorRefB = TensorRef<ElementB const, LayoutB>;
+  using ElementC = ElementC_;
+  using LayoutC = layout::ColumnMajor;
+  using TensorRefC = TensorRef<ElementC const, LayoutC>;
+  using TensorRefD = TensorRef<ElementC, LayoutC>;
+  using ElementAccumulator = ElementAccumulator_;
+  using OperatorClass = OperatorClass_;
+  using ArchTag = ArchTag_;
+  using ThreadblockShape = ThreadblockShape_;
+  using WarpShape = WarpShape_;
+  using InstructionShape = InstructionShape_;
+  using EpilogueOutputOp = EpilogueOutputOp_;
+  using ThreadblockSwizzle = ThreadblockSwizzle_;
+  static int const kStages = Stages;
+
+  static int const kAlignmentA = AlignmentA;
+  static int const kAlignmentB = AlignmentB;
+  static int const kAlignmentC = EpilogueOutputOp::kCount;
+  static bool const kSplitKSerial = false;
+  using Operator = Operator_;
+
+
+  //
+  using UnderlyingOperator = GemmBatchedReduceParallel< 
+    ElementB,
+    typename layout::LayoutTranspose<LayoutB>::type,
+    ElementA,
+    typename layout::LayoutTranspose<LayoutA>::type,
+    ElementC,
+    layout::RowMajor,    
+    ElementAccumulator,
+    OperatorClass,
+    ArchTag,
+    ThreadblockShape,
+    WarpShape,
+    InstructionShape,
+    EpilogueOutputOp,
+    ConvertScaledOp_,
+    ReductionOp_,
     ThreadblockSwizzle,
     Stages,
     kAlignmentB,
@@ -622,7 +1372,8 @@ public:
       ref_D(ref_D_),
       stride_D(stride_D_),
       epilogue(epilogue_),
-      batch_count(batch_count_) { }
+      batch_count(batch_count_) {
+      }
   };
 
 private:
@@ -632,10 +1383,11 @@ private:
 public:
 
   /// Constructs the GEMM.
-  GemmBatched() { }
+  GemmBatchedReduceParallel() { }
 
   /// Helper to construct a transposed equivalent for the underying GEMM operator
   static UnderlyingArguments to_underlying_arguments(Arguments const &args) {
+
     return UnderlyingArguments(
       {args.problem_size.n(), args.problem_size.m(), args.problem_size.k()},
       {args.ref_B.data(), args.ref_B.stride(0)},
@@ -658,15 +1410,15 @@ public:
   }
 
   /// Gets the workspace size
-  static size_t get_workspace_size(Arguments const &args) {
+  static CUsize get_workspace_size(Arguments const &args) {
     
     return UnderlyingOperator::get_workspace_size(to_underlying_arguments(args));
   }
 
   /// Initializes GEMM state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
 
-    return underlying_operator_.initialize(to_underlying_arguments(args), workspace);
+    return underlying_operator_.initialize(to_underlying_arguments(args), workspace, stream);
   }
 
   /// Lightweight update given a subset of arguments
@@ -676,13 +1428,13 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     return underlying_operator_.run(stream);
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -690,9 +1442,9 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
-    Status status = initialize(args, workspace);
+    Status status = initialize(args, workspace, stream);
     
     if (status == Status::kSuccess) {
       status = run(stream);

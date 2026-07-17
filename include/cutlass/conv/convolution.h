@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief 
 
@@ -92,14 +94,16 @@ enum class Mode {
 /// Selects among several implementation variants trading off performance with simplicity
 enum class IteratorAlgorithm { 
   kAnalytic,      ///< functionally correct in all cases but lower performance
-  kOptimized      ///< optimized for R <= 32, S <= 32 and unity-stride dgrad
+  kOptimized,     ///< optimized for R <= 32, S <= 32 and unity-stride dgrad
+  kFixedStrideDilation ///< Optimized for fixed stride and dilation
 };
 
 /// Distinguishes among partial specializations that accelerate certain problems where convolution
 /// stride is unit.
 enum class StrideSupport {
   kStrided,       ///< arbitrary convolution stride
-  kUnity          ///< unit convolution stride
+  kUnity,         ///< unit convolution stride
+  kFixed
 };
 
 /// Identifies split-K mode
@@ -109,6 +113,44 @@ enum class SplitKMode {
   kParallel
 };
 
+/// Identifies convolution kernel type 
+enum class KernelType {
+  kNormal,
+  kGroup,
+  kMultipleGroup,
+  kSparse,
+  kDepthwise
+};
+
+/// Shape of a tensor
+template <
+  int N = 1,
+  int H = 1,
+  int W = 1,
+  int C = 1
+>
+struct TensorNHWCShape {
+  static int const kN = N;
+  static int const kH = H;
+  static int const kW = W;
+  static int const kC = C;
+
+  static int const kHW = H * W;
+  static int const kNHW = N * kHW;
+  static int const kNHWC = N * H * W * C;
+
+  static int const kCount = kNHWC;
+
+  //
+  // Static member functions
+  //
+
+  /// Returns a Coord object
+  CUTLASS_HOST_DEVICE
+  static Coord<4> toCoord() {
+    return make_Coord(kN, kH, kW, kC);
+  }
+};
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace conv

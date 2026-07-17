@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -33,6 +35,7 @@
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
 #include "cutlass/semaphore.h"
+#include "cutlass/utils.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,6 +50,10 @@ template <
   typename Epilogue_,             ///! Epilogue
   typename ThreadblockSwizzle_,   ///! Threadblock swizzling function
   bool SplitKSerial               ///! If true, code supporting split-K via serial reduction is enabled.
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+  /// Sparse is used for compression matrix.
+  , Operand CompressOp_
+#endif
 >
 struct SparseGemm {
 
@@ -64,6 +71,11 @@ struct SparseGemm {
   using ElementE = typename Mma::ElementE;
   using LayoutE = typename Mma::LayoutE;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  #endif
+
   /// Warp count (concept: GemmShape)
   using WarpCount = typename Mma::WarpCount;
   static int const kThreadCount = 32 * WarpCount::kCount;
@@ -78,6 +90,10 @@ struct SparseGemm {
     typename Mma::IteratorB::TensorRef ref_B;
     typename Epilogue::OutputTileIterator::Params params_C;
     typename Epilogue::OutputTileIterator::TensorRef ref_C;
+    #if SAIL_FUSE_OP_EXT
+    typename Epilogue::OutputTileIterator::Params params_Extra[kExtraInputNum];
+    typename Epilogue::OutputTileIterator::TensorRef ref_Extra[kExtraInputNum];
+    #endif
     typename Epilogue::OutputTileIterator::Params params_D;
     typename Epilogue::OutputTileIterator::TensorRef ref_D;
     typename Mma::IteratorE::Params params_E;
@@ -103,6 +119,9 @@ struct SparseGemm {
       typename Epilogue::OutputTileIterator::TensorRef ref_C,
       typename Epilogue::OutputTileIterator::TensorRef ref_D,
       typename Mma::IteratorE::TensorRef ref_E,
+      #if SAIL_FUSE_OP_EXT
+      typename Epilogue::OutputTileIterator::TensorRef (&ref_Extra_NC)[kExtraInputNum],
+      #endif
       typename OutputOp::Params output_op = typename OutputOp::Params(),
       int *workspace = nullptr
     ):
@@ -125,7 +144,15 @@ struct SparseGemm {
       
       gemm_k_size = gemm_k_iterations * Mma::Shape::kK;
 
-    semaphore = workspace;
+      semaphore = workspace;
+
+      #if SAIL_FUSE_OP_EXT
+      CUTLASS_PRAGMA_UNROLL
+      for (int i =0; i < kExtraInputLoopNum; i++) {
+        params_Extra[i] = ref_Extra_NC[i].layout();
+        ref_Extra[i] = ref_Extra_NC[i];
+      }
+      #endif
     }
   };
 
@@ -149,7 +176,11 @@ struct SparseGemm {
       typename Mma::IteratorB::TensorRef ref_B,
       typename Epilogue::OutputTileIterator::TensorRef ref_C,
       typename Epilogue::OutputTileIterator::TensorRef ref_D,
-      typename Mma::IteratorE::TensorRef ref_E) {
+      typename Mma::IteratorE::TensorRef ref_E
+      #if SAIL_FUSE_OP_EXT
+      , typename Epilogue::OutputTileIterator::TensorRef (&ref_Extra_NC)[kExtraInputNum]
+      #endif
+      ) {
 
     static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
     static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
@@ -176,11 +207,27 @@ struct SparseGemm {
       return Status::kErrorMisalignedOperand;
     }
 
+    #if SAIL_FUSE_OP_EXT
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      if (ref_Extra_NC[i].good() && !TensorRef_aligned(ref_Extra_NC[i], kAlignmentC)) {
+          return Status::kErrorMisalignedOperand;
+      }
+    }
+    #endif
+
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    static int kSparseMajor = (CompressOp_ == Operand::kB) ? problem_size.n() : problem_size.m();
+#endif
+
     if ((problem_size.m() % kAlignmentA) || ((problem_size.k() / kSparse) % kAlignmentA) ||
       (problem_size.n() % kAlignmentB) || (problem_size.k() % kAlignmentB) ||
       (problem_size.m() % kAlignmentC) || (problem_size.n() % kAlignmentC) ||
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+      (kSparseMajor % kAlignmentE) || ((problem_size.k() / kSparse) % kAlignmentE)) {
+#else
       (problem_size.m() % kAlignmentE) || ((problem_size.k() / kSparse) % kAlignmentE)) {
-
+#endif
       return Status::kErrorMisalignedOperand;
     }
 
@@ -195,7 +242,11 @@ struct SparseGemm {
     // because of the row reordering of operand E
     static int const kAlignmentM = (sizeof(ElementE) == 2) ? 32 : 16;
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    if (kSparseMajor % kAlignmentM) {
+#else
     if (problem_size.m() % kAlignmentM) {
+#endif
       return Status::kErrorMisalignedOperand;
     }
 
@@ -205,7 +256,6 @@ struct SparseGemm {
   /// Executes one GEMM
   CUTLASS_DEVICE
   void operator()(Params const &params, SharedStorage &shared_storage) {
-
     // Compute threadblock location
     ThreadblockSwizzle threadblock_swizzle;
 
@@ -219,10 +269,67 @@ struct SparseGemm {
       return;
     }
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
     // Compute initial location in logical coordinates
     cutlass::MatrixCoord tb_offset_A{
       threadblock_tile_offset.m() * Mma::Shape::kM,
-      threadblock_tile_offset.k() * params.gemm_k_size / kSparse,
+      (CompressOp_ == Operand::kB) ?
+      threadblock_tile_offset.k() * params.gemm_k_size :
+      threadblock_tile_offset.k() * params.gemm_k_size / kSparse
+    };
+
+    cutlass::MatrixCoord tb_offset_B{
+      (CompressOp_ == Operand::kB) ?
+      threadblock_tile_offset.k() * params.gemm_k_size / kSparse :
+      threadblock_tile_offset.k() * params.gemm_k_size,
+      threadblock_tile_offset.n() * Mma::Shape::kN
+    };
+
+    cutlass::MatrixCoord tb_offset_E{
+      (CompressOp_ == Operand::kB) ? threadblock_tile_offset.k() * params.gemm_k_size / kSparse : threadblock_tile_offset.m() * Mma::Shape::kM,
+      (CompressOp_ == Operand::kB) ? threadblock_tile_offset.n() * Mma::Shape::kN : threadblock_tile_offset.k() * params.gemm_k_size / kSparse,
+    };
+
+    // Problem size is a function of threadblock index in the K dimension
+    int problem_size_k = min(
+      params.problem_size.k(),
+      (threadblock_tile_offset.k() + 1) * params.gemm_k_size);
+
+    // Compute threadblock-scoped matrix multiply-add
+    int gemm_k_iterations = (CompressOp_ == Operand::kB)
+                           ? (problem_size_k - tb_offset_A.column() + Mma::Shape::kK - 1) / Mma::Shape::kK
+                           : (problem_size_k - tb_offset_B.row() + Mma::Shape::kK - 1) / Mma::Shape::kK;
+
+    // Compute position within threadblock
+    int thread_idx = threadIdx.x;
+
+    // Construct iterators to A, B, and E operands
+    typename Mma::IteratorA iterator_A(
+      params.params_A,
+      params.ref_A.data(),
+      {params.problem_size.m(),
+       (CompressOp_ == Operand::kB) ? problem_size_k : problem_size_k / kSparse},
+      thread_idx,
+      tb_offset_A);
+
+    typename Mma::IteratorB iterator_B(
+      params.params_B,
+      params.ref_B.data(),
+      {(CompressOp_ == Operand::kB) ? problem_size_k / kSparse : problem_size_k,
+       params.problem_size.n()},
+      thread_idx,
+      tb_offset_B);
+
+    typename Mma::IteratorE iterator_E(
+        params.params_E, params.ref_E.data(),
+        {(CompressOp_ == Operand::kB) ? problem_size_k / kSparse / kElementsPerElementE : params.problem_size.m(),
+         (CompressOp_ == Operand::kB) ? params.problem_size.n() : problem_size_k / kSparse / kElementsPerElementE},
+        thread_idx, tb_offset_E);
+#else
+     // Compute initial location in logical coordinates
+    cutlass::MatrixCoord tb_offset_A{
+      threadblock_tile_offset.m() * Mma::Shape::kM,
+      threadblock_tile_offset.k() * params.gemm_k_size / kSparse
     };
 
     cutlass::MatrixCoord tb_offset_B{
@@ -266,6 +373,7 @@ struct SparseGemm {
         {params.problem_size.m(),
          problem_size_k / kSparse / kElementsPerElementE},
         thread_idx, tb_offset_E);
+#endif
 
     // Broadcast the warp_id computed by lane 0 to ensure dependent code
     // is compiled as warp-uniform.
@@ -360,7 +468,22 @@ struct SparseGemm {
     }
 
     // Execute the epilogue operator to update the destination tensor.
-    epilogue(output_op, iterator_D, accumulators, iterator_C); 
+    #if SAIL_FUSE_OP_EXT
+    typename Epilogue::OutputTileIterator iterator_Extra[kExtraInputNum];
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      iterator_Extra[i] = { params.params_Extra[i],
+                            params.ref_Extra[i].data(),
+                            params.problem_size.mn(),
+                            thread_idx,
+                            threadblock_offset };
+    }
+
+    epilogue.runEpilogue(output_op, iterator_D, accumulators, iterator_C, iterator_Extra);
+    #else
+    epilogue(output_op, iterator_D, accumulators, iterator_C);
+    #endif
     
     //
     // Release the semaphore

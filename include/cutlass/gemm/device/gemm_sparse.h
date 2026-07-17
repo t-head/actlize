@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -76,7 +78,7 @@ namespace device {
   input to the computation. This is distinct from the kernel-level Params structure pattern
   which contains application-specific precomputed state needed by the device code.
 
-  Example of a CUTLASS GEMM operator implementing the functionality of cuBLAS's SGEMM NN
+  Example of a CUTLASS GEMM operator implementing the functionality of acBLAS's SGEMM NN
   is as follows:
 
     //
@@ -133,9 +135,9 @@ namespace device {
       /// Operator class tag
       typename OperatorClass,
       
-      /// Tag indicating architecture to tune for.  This is the minimum SM that
+      /// Tag indicating architecture to tune for.  This is the minimum CU that
       /// supports the intended feature. The device kernel can be built
-      /// targeting any SM larger than this number.
+      /// targeting any CU larger than this number.
       typename ArchTag,
       
       /// Threadblock-level tile size (concept: GemmShape)
@@ -176,7 +178,7 @@ template <
     /// Operator class tag
     typename OperatorClass_ = arch::OpClassSimt,
     /// Tag indicating architecture to tune for
-    typename ArchTag_ = arch::Sm70,
+    typename ArchTag_ = arch::PPU0010,
     /// Threadblock-level tile size (concept: GemmShape)
     typename ThreadblockShape_ = typename DefaultGemmConfiguration<
         OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
@@ -200,6 +202,10 @@ template <
     int Stages =
         DefaultGemmConfiguration<OperatorClass_, ArchTag_, ElementA_, ElementB_,
                                  ElementC_, ElementAccumulator_>::kStages,
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    Operand CompressOp_ = Operand::kA,
+#endif
     /// Access granularity of A matrix in units of elements
     int AlignmentA =
         DefaultGemmConfiguration<OperatorClass_, ArchTag_, ElementA_, ElementB_,
@@ -226,6 +232,10 @@ class SparseGemm {
   using ElementC = ElementC_;
   using LayoutC = LayoutC_;
   using TensorRefC = TensorRef<ElementC const, LayoutC>;
+  #if SAIL_FUSE_OP_EXT
+  using ElementFuseInExtra = ElementC;
+  using LayoutExtra = LayoutC_;
+  #endif
   using TensorRefD = TensorRef<ElementC, LayoutC>;
   using ElementAccumulator = ElementAccumulator_;
   using OperatorClass = OperatorClass_;
@@ -244,6 +254,10 @@ class SparseGemm {
   static ComplexTransform const kTransformA = ComplexTransform::kNone;
   static ComplexTransform const kTransformB = ComplexTransform::kNone;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = EpilogueOutputOp::kExtraEpilogueInputs > 0 ? EpilogueOutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<EpilogueOutputOp>::value;
+  #endif
   /// Define the kernel
   using GemmKernel = typename kernel::DefaultSparseGemm<
     ElementA,
@@ -265,6 +279,9 @@ class SparseGemm {
     kStages,
     kSplitKSerial,
     Operator
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    , CompressOp_
+#endif
   >::GemmKernel;
 
   using ElementE = typename GemmKernel::ElementE;
@@ -290,6 +307,9 @@ class SparseGemm {
     TensorRef<ElementC const, LayoutC> ref_C;
     TensorRef<ElementC, LayoutC> ref_D;
     TensorRef<ElementE const, LayoutE> ref_E;
+    #if SAIL_FUSE_OP_EXT
+    TensorRef<ElementFuseInExtra const, LayoutExtra> ref_Extra[kExtraInputNum];
+    #endif
     typename EpilogueOutputOp::Params epilogue;
     int split_k_slices;
 
@@ -315,6 +335,9 @@ class SparseGemm {
       typename EpilogueOutputOp::Params epilogue_ = 
         typename EpilogueOutputOp::Params(),
       int split_k_slices = 1
+      #if SAIL_FUSE_OP_EXT
+      , TensorRef<ElementFuseInExtra const, LayoutExtra> *pref_Extra_ = nullptr
+      #endif
     ):
       problem_size(problem_size_),
       ref_A(ref_A_),
@@ -324,7 +347,16 @@ class SparseGemm {
       ref_E(ref_E_),
       epilogue(epilogue_),
       split_k_slices(split_k_slices) {
-
+        #if SAIL_FUSE_OP_EXT
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < kExtraInputLoopNum; i++) {
+          if (pref_Extra_) {
+            ref_Extra[i] = pref_Extra_[i];
+          } else {
+            ref_Extra[i] = {nullptr, 0};
+          }
+        }
+        #endif
     }
   };
 
@@ -341,9 +373,25 @@ public:
   /// Determines whether the GEMM can execute the given problem.
   static Status can_implement(Arguments const &args) {
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+#if !SAIL_SIMULATE_CUTLASS_MMA
+    if (CompressOp_ != Operand::kB) {
+      return Status::kErrorInvalidProblem;
+    }
+#endif
+#endif
+
     if (!kSplitKSerial && args.split_k_slices > 1) {
       return Status::kErrorInvalidProblem;
     }
+
+    #if SAIL_FUSE_OP_EXT
+    TensorRef<ElementFuseInExtra, LayoutExtra> ref_Extra_NC[kExtraInputNum];
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      ref_Extra_NC[i] = args.ref_Extra[i].non_const_ref();
+    }
+    #endif
 
     Status status = GemmKernel::can_implement(
       args.problem_size,
@@ -352,19 +400,21 @@ public:
       args.ref_C.non_const_ref(),
       args.ref_D,
       args.ref_E.non_const_ref()
+      #if SAIL_FUSE_OP_EXT
+      , ref_Extra_NC
+      #endif
     );
 
     if (status != Status::kSuccess) {
       return status;
     }
-
     return Status::kSuccess;
   }
 
   /// Gets the workspace size
-  static size_t get_workspace_size(Arguments const &args) {
+  static CUsize get_workspace_size(Arguments const &args) {
     
-    size_t bytes = 0;
+    CUsize bytes = 0;
 
     // Determine grid shape
     ThreadblockSwizzle threadblock_swizzle;
@@ -373,7 +423,7 @@ public:
       args.problem_size, 
       {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
       args.split_k_slices);
-    
+
     if (kSplitKSerial && args.split_k_slices > 1) {
 
       bytes += sizeof(int) * size_t(tiled_shape.m()) * size_t(tiled_shape.n());
@@ -383,7 +433,7 @@ public:
   }
 
   /// Initializes GEMM state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
 
     // Determine grid shape
     ThreadblockSwizzle threadblock_swizzle;
@@ -399,11 +449,11 @@ public:
           return Status::kErrorWorkspaceNull;
         }
 
-        size_t bytes = get_workspace_size(args);
+        CUsize bytes = get_workspace_size(args);
       
-        cudaError_t result = cudaMemsetAsync(workspace, 0, bytes, stream);
+        hggcError_t result = hggcMemsetAsync(workspace, 0, bytes, stream);
 
-        if (result != cudaSuccess) {
+        if (result != hggcSuccess) {
           return Status::kErrorInternal;
         }
       }
@@ -415,6 +465,14 @@ public:
       }
     }
 
+    #if SAIL_FUSE_OP_EXT
+    TensorRef<ElementFuseInExtra, LayoutExtra> ref_Extra_NC[kExtraInputNum];
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      ref_Extra_NC[i] = args.ref_Extra[i].non_const_ref();
+    }
+    #endif
+
     // Initialize the Params structure
     params_ = typename GemmKernel::Params{
       args.problem_size,
@@ -424,29 +482,31 @@ public:
       args.ref_C.non_const_ref(),
       args.ref_D,
       args.ref_E.non_const_ref(),
+      #if SAIL_FUSE_OP_EXT
+      ref_Extra_NC,
+      #endif
       args.epilogue,
       static_cast<int *>(workspace)
     };
     
     int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
     if (smem_size >= (48 << 10)) {
-      cudaError_t result = cudaFuncSetAttribute(Kernel<GemmKernel>,
-                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+      hggcError_t result = hggcFuncSetAttribute(Kernel<GemmKernel>,
+                                    hggcFuncAttributeMaxDynamicSharedMemorySize,
                                     smem_size);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
 
-      result = cudaFuncSetAttribute(
+      result = hggcFuncSetAttribute(
           Kernel<GemmKernel>,
-          cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+          hggcFuncAttributePreferredSharedMemoryCarveout, 100);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
     }
-
     return Status::kSuccess;
   }
 
@@ -464,6 +524,12 @@ public:
     params_.ref_C.reset(args.ref_C.non_const_ref().data());
     params_.ref_D.reset(args.ref_D.data());
     params_.ref_E.reset(args.ref_E.non_const_ref().data());
+    #if SAIL_FUSE_OP_EXT
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      params_.ref_Extra[i] = args.ref_Extra[i].non_const_ref();
+    }
+    #endif
     params_.output_op = args.epilogue;
     params_.semaphore = static_cast<int *>(workspace);
 
@@ -471,7 +537,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     ThreadblockSwizzle threadblock_swizzle;
 
@@ -482,13 +548,13 @@ public:
 
     cutlass::Kernel<GemmKernel><<<grid, block, smem_size, stream>>>(params_);
 
-    cudaError_t result = cudaGetLastError();
+    hggcError_t result = hggcGetLastError();
 
-    return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -496,9 +562,9 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
-    Status status = initialize(args, workspace);
+    Status status = initialize(args, workspace, stream);
     
     if (status == Status::kSuccess) {
       status = run(stream);

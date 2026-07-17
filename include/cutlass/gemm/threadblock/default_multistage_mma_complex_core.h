@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines basic properties needed by CTA-level GEMMs assuming
    expectations about data layout of the global memory fragments, data types,
@@ -37,13 +39,13 @@
 #include "cutlass/array.h"
 #include "cutlass/complex.h"
 
-#include "cutlass/layout/tensor_op_multiplicand_sm75.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm80.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu.h"
 
 #include "cutlass/gemm/warp/mma_simt_policy.h"
 #include "cutlass/gemm/warp/mma_simt.h"
 #include "cutlass/gemm/warp/default_mma_tensor_op.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu.h"
 
 #include "cutlass/gemm/threadblock/default_mma_core.h"
 
@@ -53,7 +55,7 @@
 
 #include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op.h"
 #include "cutlass/transform/threadblock/regular_tile_access_iterator_pitch_linear.h"
-#include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op_sm80.h"
+#include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op_ppu.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 

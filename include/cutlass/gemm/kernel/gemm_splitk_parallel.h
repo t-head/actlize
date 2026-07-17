@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for GEMM performing a reduction over K partitions in parallel.
 */
@@ -32,6 +34,8 @@
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
+
+#define SPLITK_BALANCE
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,6 +77,10 @@ struct GemmSplitKParallel {
     int64_t splitk_slice_stride;
     int gemm_k_size;
 
+#ifdef SPLITK_BALANCE
+    int boundary;
+#endif
+
     //
     // Methods
     //
@@ -101,9 +109,28 @@ struct GemmSplitKParallel {
       output_op(output_op),
       splitk_slice_stride(splitk_slice_stride) {
 
+      /*
+      Two ways to balance splited k blocks: balance all k blocks and last min;
+      Examples: splitek = 6, full_gemm_k_iterations = 33;
+      Balance all: 6 6 6 5 5 5;
+      Last min:    6 6 6 6 6 3;
+      Now balance all is used;
+      */
+#ifdef SPLITK_BALANCE
+      int full_gemm_k_iterations = (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
+      int gemm_k_iterations = full_gemm_k_iterations / grid_tiled_shape.k();
+      boundary = full_gemm_k_iterations - full_gemm_k_iterations / grid_tiled_shape.k() * grid_tiled_shape.k();
+
+#elif SPLITK_LASTMIN
+      int full_gemm_k_iterations = (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
+      int gemm_k_iterations = (full_gemm_k_iterations + grid_tiled_shape.k() - 1) / grid_tiled_shape.k();
+
+#else
+      // cutlass origin code
       int full_gemm_k_iterations = problem_size.k() / Mma::Shape::kK;
       int gemm_k_iterations = full_gemm_k_iterations / grid_tiled_shape.k();
 
+#endif
       gemm_k_size = gemm_k_iterations * Mma::Shape::kK;
     }
   };
@@ -138,6 +165,31 @@ struct GemmSplitKParallel {
       return;
     }
 
+#ifdef SPLITK_BALANCE
+    // Problem size is a function of threadblock index in the K dimension
+    int offset_k, problem_size_k;
+    if (threadblock_tile_offset.k() < params.boundary) {
+      offset_k = (params.gemm_k_size + Mma::Shape::kK) * threadblock_tile_offset.k();
+      problem_size_k = params.gemm_k_size + Mma::Shape::kK + offset_k;
+    } else {
+      offset_k = (params.gemm_k_size + Mma::Shape::kK) * params.boundary
+               + params.gemm_k_size * (threadblock_tile_offset.k() - params.boundary);
+      problem_size_k = params.gemm_k_size + offset_k;
+    }
+
+    problem_size_k = problem_size_k > params.problem_size.k() ? params.problem_size.k() : problem_size_k;
+
+    // Compute initial location in logical coordinates
+    cutlass::MatrixCoord tb_offset_A{
+      threadblock_tile_offset.m() * Mma::Shape::kM,
+      offset_k,
+    };
+
+    cutlass::MatrixCoord tb_offset_B{
+      offset_k,
+      threadblock_tile_offset.n() * Mma::Shape::kN
+    };
+#else
     // Compute initial location in logical coordinates
     cutlass::MatrixCoord tb_offset_A{
       threadblock_tile_offset.m() * Mma::Shape::kM,
@@ -157,9 +209,13 @@ struct GemmSplitKParallel {
     else {
       problem_size_k = (threadblock_tile_offset.k() + 1) * params.gemm_k_size;
     }
+#endif
 
     // Compute threadblock-scoped matrix multiply-add
     int gemm_k_iterations = (problem_size_k - tb_offset_A.column() + Mma::Shape::kK - 1) / Mma::Shape::kK;
+    if (gemm_k_iterations == 0) {
+      return;
+    }
 
     // Compute position within threadblock
     int thread_idx = threadIdx.x;
@@ -179,7 +235,7 @@ struct GemmSplitKParallel {
       thread_idx,
       tb_offset_B);
 
-    int warp_idx = threadIdx.x / 32;
+    int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
     int lane_idx = threadIdx.x % 32;
 
 

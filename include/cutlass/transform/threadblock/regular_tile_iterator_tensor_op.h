@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing storing of tiles from pitch-linear rank=2 tensors. 
 */
@@ -638,6 +640,112 @@ class RegularTileIterator<Shape_, Element_,
   using Shape = Shape_;
   using Element = Element_;
   using Layout = layout::ColumnMajorTensorOpMultiplicandCrosswise<
+      sizeof_bits<Element_>::value, Crosswise>;
+  static int const kAdvanceRank = AdvanceRank;
+  static int const kAlignment = Alignment;
+
+  using Index = typename Layout::Index;
+  using LongIndex = typename Layout::LongIndex;
+
+  using TensorRef = TensorRef<Element, Layout>;
+  using TensorCoord = typename Layout::TensorCoord;
+
+  using ThreadMap = ThreadMap_;
+
+  /// Underlying iterator type
+  using UnderlyingIterator = RegularTileIterator<
+      layout::PitchLinearShape<Shape::kRow, Shape::kColumn>, Element,
+      layout::TensorOpMultiplicandCrosswise<sizeof_bits<Element_>::value,
+                                            Crosswise>,
+      (kAdvanceRank == 0 ? 0 : 1), ThreadMap_>;
+
+ public:
+  /// Fragment object to be loaded or stored
+  using Fragment = Array<Element, UnderlyingIterator::Fragment::kElements>;
+
+ private:
+  /// Underlying iterator
+  UnderlyingIterator iterator_;
+
+ public:
+  /// Construct a TileIterator with zero threadblock offset
+  CUTLASS_HOST_DEVICE
+  RegularTileIterator(TensorRef ref,  ///< Pointer to start of tensor
+                      int thread_id   ///< ID of each participating thread
+                      )
+      : iterator_({ref.data(), ref.stride()}, thread_id) {}
+
+  /// Adds a pointer offset in units of Element
+  CUTLASS_HOST_DEVICE
+  void add_pointer_offset(LongIndex pointer_offset) {
+    iterator_.add_pointer_offset(pointer_offset);
+  }
+
+  /// Adds a tile offset
+  CUTLASS_DEVICE
+  void add_tile_offset(TensorCoord const &coord) {
+    iterator_.add_tile_offset({coord.row(), coord.column()});
+  }
+
+  /// Advances to the next tile in memory.
+  CUTLASS_HOST_DEVICE
+  RegularTileIterator &operator++() {
+    ++iterator_;
+    return *this;
+  }
+
+  /// Advances to the next tile in memory.
+  CUTLASS_HOST_DEVICE
+  RegularTileIterator operator++(int) {
+    RegularTileIterator prev(*this);
+    ++iterator_;
+
+    return prev;
+  }
+
+  /// Loads a fragment from memory
+  CUTLASS_DEVICE
+  void load_with_pointer_offset(Fragment &frag, Index pointer_offset) {
+    iterator_.load_with_pointer_offset(frag, pointer_offset);
+  }
+
+  /// Loads a fragment from memory
+  CUTLASS_DEVICE
+  void load(Fragment &frag) { load_with_pointer_offset(frag, 0); }
+
+  /// Store a fragment to memory
+  CUTLASS_DEVICE
+  void store_with_pointer_offset(Fragment const &frag, Index pointer_offset) {
+    iterator_.store_with_pointer_offset(frag, pointer_offset);
+  }
+
+  /// Store a fragment to memory
+  CUTLASS_DEVICE
+  void store(Fragment const &frag) { store_with_pointer_offset(frag, 0); }
+};
+
+/// Tile Iterator specialized for column-major crosswise TensorOp formats.
+///
+///
+/// Satisfies: ForwardTileIteratorConcept |
+///            ReadableContiguousTileIteratorConcept |
+///            WriteableContiguousTileIteratorConcept
+///
+template <typename Shape_, typename Element_, int AdvanceRank,
+          typename ThreadMap_, int Alignment, int Crosswise>
+class RegularTileIterator<Shape_, Element_,
+                          layout::ColumnMajorTensorOpMultiplicandCrosswiseCol32x2R4R4<
+                              sizeof_bits<Element_>::value, Crosswise>,
+                          AdvanceRank, ThreadMap_, Alignment> {
+ public:
+  static_assert(
+      AdvanceRank == 0 || AdvanceRank == 1,
+      "Specialization for column-major iterator may along advance along the "
+      "columns(rank=0) or rows(rank=1) dimension.");
+
+  using Shape = Shape_;
+  using Element = Element_;
+  using Layout = layout::ColumnMajorTensorOpMultiplicandCrosswiseCol32x2R4R4<
       sizeof_bits<Element_>::value, Crosswise>;
   static int const kAdvanceRank = AdvanceRank;
   static int const kAlignment = Alignment;

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations.
 */
@@ -48,7 +50,7 @@ namespace warp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
   /// Size of the Gemm problem - concept: gemm::GemmShape<>
   typename Shape_,
@@ -105,7 +107,7 @@ public:
   using OperatorClass = arch::OpClassSimt;
 
   /// Hard-coded for now
-  using ArchTag = arch::Sm50;
+  using ArchTag = arch::PPU0010;
 
   /// Complex transform on A operand
   static ComplexTransform const kTransformA = TransformA;
@@ -120,7 +122,7 @@ public:
                       layout::RowMajor,
                       LayoutA>::type
                  >::type;
-  
+
   using ThreadLayoutB = typename platform::conditional< platform::is_same< layout::ColumnMajorInterleaved<4>, LayoutB >::value,
                   layout::ColumnMajor,
                   typename platform::conditional < platform::is_same< layout::RowMajorInterleaved<4>, LayoutB >::value,
@@ -128,9 +130,9 @@ public:
                       LayoutB>::type
                  >::type;
 
-  static constexpr bool use_dp4a = (platform::is_same< layout::ColumnMajorInterleaved<4>, LayoutA>::value || 
-                                    platform::is_same< layout::RowMajorInterleaved<4>, LayoutA >::value) && 
-                                    platform::is_same< ElementA, int8_t >::value && 
+  static constexpr bool use_dp4a = (platform::is_same< layout::ColumnMajorInterleaved<4>, LayoutA>::value ||
+                                    platform::is_same< layout::RowMajorInterleaved<4>, LayoutA >::value) &&
+                                    platform::is_same< ElementA, int8_t >::value &&
                                     platform::is_same< ElementB, int8_t >::value;
 
   using dp4a_type = typename platform::conditional< use_dp4a , int8_t, bool >::type;
@@ -153,6 +155,9 @@ public:
 
   /// Underlying matrix multiply operator (concept: arch::Mma)
   using ArchMmaOperator = typename ThreadMma::ArchMmaOperator;
+
+  /// Indicates math operator
+  using MathOperator = typename ArchMmaOperator::Operator;
 
   /// Shape of the underlying instruction
   using InstructionShape = GemmShape<1,1,use_dp4a ? 4 : 1>;
@@ -218,9 +223,9 @@ public:
   /// Performs a warp-level matrix multiply-accumulate operation
   CUTLASS_DEVICE
   void operator()(
-    FragmentC &d, 
-    FragmentA a, 
-    FragmentB b, 
+    FragmentC &d,
+    FragmentA a,
+    FragmentB b,
     FragmentC const &c, int group_idx = 0) const {
 
     ThreadMma mma;

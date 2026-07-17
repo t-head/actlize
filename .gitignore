@@ -1,0 +1,4 @@
+examples/*/*.o
+examples/*/*.log
+examples/*/*.ppu
+build/*

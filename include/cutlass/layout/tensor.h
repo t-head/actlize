@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines layout functions used by TensorRef and derived classes for common 4-D and 5-D
       tensor formats.
@@ -33,8 +35,8 @@
     defined in cutlass/tensor_ref.h.
 */
 #pragma once
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cassert>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cassert>
 #else
 #include "assert.h"
 #endif
@@ -98,7 +100,7 @@ public:
     typename Stride::Index stride_w,    ///< number of elements between adjacent W coordinates
     typename Stride::Index stride_h,    ///< number of elements between adjacent H coordinates
     typename Stride::Index stride_n     ///< number of elements between adjacent N coordinates
-  ): 
+  ):
     stride_(make_Coord(stride_w, stride_h, stride_n)) { }
 
   /// Helper returns a layout to a tightly packed NHWC tensor.
@@ -106,23 +108,23 @@ public:
   static TensorNHWC packed(TensorCoord const &extent) {
     return TensorNHWC(
       make_Coord(
-        extent.c(), 
+        extent.c(),
         extent.w() * extent.c(),
         extent.h() * extent.w() * extent.c()
       )
     );
   }
-  
-  /// Returns the offset of a coordinate (n, h, w, c) in linear memory. 
+
+  /// Returns the offset of a coordinate (n, h, w, c) in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(TensorCoord const &coord) const {
-    return coord.c() + 
-      LongIndex(stride_[0] * coord.w()) + 
-      LongIndex(stride_[1] * coord.h()) +
-      LongIndex(stride_[2] * coord.n());
+    return coord.c() +
+      (LongIndex(stride_[0]) * coord.w()) +
+      (LongIndex(stride_[1]) * coord.h()) +
+      (LongIndex(stride_[2]) * coord.n());
   }
-  
-  /// Returns the offset of a pitchlinear coordinate in linear memory. 
+
+  /// Returns the offset of a pitchlinear coordinate in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(PitchLinearCoord coord) const {
     return coord.contiguous() + LongIndex(coord.strided() * stride_[2]);
@@ -134,7 +136,7 @@ public:
 
     int n = 0, h = 0, w = 0, c = 0;
 
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
     int tmp = 0;
     c = int(index % static_cast<int>(stride_[0]));
 
@@ -149,11 +151,11 @@ public:
     fast_divmod(w, tmp, w, int(stride_[0]), c_mul, c_shr);
     #else
 
-    n = int(index / stride_[2]);
-    LongIndex residual = index % stride_[2];
+    n = int(index / (stride_[2]));
+    LongIndex residual = index % (stride_[2]);
 
-    h = int(residual / stride_[1]);
-    residual = (residual % stride_[1]);
+    h = int(residual / (stride_[1]));
+    residual = (residual % (stride_[1]));
 
     w = int(residual / stride_[0]);
     c = int(residual % stride_[0]);
@@ -181,11 +183,16 @@ public:
     // and we could not rely on the capacity calculation in such cases
     // we could move this checkers to debug code only
     if ((extent.c() > stride_[0])
-        || (extent.w() * stride_[0] > stride_[1]) 
+        || (extent.w() * stride_[0] > stride_[1])
         || (extent.h() * stride_[1] > stride_[2])) {
       assert(0);
     }
-    return extent.n() * stride_[2];
+    return extent.n() * LongIndex(stride_[2]);
+  }
+
+  CUTLASS_HOST_DEVICE
+  void print() const {
+    printf("stride: %ld, %ld, %ld\n", LongIndex(stride_[0]), LongIndex(stride_[1]), LongIndex(stride_[2]));
   }
 };
 
@@ -241,13 +248,13 @@ public:
     );
   }
 
-  /// Returns the offset of a coordinate in linear memory. 
+  /// Returns the offset of a coordinate in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(TensorCoord const &coord) const {
-    return coord.w() + 
-      LongIndex(stride_[0] * coord.h()) + 
-      LongIndex(stride_[1] * coord.c()) + 
-      LongIndex(stride_[2] * coord.n());
+    return coord.w() +
+      (LongIndex(stride_[0]) * coord.h()) +
+      (LongIndex(stride_[1]) * coord.c()) +
+      (LongIndex(stride_[2]) * coord.n());
   }
 
   /// Returns the stride of the layout
@@ -265,7 +272,7 @@ public:
   /// Compute the number of contiguous elements needed to store a tensor with the given size
   CUTLASS_HOST_DEVICE
   LongIndex capacity(TensorCoord const &extent) const {
-    return extent.n() * stride_[2];
+    return extent.n() * LongIndex(stride_[2]);
   }
 };
 
@@ -335,18 +342,18 @@ public:
     );
   }
 
-  /// Returns the offset of a coordinate in linear memory. 
+  /// Returns the offset of a coordinate in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(TensorCoord const &coord) const {
 
     Index c_minor = (coord.c() % kInterleave);
     Index c_major = (coord.c() / kInterleave);
 
-    return c_minor + 
-      LongIndex(kInterleave * coord.w()) + 
-      LongIndex(stride_[0] * coord.h()) + 
-      LongIndex(stride_[1] * c_major) + 
-      LongIndex(stride_[2] * coord.n());
+    return c_minor +
+      (LongIndex(kInterleave) * coord.w()) +
+      (LongIndex(stride_[0]) * coord.h()) +
+      (LongIndex(stride_[1]) * c_major) +
+      (LongIndex(stride_[2]) * coord.n());
   }
 
   /// Returns the stride of the layout
@@ -364,7 +371,7 @@ public:
   /// Compute the number of contiguous elements needed to store a tensor with the given size
   CUTLASS_HOST_DEVICE
   LongIndex capacity(TensorCoord const &extent) const {
-    return extent.n() * stride_[2];
+    return extent.n() * LongIndex(stride_[2]);
   }
 };
 
@@ -434,21 +441,21 @@ public:
     );
   }
 
-  /// Returns the offset of a coordinate in linear memory. 
+  /// Returns the offset of a coordinate in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(TensorCoord const &coord) const {
 
     Index c_minor = (coord.c() % kInterleave);
     Index c_major = (coord.c() / kInterleave);
 
-    return c_minor + 
-      LongIndex(kInterleave * coord.n()) + 
-      LongIndex(stride_[0] * coord.w()) + 
-      LongIndex(stride_[1] * coord.h()) + 
-      LongIndex(stride_[2] * c_major);
+    return c_minor +
+      (LongIndex(kInterleave) * coord.n()) +
+      (LongIndex(stride_[0]) * coord.w()) +
+      (LongIndex(stride_[1]) * coord.h()) +
+      (LongIndex(stride_[2]) * c_major);
   }
 
-  /// Returns the offset of a pitchlinear coordinate in linear memory. 
+  /// Returns the offset of a pitchlinear coordinate in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(PitchLinearCoord const &coord) const {
     return (coord.contiguous() % kInterleave) +
@@ -471,7 +478,7 @@ public:
   /// Compute the number of contiguous elements needed to store a tensor with the given size
   CUTLASS_HOST_DEVICE
   LongIndex capacity(TensorCoord const &extent) const {
-    return (extent.c() / kInterleave * stride_[2]);
+    return (extent.c() / kInterleave * LongIndex(stride_[2]));
   }
 };
 
@@ -518,10 +525,10 @@ public:
   /// Constructor
   CUTLASS_HOST_DEVICE
   TensorNDHWC(
-    typename Stride::Index c, 
-    typename Stride::Index wc, 
-    typename Stride::Index hwc, 
-    typename Stride::Index dhwc): 
+    typename Stride::Index c,
+    typename Stride::Index wc,
+    typename Stride::Index hwc,
+    typename Stride::Index dhwc):
   stride_(make_Coord(c, wc, hwc, dhwc)) { }
 
   /// Helper returns a layout to a tightly packed NHWC tensor.
@@ -529,30 +536,30 @@ public:
   static TensorNDHWC packed(TensorCoord const &extent) {
     return TensorNDHWC(
       make_Coord(
-        extent.c(), 
+        extent.c(),
         extent.w() * extent.c(),
         extent.h() * extent.w() * extent.c(),
         extent.d() * extent.h() * extent.w() * extent.c()
       )
     );
   }
-  
-  /// Returns the offset of a coordinate (n, d, h, w, c) in linear memory. 
+
+  /// Returns the offset of a coordinate (n, d, h, w, c) in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(TensorCoord const &coord) const {
-    return coord.c() + 
-      LongIndex(stride_[0] * coord.w()) + 
-      LongIndex(stride_[1] * coord.h()) +
-      LongIndex(stride_[2] * coord.d()) +
-      LongIndex(stride_[3] * coord.n());
+    return coord.c() +
+      (LongIndex(stride_[0]) * coord.w()) +
+      (LongIndex(stride_[1]) * coord.h()) +
+      (LongIndex(stride_[2]) * coord.d()) +
+      (LongIndex(stride_[3]) * coord.n());
   }
 
-  /// Returns the offset of a pitchlinear coordinate in linear memory. 
+  /// Returns the offset of a pitchlinear coordinate in linear memory.
   CUTLASS_HOST_DEVICE
   LongIndex operator()(PitchLinearCoord coord) const {
     return coord.contiguous() + LongIndex(coord.strided() * stride_[3]);
   }
-  
+
   /// Returns the stride of the layout
   CUTLASS_HOST_DEVICE
   Stride stride() const {
@@ -572,12 +579,12 @@ public:
     // and we could not rely on the capacity calculation in such cases
     // we could move this checkers to debug code only
     if ((extent.c() > stride_[0])
-        || (extent.w() * stride_[0] > stride_[1]) 
+        || (extent.w() * stride_[0] > stride_[1])
         || (extent.h() * stride_[1] > stride_[2])
         || (extent.d() * stride_[2] > stride_[3])) {
       assert(0);
     }
-    return extent.n() * stride_[3];
+    return extent.n() * LongIndex(stride_[3]);
   }
 };
 

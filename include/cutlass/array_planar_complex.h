@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations.
 */
@@ -45,7 +47,7 @@ struct ArrayPlanarComplex {
   using Element = Element_;
 
   /// Number of logical elements
-  static size_t const kElements = N;
+  static CUsize const kElements = N;
 
   /// Underlying Fragment of real-valued elemenets
   using ArrayReal = Array<Element, N>;

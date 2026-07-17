@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Kernel performing a reduction over densely packed tensors in global memory
 */
@@ -50,7 +52,7 @@ template <
   typename Shape_,              ///< shape of CTA        (concept: MatrixShape)
   typename OutputOp_ ,          ///< output operator     (concept: epilogue::thread operator)
   typename ReductionOp_,        ///< reduction operator  (concept: ReductionOperator)
-  int PartitionsPerStage = 4    ///< number of partitions to issue 
+  int PartitionsPerStage = 4    ///< number of partitions to issue
 >
 class ReduceSplitK {
 public:
@@ -59,7 +61,11 @@ public:
   using ReductionOp = ReductionOp_;
   using OutputOp = OutputOp_;
   static int const kElementsPerAccess = OutputOp::kCount;
+#if SAIL_REDUCE_SPLITK_OPT
+  static int const kPartitionsPerStage = PartitionsPerStage * 4 / kElementsPerAccess;
+#else
   static int const kPartitionsPerStage = PartitionsPerStage;
+#endif
 
   using ElementWorkspace = typename ReductionOp::Element;
   using ElementAccumulator = typename ReductionOp::ElementAccumulator;
@@ -72,6 +78,13 @@ public:
   using FragmentAccumulator = Array<ElementAccumulator, kElementsPerAccess>;
   using FragmentOutput = AlignedArray<ElementOutput, kElementsPerAccess>;
 
+#if SAIL_FUSE_OP_EXT
+  using FragmentExtraInput = Array<ElementOutput, kElementsPerAccess>;
+  using TensorRefExtra = OutputTensorRef;
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  static bool const kSupportExtraInput = OutputOp::kExtraEpilogueOpsNum > 0;
+#endif
   //
   // Types
   //
@@ -81,10 +94,15 @@ public:
 
     MatrixCoord problem_size;
     int partitions;
-    size_t partition_stride;
+    CUsize partition_stride;
+    CUsize destination_stride;
+    CUsize source_stride;
     WorkspaceTensorRef workspace;
     OutputTensorRef destination;
     OutputTensorRef source;
+    #if SAIL_FUSE_OP_EXT
+    TensorRefExtra ref_Extra[kExtraInputNum];
+    #endif
     typename OutputOp::Params output;
     typename ReductionOp::Params reduction;
 
@@ -99,22 +117,38 @@ public:
     Params(
       MatrixCoord problem_size_,
       int partitions_,
-      size_t partition_stride_,
+      CUsize partition_stride_,
+      CUsize destination_stride_,
+      CUsize source_stride_,
       WorkspaceTensorRef workspace_,
       OutputTensorRef destination_,
       OutputTensorRef source_,
       typename OutputOp::Params output_ = typename OutputOp::Params(),
       typename ReductionOp::Params reduction_ = typename ReductionOp::Params()
+      #if SAIL_FUSE_OP_EXT
+      , const TensorRefExtra *pRef_Extra_NC = nullptr
+      #endif
     ):
       problem_size(problem_size_),
       partitions(partitions_),
       partition_stride(sizeof(FragmentWorkspace) * partition_stride_ / kElementsPerAccess),
+      destination_stride(destination_stride_),
+      source_stride(source_stride_),
       workspace(workspace_),
       destination(destination_),
       source(source_),
       output(output_),
       reduction(reduction_) {
-
+        #if SAIL_FUSE_OP_EXT
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < kExtraInputLoopNum; i++) {
+          if (pRef_Extra_NC) {
+            ref_Extra[i] = pRef_Extra_NC[i];
+          } else {
+            ref_Extra[i] = {nullptr, 0};
+          }
+        }
+        #endif
     }
   };
 
@@ -129,20 +163,87 @@ public:
     cutlass::MatrixCoord problem_size) {
 
     return dim3(
+#if SAIL_REDUCE_SPLITK_OPT
+      (problem_size.row() * problem_size.column() + Shape::kCount - 1) / Shape::kCount);
+#else
       (problem_size.row() + Shape::kRow - 1) / Shape::kRow,
       (problem_size.column() + Shape::kColumn - 1) / Shape::kColumn);
+#endif
   }
 
   /// Determines the threadblock shape
   CUTLASS_HOST_DEVICE
   static dim3 block_shape() {
+#if SAIL_REDUCE_SPLITK_OPT
+    return dim3(Shape::kCount / kElementsPerAccess);
+#else
     return dim3(Shape::kColumn / kElementsPerAccess, Shape::kRow);
+#endif
   }
+
+#if SAIL_FUSE_OP_EXT
+  template <bool Support = kSupportExtraInput>
+  CUTLASS_DEVICE
+  typename platform::enable_if<Support, void>::type
+  runEpilogueOutput(OutputOp const& output_op,
+                    FragmentAccumulator const& accumulator,
+                    FragmentOutput const& source_frag,
+                    typename OutputOp::FragmentOutput& output_frag,
+                    Params const& params,
+                    uint32_t const& thread_offset
+                   ) {
+    FragmentExtraInput extra_frags[kExtraInputNum];
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; ++i) {
+      FragmentExtraInput const *extra_ptr = reinterpret_cast<FragmentExtraInput const *>(
+      #if SAIL_REDUCE_SPLITK_OPT
+            params.ref_Extra[i].data() + params.ref_Extra[i].offset(
+              MatrixCoord(thread_offset / params.problem_size.column(), thread_offset % params.problem_size.column())));
+      #else
+            params.ref_Extra[i].data() + params.ref_Extra[i].offset(thread_offset));
+      #endif
+      reinterpret_cast<FragmentExtraInput &>(extra_frags[i]) = *extra_ptr;
+    }
+
+    if (output_op.is_source_needed()) {
+      output_frag = output_op(accumulator, source_frag, extra_frags);
+    } else {
+      output_frag = output_op(accumulator, extra_frags);
+    }
+  }
+
+  template <bool Support = kSupportExtraInput>
+  CUTLASS_DEVICE
+  typename platform::enable_if<!Support, void>::type
+  runEpilogueOutput(OutputOp const& output_op,
+                    FragmentAccumulator const& accumulator,
+                    FragmentOutput const& source_frag,
+                    typename OutputOp::FragmentOutput& output_frag,
+                    Params const& params,
+                    uint32_t const& thread_offset
+                   ) {
+    if (output_op.is_source_needed()) {
+      output_frag = output_op(accumulator, source_frag);
+    } else {
+      output_frag = output_op(accumulator);
+    }
+  }
+#endif
 
   /// Perform a reduction
   CUTLASS_DEVICE
   void operator()(Params const &params, SharedStorage &storage) {
+#if SAIL_REDUCE_SPLITK_OPT
+    // because workspace, source and destination are all RowMajor,
+    // so we don't need MatrixCoord thread_offset to compute offset index.
+    uint32_t thread_offset = blockIdx.x * Shape::kCount + threadIdx.x * kElementsPerAccess;
+    MatrixCoord thread_mn(thread_offset / params.problem_size.column(), thread_offset % params.problem_size.column());
 
+    if (!(thread_offset < params.problem_size.row() * params.problem_size.column())) {
+      return;
+    }
+#else
     // Determine CTA position
     MatrixCoord thread_offset(
       int(blockIdx.x) * Shape::kRow + threadIdx.y,
@@ -150,39 +251,84 @@ public:
     );
 
     // One guard conditional
-    if (!(thread_offset.row() < params.problem_size.row() && 
+    if (!(thread_offset.row() < params.problem_size.row() &&
           thread_offset.column() < params.problem_size.column())) {
 
       return;
     }
-
+#endif
 
     ReductionOp reduction_op(params.reduction);
 
     FragmentAccumulator accumulator;
 
-    accumulator.clear();  
-    
+    accumulator.clear();
+
     //
     // Load the first slice
     //
 
-    char const *workspace_ptr = 
+#if SAIL_REDUCE_SPLITK_OPT
+    char const * __restrict__ workspace_ptr =
+      reinterpret_cast<char const *>(
+        params.workspace.data() + thread_offset);
+#else
+    char const *workspace_ptr =
       reinterpret_cast<char const *>(
         params.workspace.data() + params.workspace.offset(thread_offset));
+#endif
+    int batch_id = blockIdx.z;
+    workspace_ptr += batch_id * params.partitions * params.partition_stride;
 
     FragmentWorkspace workspace_frag[kPartitionsPerStage];
-    
+
     //
     // Construct the output operator
     //
-    
+
     OutputOp output_op(params.output);
 
     //
     // Load and accumulate with a simple batched loading sequence.
     //
 
+#if SAIL_REDUCE_SPLITK_OPT
+    {
+      int k = 0;
+      CUTLASS_PRAGMA_NO_UNROLL
+      for (; k <= params.partitions - kPartitionsPerStage; k += kPartitionsPerStage) {
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < kPartitionsPerStage; ++i) {
+          // if (k + i < params.partitions) {
+          workspace_frag[i] = *reinterpret_cast<FragmentWorkspace const *>(workspace_ptr);
+          workspace_ptr += params.partition_stride;
+          // }
+        }
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < kPartitionsPerStage; ++i) {
+          // if (k + i < params.partitions) {
+            accumulator = reduction_op(accumulator, workspace_frag[i]);
+          //}
+        }
+      }
+
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < kPartitionsPerStage; ++i) {
+        if (k + i < params.partitions) {
+          workspace_frag[i] = *reinterpret_cast<FragmentWorkspace const *>(workspace_ptr);
+          workspace_ptr += params.partition_stride;
+        }
+      }
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < kPartitionsPerStage; ++i) {
+        if (k + i < params.partitions) {
+          accumulator = reduction_op(accumulator, workspace_frag[i]);
+        }
+      }
+    }
+#else
     CUTLASS_PRAGMA_NO_UNROLL
     for (int k = 0; k < params.partitions; k += kPartitionsPerStage) {
 
@@ -192,7 +338,7 @@ public:
           workspace_frag[i] = *reinterpret_cast<FragmentWorkspace const *>(workspace_ptr);
           workspace_ptr += params.partition_stride;
         }
-      }   
+      }
 
       CUTLASS_PRAGMA_UNROLL
       for (int i = 0; i < kPartitionsPerStage; ++i) {
@@ -201,34 +347,46 @@ public:
         }
       }
     }
+#endif
 
     //
     // Conditionally load the source
     //
-
     FragmentOutput source_frag;
-
     source_frag.clear();
-
-    FragmentOutput const *source_ptr = reinterpret_cast<FragmentOutput const *>(
-      params.source.data() + params.source.offset(thread_offset));
-
     if (output_op.is_source_needed()) {
+      FragmentOutput const *source_ptr = reinterpret_cast<FragmentOutput const *>(
+      #if SAIL_REDUCE_SPLITK_OPT
+            // source may be not contiguous, (ldc > col)
+            params.source.data() + params.source.offset(thread_mn) + params.source_stride * batch_id);
+      #else
+            params.source.data() + params.source.offset(thread_offset) + params.source_stride * batch_id);
+      #endif
       reinterpret_cast<FragmentOutput &>(source_frag) = *source_ptr;
     }
-    
+
+    #if SAIL_FUSE_OP_EXT
+    typename OutputOp::FragmentOutput output_frag;
+    runEpilogueOutput(output_op, accumulator, source_frag, output_frag, params, thread_offset);
+    #else
     //
     // Compute the output
     //
 
     typename OutputOp::FragmentOutput output_frag = output_op(accumulator, source_frag);
+    #endif
 
     //
     // Store
     //
 
     FragmentOutput *dest_ptr = reinterpret_cast<FragmentOutput *>(
-      params.destination.data() + params.destination.offset(thread_offset));
+#if SAIL_REDUCE_SPLITK_OPT
+      // destination may be not contiguous, (ldd > col)
+      params.destination.data() + params.destination.offset(thread_mn) + params.destination_stride * batch_id);
+#else
+      params.destination.data() + params.destination.offset(thread_offset) + params.destination_stride * batch_id);
+#endif
 
     *dest_ptr = reinterpret_cast<FragmentOutput const &>(output_frag);
   }

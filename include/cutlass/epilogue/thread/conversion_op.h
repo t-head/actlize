@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing conversion operations used by epilogues.
 */
@@ -65,6 +67,11 @@ public:
 
   static FloatRoundStyle const kRound = Round;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
+
   /// Host-constructable parameters structure
   struct Params {
 
@@ -72,8 +79,80 @@ public:
     // Methods
     //
 
+    ElementCompute alpha;                  ///< scales accumulators
+    ElementCompute beta_c;                 ///< scales source tensor
+    #if SAIL_FUSE_OP_EXT
+    ElementCompute beta_e;                 ///< scales fuse op input E tensor
+    #endif
+    ElementCompute act_param0;              ///< zero
+    ElementCompute act_param1;            ///< alpha value of leaky relu
+    ElementCompute const *alpha_ptr;       ///< pointer to accumulator scalar - if not null, loads it from memory
+    ElementCompute const *beta_c_ptr;      ///< pointer to source scalar - if not null, loads it from memory
+    #if SAIL_FUSE_OP_EXT
+    ElementCompute const *beta_e_ptr;      ///< pointer to input E scalar - if not null, loads it from memory
+    #endif
+    ElementCompute const *act_param0_ptr; ///< pointer to activation op's first parameter - if not null, loads it from memory
+    ElementCompute const *act_param1_ptr; ///< pointer to leaky alpha value - if not null, loads it from memory
+    //
+    // Methods
+    //
+
     CUTLASS_HOST_DEVICE
-    Params() {}
+    Params():
+      alpha(ElementCompute(1)),
+      beta_c(ElementCompute(0)),
+      #if SAIL_FUSE_OP_EXT
+      beta_e(ElementCompute(1)),
+      #endif
+      act_param0(ElementCompute(0)),
+      act_param1(ElementCompute(0)),
+      alpha_ptr(nullptr),
+      beta_c_ptr(nullptr),
+      #if SAIL_FUSE_OP_EXT
+      beta_e_ptr(nullptr),
+      #endif
+      act_param0_ptr(nullptr),
+      act_param1_ptr(nullptr) { }
+
+    CUTLASS_HOST_DEVICE
+    Params(
+      ElementCompute alpha,
+      ElementCompute beta_c = ElementCompute(0),
+      ElementCompute beta_e = ElementCompute(1),
+      ElementCompute act_param0 = ElementCompute(0),
+      ElementCompute act_param1 = ElementCompute(1.0)
+    ): alpha(alpha), beta_c(beta_c),
+    #if SAIL_FUSE_OP_EXT
+    beta_e(beta_e),
+    #endif
+    act_param0(act_param0), act_param1(act_param1), alpha_ptr(nullptr), beta_c_ptr(nullptr),
+    #if SAIL_FUSE_OP_EXT
+    beta_e_ptr(nullptr),
+    #endif
+    act_param0_ptr(nullptr),
+    act_param1_ptr(nullptr) {
+    }
+
+    CUTLASS_HOST_DEVICE
+    Params(
+      ElementCompute const *alpha_ptr,
+      ElementCompute const *beta_c_ptr = nullptr,
+      #if SAIL_FUSE_OP_EXT
+      ElementCompute const *beta_e_ptr = nullptr,
+      #endif
+      ElementCompute const *act_param0_ptr = nullptr,
+      ElementCompute const *act_param1_ptr = nullptr
+    ): alpha(1), beta_c(0), alpha_ptr(alpha_ptr), beta_c_ptr(beta_c_ptr)
+    #if SAIL_FUSE_OP_EXT
+    , beta_e(1)
+    , beta_e_ptr(beta_e_ptr)
+    , act_param0(0.0)
+    , act_param1(1.0)
+    , act_param0_ptr(act_param0_ptr)
+    , act_param1_ptr(act_param1_ptr)
+    #endif
+    {
+    }
   };
 
 public:
@@ -89,6 +168,12 @@ public:
   constexpr bool is_source_needed() const {
     return false;
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  constexpr bool is_invariant() const { return false; }
+#endif
 
   /// Constexpr function to enable the compiler to optimize away the source loading if it is
   /// never needed.
@@ -109,6 +194,9 @@ public:
 
     return destination_converter(accumulator);
   }
+
+  CUTLASS_HOST_DEVICE
+  void set_k_partition(int k_partition, int k_partition_count) {}
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

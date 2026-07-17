@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Constructs a default epilogue for planar complex outputs.
 
@@ -41,7 +43,6 @@
 
 #include "cutlass/epilogue/thread/linear_combination_planar_complex.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_simt.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
 
 #include "cutlass/epilogue/threadblock/epilogue_planar_complex.h"
@@ -80,47 +81,7 @@ struct DefaultEpiloguePlanarComplex<
   ThreadblockShape_, 
   WarpMmaOperator_, 
   arch::OpClassTensorOp, 
-  arch::Sm70,
-  PartitionsK, 
-  OutputOp_, 
-  ElementsPerAccess> {
-
-  using RealEpilogue = DefaultEpilogueVoltaTensorOp<
-    ThreadblockShape_,
-    WarpMmaOperator_,
-    PartitionsK,
-    OutputOp_,
-    ElementsPerAccess
-  >;
-
-  using Epilogue = EpiloguePlanarComplex<
-    ThreadblockShape_,
-    WarpMmaOperator_,
-    PartitionsK,
-    typename RealEpilogue::OutputTileIterator,
-    typename RealEpilogue::AccumulatorFragmentIterator,
-    typename RealEpilogue::WarpTileIterator,
-    typename RealEpilogue::SharedLoadIterator,
-    OutputOp_,
-    typename RealEpilogue::Padding
-  >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Defines sensible defaults for epilogues.
-template <
-  typename ThreadblockShape_,
-  typename WarpMmaOperator_,
-  int PartitionsK,
-  typename OutputOp_,
-  int ElementsPerAccess
->
-struct DefaultEpiloguePlanarComplex<
-  ThreadblockShape_, 
-  WarpMmaOperator_, 
-  arch::OpClassTensorOp, 
-  arch::Sm75,
+  arch::PPU0010,
   PartitionsK, 
   OutputOp_, 
   ElementsPerAccess> {
@@ -160,7 +121,7 @@ struct DefaultEpiloguePlanarComplex<
   ThreadblockShape_, 
   WarpMmaOperator_, 
   arch::OpClassTensorOp, 
-  arch::Sm80,
+  arch::PPU0010,
   PartitionsK, 
   OutputOp_, 
   ElementsPerAccess> {

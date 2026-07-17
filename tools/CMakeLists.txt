@@ -1,3 +1,4 @@
+# Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
 # Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -21,17 +22,4 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_subdirectory(util)
-
-if (CUTLASS_ENABLE_LIBRARY)
-  add_subdirectory(library)
-endif()
-if (CUTLASS_ENABLE_PROFILER)
-  if (NOT CUTLASS_ENABLE_LIBRARY)
-    message(SEND_ERROR "Build conflict: The CUTLASS profiler requires the CUTLASS library.")
-    message(SEND_ERROR "  CUTLASS_ENABLE_PROFILER = ${CUTLASS_ENABLE_PROFILER}")
-    message(SEND_ERROR "  CUTLASS_ENABLE_LIBRARY = ${CUTLASS_ENABLE_LIBRARY}")
-  else()
-    add_subdirectory(profiler)
-  endif()
-endif()
 

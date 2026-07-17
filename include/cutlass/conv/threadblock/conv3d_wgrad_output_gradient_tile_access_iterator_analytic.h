@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM A (output gradient tile) 
     matrix from memory.
@@ -81,6 +83,8 @@ public:
   
   static_assert(sizeof_bits<Element>::value >= 8,
     "WGRAD requires elements of size 8b or greater.");
+
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
 
   //
   // Parameters structure
@@ -149,6 +153,10 @@ public:
                       + s * ThreadMap::Delta::kStrided;  
       
     }
+
+#if SAIL_TMP_WORKAROUND
+    set_iteration_index(0);
+#endif
   }
 
   CUTLASS_HOST_DEVICE

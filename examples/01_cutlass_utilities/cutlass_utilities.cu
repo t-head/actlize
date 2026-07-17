@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -56,7 +57,7 @@
   cutlass::reference::device::TensorFillRandomGaussian()
 
     This template function initializes elementsof a tensor to a random Gaussian distribution. It
-    uses cuRAND in device code to compute random numbers.
+    uses acRAND in device code to compute random numbers.
 
 
   cutlass::reference::host::Gemm<>
@@ -77,6 +78,9 @@
 #include <sstream>
 #include <vector>
 #include <fstream>
+
+// PTG cutlass propriatary configs
+#include "accutlass.h"
 
 // CUTLASS includes needed for half-precision GEMM kernel
 #include "cutlass/cutlass.h"
@@ -113,7 +117,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Define a CUTLASS GEMM template and launch a GEMM kernel.
-cudaError_t cutlass_hgemm_nn(
+hggcError_t cutlass_hgemm_nn(
   int M,
   int N,
   int K,
@@ -148,18 +152,18 @@ cudaError_t cutlass_hgemm_nn(
   });
 
   if (status != cutlass::Status::kSuccess) {
-    return cudaErrorUnknown;
+    return hggcErrorUnknown;
   }
 
-  return cudaSuccess;
+  return hggcSuccess;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Allocate several matrices in GPU device memory and call a single-precision
+/// Allocate several matrices in PPU device memory and call a single-precision
 /// CUTLASS GEMM kernel.
-cudaError_t TestCutlassGemm(int M, int N, int K, cutlass::half_t alpha, cutlass::half_t beta) {
-  cudaError_t result;
+hggcError_t TestCutlassGemm(int M, int N, int K, cutlass::half_t alpha, cutlass::half_t beta) {
+  hggcError_t result;
 
   //
   // Construct cutlass::HostTensor<> using the half-precision host-side type.
@@ -248,7 +252,7 @@ cudaError_t TestCutlassGemm(int M, int N, int K, cutlass::half_t alpha, cutlass:
     C_cutlass.stride(0)
   );
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     return result;
   }
 
@@ -310,11 +314,11 @@ cudaError_t TestCutlassGemm(int M, int N, int K, cutlass::half_t alpha, cutlass:
     file << "\n\nReference =\n" << C_reference.host_view() << std::endl;
 
     // Return error code.
-    return cudaErrorUnknown;
+    return hggcErrorUnknown;
   }
 
   // Passed error check
-  return cudaSuccess;
+  return hggcSuccess;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -331,17 +335,11 @@ int main(int argc, const char *arg[]) {
   // This example uses half-precision and is only suitable for devices with compute capabitliy 5.3 or greater.
   //
 
-  cudaDeviceProp prop;
-  cudaError_t result = cudaGetDeviceProperties(&prop, 0);
+  hggcDeviceProp prop;
+  hggcError_t result = hggcGetDeviceProperties(&prop, 0);
   
-  if (result != cudaSuccess) {
-    std::cerr << "Failed to query device properties with error " << cudaGetErrorString(result) << std::endl;
-    return -1;
-  }
-
-  if (!(prop.major > 5 || (prop.major == 5 && prop.minor >= 3))) {
-    std::cerr << "This example uses half precision and is only suitable for devices with compute capability 5.3 or greater.\n";
-    std::cerr << "You are using a CUDA device with compute capability " << prop.major << "." << prop.minor << std::endl;
+  if (result != hggcSuccess) {
+    std::cerr << "Failed to query device properties with error " << hggcGetErrorString(result) << std::endl;
     return -1;
   }
 
@@ -382,12 +380,12 @@ int main(int argc, const char *arg[]) {
     scalars[1]      // beta
   );
 
-  if (result == cudaSuccess) {
+  if (result == hggcSuccess) {
     std::cout << "Passed." << std::endl;
   }
 
   // Exit.
-  return result == cudaSuccess ? 0 : -1;
+  return result == hggcSuccess ? 0 : -1;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

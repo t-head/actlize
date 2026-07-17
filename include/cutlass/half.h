@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*!
     \file
     \brief Defines a class for using IEEE half-precision floating-point types in host or
@@ -33,7 +35,7 @@
 #define CUTLASS_ENABLE_F16C 0
 #endif
 
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
 /* All floating-point numbers can be put in one of these categories.  */
 enum
   {
@@ -54,7 +56,7 @@ enum
       FP_NORMAL
   };
 
-// F16C extensions are not meaningful when compiling for NVRTC which only accommodates device code.
+// F16C extensions are not meaningful when compiling for HGRTC which only accommodates device code.
 #undef CUTLASS_ENABLE_F16C
 #define CUTLASS_ENABLE_F16C 0
 
@@ -66,14 +68,14 @@ enum
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <cuda_fp16.h>
+#include <hggc_fp16.h>
 
 #include "cutlass/cutlass.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Optionally target F16C extentions to accelerate half-precision conversion.
-#if !defined(__CUDA_ARCH__) && (CUTLASS_ENABLE_F16C)
+#if !defined(__HGGC_ARCH__) && (CUTLASS_ENABLE_F16C)
 #if defined(_MSC_VER)
 
 #include <immintrin.h>
@@ -84,7 +86,7 @@ enum
 
 #define F16C_ROUND_NEAREST 0
 
-#if !defined(__CUDA_ARCH__)
+#if !defined(__HGGC_ARCH__)
 extern __inline float _cvtsh_ss (unsigned short __S) {
   __m128i packed;
   std::memcpy(&packed, &__S, sizeof(__S));
@@ -159,10 +161,9 @@ public:
       return cpu;
   }
 };
-#endif // !defined(__CUDA_ARCH__) && CUTLASS_ENABLE_F16C
+#endif // !defined(__HGGC_ARCH__) && CUTLASS_ENABLE_F16C
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 namespace cutlass {
 
@@ -191,18 +192,13 @@ struct alignas(2) half_t {
   }
 
   /// FP32 -> FP16 conversion - rounds to nearest even
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 530)
-    // Avoid inlining in device code if no hardware support
-    __device__ __noinline__
-  #else
-    CUTLASS_HOST_DEVICE
-  #endif  
+  CUTLASS_HOST_DEVICE
   static half_t convert(float const& flt) {
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     return half_t(__float2half_rn(flt));
   #else
 
-    #if !defined(__CUDA_ARCH__) && CUTLASS_ENABLE_F16C
+    #if !defined(__HGGC_ARCH__) && CUTLASS_ENABLE_F16C
       if( CpuId::instance().is_f16c_supported() ) {
         unsigned short u = _cvtss_sh(flt, F16C_ROUND_NEAREST);
         return bitcast(u);
@@ -272,7 +268,7 @@ struct alignas(2) half_t {
   /// FP32 -> FP16 conversion - rounds to nearest even
   CUTLASS_HOST_DEVICE
   static half_t convert(int const& n) {
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     return half_t(__int2half_rn(n));
   #else
     return convert(float(n));
@@ -282,7 +278,7 @@ struct alignas(2) half_t {
   /// FP32 -> FP16 conversion - rounds to nearest even
   CUTLASS_HOST_DEVICE
   static half_t convert(unsigned const& n) {
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     return half_t(__uint2half_rn(n));
   #else
     return convert(float(n));
@@ -290,18 +286,13 @@ struct alignas(2) half_t {
   }
 
   /// Converts a half-precision value stored as a uint16_t to a float
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 530)
-    // Avoid inlining in device code if no hardware support
-    __device__ __noinline__
-  #else
-    CUTLASS_HOST_DEVICE
-  #endif
+  CUTLASS_HOST_DEVICE
   static float convert(half_t const& x) {
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     return __half2float(x.to_half());
   #else
 
-    #if !defined(__CUDA_ARCH__) && CUTLASS_ENABLE_F16C
+    #if !defined(__HGGC_ARCH__) && CUTLASS_ENABLE_F16C
       if( CpuId::instance().is_f16c_supported() ) {
         unsigned short u = x.storage;
         return _cvtsh_ss(u);
@@ -351,7 +342,7 @@ struct alignas(2) half_t {
   CUTLASS_HOST_DEVICE
   half_t() : storage(0) { }
 
-  /// Reinterpret cast from CUDA's half type
+  /// Reinterpret cast from device's half type
   CUTLASS_HOST_DEVICE
   explicit half_t(half const & x): storage(reinterpret_cast<uint16_t const &>(x)) {
 
@@ -412,7 +403,7 @@ struct alignas(2) half_t {
     return (convert(*this) != 0.0f);
   }
 
-  /// Bitcasts to CUDA's half type
+  /// Bitcasts to device's half type
   CUTLASS_HOST_DEVICE
   half to_half() const {
     return reinterpret_cast<half const &>(storage);
@@ -479,7 +470,6 @@ bool isfinite(cutlass::half_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::half_t nanh(const char*) {
-  // NVIDIA canonical NaN
   return cutlass::half_t::bitcast(0x7fff);
 }
 
@@ -518,7 +508,7 @@ int fpclassify(cutlass::half_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::half_t sqrt(cutlass::half_t const& h) {
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
   return cutlass::half_t(sqrtf(float(h)));
 #else
   return cutlass::half_t(std::sqrt(float(h)));
@@ -547,7 +537,7 @@ half_t copysign(half_t const& a, half_t const& b) {
 
 namespace std {
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 /// Numeric limits
 template <>
 struct numeric_limits<cutlass::half_t> {
@@ -609,7 +599,7 @@ namespace cutlass {
 
 CUTLASS_HOST_DEVICE
 bool operator==(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return __heq(lhs.to_half(), rhs.to_half());
 #else
   return float(lhs) == float(rhs);
@@ -618,7 +608,7 @@ bool operator==(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 bool operator!=(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return __hne(lhs.to_half(), rhs.to_half());
 #else
   return float(lhs) != float(rhs);
@@ -627,7 +617,7 @@ bool operator!=(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 bool operator<(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return __hlt(lhs.to_half(), rhs.to_half());
 #else
   return float(lhs) < float(rhs);
@@ -636,7 +626,7 @@ bool operator<(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 bool operator<=(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return __hle(lhs.to_half(), rhs.to_half());
 #else
   return float(lhs) <= float(rhs);
@@ -645,7 +635,7 @@ bool operator<=(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 bool operator>(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return __hgt(lhs.to_half(), rhs.to_half());
 #else
   return float(lhs) > float(rhs);
@@ -654,7 +644,7 @@ bool operator>(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 bool operator>=(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return __hge(lhs.to_half(), rhs.to_half());
 #else
   return float(lhs) >= float(rhs);
@@ -663,7 +653,7 @@ bool operator>=(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t operator+(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return half_t(__hadd(lhs.to_half(), rhs.to_half()));
 #else
   return half_t(float(lhs) + float(rhs));
@@ -672,7 +662,7 @@ half_t operator+(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t operator-(half_t const& lhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return half_t(__hneg(lhs.to_half()));
 #else
   return half_t(-float(lhs));
@@ -681,7 +671,7 @@ half_t operator-(half_t const& lhs) {
 
 CUTLASS_HOST_DEVICE
 half_t operator-(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return half_t(__hsub(lhs.to_half(), rhs.to_half()));
 #else
   return half_t(float(lhs) - float(rhs));
@@ -690,7 +680,7 @@ half_t operator-(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t operator*(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return half_t(__hmul(lhs.to_half(), rhs.to_half()));
 #else
   return half_t(float(lhs) * float(rhs));
@@ -699,7 +689,7 @@ half_t operator*(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t operator/(half_t const& lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   return half_t(__hdiv(lhs.to_half(), rhs.to_half()));
 #else
   return half_t(float(lhs) / float(rhs));
@@ -708,7 +698,7 @@ half_t operator/(half_t const& lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t& operator+=(half_t & lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hadd(lhs.to_half(), rhs.to_half()));
 #else
   lhs = half_t(float(lhs) + float(rhs));
@@ -718,7 +708,7 @@ half_t& operator+=(half_t & lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t& operator-=(half_t & lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hsub(lhs.to_half(), rhs.to_half()));
 #else
   lhs = half_t(float(lhs) - float(rhs));
@@ -728,7 +718,7 @@ half_t& operator-=(half_t & lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t& operator*=(half_t & lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hmul(lhs.to_half(), rhs.to_half()));
 #else
   lhs = half_t(float(lhs) * float(rhs));
@@ -738,7 +728,7 @@ half_t& operator*=(half_t & lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t& operator/=(half_t & lhs, half_t const& rhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hdiv(lhs.to_half(), rhs.to_half()));
 #else
   lhs = half_t(float(lhs) / float(rhs));
@@ -748,7 +738,7 @@ half_t& operator/=(half_t & lhs, half_t const& rhs) {
 
 CUTLASS_HOST_DEVICE
 half_t& operator++(half_t & lhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hadd(lhs.to_half(), half_t(1.0f).to_half()));
 #else
   float tmp(lhs);
@@ -760,7 +750,7 @@ half_t& operator++(half_t & lhs) {
 
 CUTLASS_HOST_DEVICE
 half_t& operator--(half_t & lhs) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hsub(lhs.to_half(), half_t(1.0f).to_half()));
 #else
   float tmp(lhs);
@@ -773,7 +763,7 @@ half_t& operator--(half_t & lhs) {
 CUTLASS_HOST_DEVICE
 half_t operator++(half_t & lhs, int) {
   half_t ret(lhs);
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hadd(lhs.to_half(), half_t(1.0f).to_half()));
 #else
   float tmp(lhs);
@@ -786,7 +776,7 @@ half_t operator++(half_t & lhs, int) {
 CUTLASS_HOST_DEVICE
 half_t operator--(half_t & lhs, int) {
   half_t ret(lhs);
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   lhs = half_t(__hsub(lhs.to_half(), half_t(1.0f).to_half()));
 #else
   float tmp(lhs);
@@ -799,6 +789,8 @@ half_t operator--(half_t & lhs, int) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace cutlass
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

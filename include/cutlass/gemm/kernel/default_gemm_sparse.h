@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief 
       Default kernel-level GEMM definitions combine threadblock-scoped matrix multiply-add with
@@ -38,7 +40,6 @@
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/numeric_types.h"
-#include "cutlass/arch/wmma.h"
 
 #include "cutlass/epilogue/threadblock/epilogue.h"
 #include "cutlass/epilogue/thread/linear_combination.h"
@@ -47,22 +48,17 @@
 #include "cutlass/gemm/kernel/gemm.h"
 #include "cutlass/gemm/kernel/sparse_gemm.h"
 #include "cutlass/gemm/kernel/gemm_pipelined.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm75.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm70.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm80.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sparse_sm80.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
+#include "cutlass/gemm/threadblock/default_mma_core_ppu.h"
+#include "cutlass/gemm/threadblock/default_mma_core_sparse_ppu.h"
 #include "cutlass/gemm/threadblock/default_sparse_mma.h"
 #include "cutlass/gemm/threadblock/default_mma_core_simt.h"
 #include "cutlass/gemm/threadblock/threadblock_swizzle.h"
 
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_simt.h"
 #include "cutlass/transform/threadblock/predicated_tile_iterator.h"
-
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-#include "cutlass/epilogue/threadblock/default_epilogue_wmma_tensor_op.h"
-#endif //CUTLASS_ARCH_WMMA_ENABLED
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -112,13 +108,18 @@ template <
     /// epilogue
     bool SplitKSerial,
     /// Operation performed by GEMM
-    typename Operator>
+    typename Operator
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    , Operand CompressOp_ = Operand::kA
+#endif
+    >
 struct DefaultSparseGemm;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for Ampere Architecture
+/// Partial specialization for PPU Architecture
 template <
     /// Element type for A matrix operand
     typename ElementA,
@@ -152,18 +153,31 @@ template <
     /// epilogue
     bool SplitKSerial,
     /// Operation performed by GEMM
-    typename Operator>
+    typename Operator
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    , Operand CompressOp_
+#endif
+    >
 struct DefaultSparseGemm<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementC,
                    layout::RowMajor, ElementAccumulator, arch::OpClassTensorOp,
-                   arch::Sm80, ThreadblockShape, WarpShape, InstructionShape,
+                   arch::PPU0010, ThreadblockShape, WarpShape, InstructionShape,
                    EpilogueOutputOp, ThreadblockSwizzle, Stages, SplitKSerial,
-                   Operator> {
+                   Operator
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+                   , CompressOp_
+#endif
+                   > {
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultSparseMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
-      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, arch::Sm80,
+      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, arch::PPU0010,
       ThreadblockShape, WarpShape, InstructionShape, Stages,
-      Operator>::ThreadblockMma;
+      Operator, false
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+      , CompressOp_
+#endif
+      >::ThreadblockMma;
 
   static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
 
@@ -174,7 +188,11 @@ struct DefaultSparseGemm<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAli
           EpilogueOutputOp::kCount>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+  using GemmKernel = kernel::SparseGemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial, CompressOp_>;
+#else
   using GemmKernel = kernel::SparseGemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+#endif
 };
 
 ////////////////////////////////////////////////////////////////////////////////

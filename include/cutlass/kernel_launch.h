@@ -1,16 +1,17 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
- *   * Redistributions of source code must retain the above copyright notice, this list of
- *     conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright notice, this list of
- *     conditions and the following disclaimer in the documentation and/or other materials
- *     provided with the distribution.
- *   * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
- *     to endorse or promote products derived from this software without specific prior written
- *     permission.
+ *     * Redistributions of source code must retain the above copyright notice, this list of
+ *       conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright notice, this list of
+ *       conditions and the following disclaimer in the documentation and/or other materials
+ *       provided with the distribution.
+ *     * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
+ *       to endorse or promote products derived from this software without specific prior written
+ *       permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
@@ -22,8 +23,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-  \brief Defines structures and helpers to launch CUDA kernels within CUTLASS.
+  \brief Defines structures and helpers to launch device kernels within CUTLASS.
 */
 
 #pragma once
@@ -34,17 +36,17 @@ namespace cutlass {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure containing the basic launch configuration of a CUDA kernel.
+/// Structure containing the basic launch configuration of a device kernel.
 struct KernelLaunchConfiguration {
 
-  /// CUDA grid dimensions
+  /// device grid dimensions
   dim3 grid;
 
-  /// CUDA threablock dimensions
+  /// device threablock dimensions
   dim3 block;
 
   /// Bytes of dynamically allocated SMEM in addition to static SMEM
-  size_t dynamic_smem;
+  CUsize dynamic_smem;
 
   //
   // Methods
@@ -55,7 +57,7 @@ struct KernelLaunchConfiguration {
   KernelLaunchConfiguration(
     dim3 _grid = dim3(1,1,1),
     dim3 _block = dim3(1,1,1),
-    size_t _dynamic_smem = 0
+    CUsize _dynamic_smem = 0
   ):
     grid(_grid),
     block(_block),

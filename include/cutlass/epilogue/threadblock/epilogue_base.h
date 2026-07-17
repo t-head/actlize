@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -32,8 +34,8 @@
 
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cassert>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cassert>
 #else
 #include <assert.h>
 #endif
@@ -67,7 +69,8 @@ template <
   typename AccumulatorFragmentIterator_,    ///< Fragment iterator selecting accumulators
   typename WarpTileIterator_,               ///< Warp-scoped tile iterator writing accumulators to SMEM
   typename Padding_,                        ///< Padding added to SMEM allocation to avoid bank conflicts (concept: MatrixShape)
-  int FragmentsPerIteration = 1
+  int FragmentsPerIteration = 1,
+  bool Transpose = false                   ///< transpose tensor cell output before shared memory
 >
 class EpilogueBase {
 public:
@@ -117,10 +120,19 @@ public:
     using Layout = typename WarpTileIterator::Layout;
     
     /// Logical shape of the shared memory tile written to by all warps.
-    using Shape = MatrixShape<
-      WarpCount::kM * WarpTileIterator::Shape::kRow * WarpCount::kK,
-      WarpCount::kN * WarpTileIterator::Shape::kColumn
-    >;
+    using Shape = typename platform::conditional<
+                    Transpose == false,
+                    MatrixShape<
+                      WarpCount::kM * WarpTileIterator::Shape::kRow * WarpCount::kK,
+                      WarpCount::kN * WarpTileIterator::Shape::kColumn
+                    >,
+                    MatrixShape<
+                      // WarpTileIterator::Shape is unchanged, which row is 8
+                      // but warp count should transpose since warp should transpose between each other
+                      WarpCount::kN * WarpTileIterator::Shape::kRow * WarpCount::kK,
+                      WarpCount::kM * WarpTileIterator::Shape::kColumn
+                    >
+                  >::type;
 
     /// Shape of the shared memory allocation for the epilogue    
     using StorageShape = MatrixShape<

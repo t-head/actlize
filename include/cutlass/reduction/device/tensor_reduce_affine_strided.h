@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Kernel performing a reduction over one or more ranks of an affine tensor
 */
@@ -90,16 +92,16 @@ struct TensorReductionAffineStrided {
   /// Number of workspaces needed
   int workspace_count;
 
-  /// CUDA Grid shape (.x => contiguous, .y => outer, .z => inner)
+  /// device Grid shape (.x => contiguous, .y => outer, .z => inner)
   dim3 grid_shape;
 
-  /// CUDA Threadblock shape (.x => contiguous, .y => outer, .z => inner)
+  /// device Threadblock shape (.x => contiguous, .y => outer, .z => inner)
   dim3 threadblock_shape;
 
-  /// CUDA grid shape for the final reduction step if needed
+  /// device grid shape for the final reduction step if needed
   dim3 grid_final;
 
-  /// CUDA threadblock shape for the final reduction step if needed
+  /// device threadblock shape for the final reduction step if needed
   dim3 threadblock_final;
 
 private:
@@ -244,7 +246,7 @@ public:
     void *device_workspace_ptr = nullptr,             ///< Device workspace
     ElementCompute reduction_identity = ElementCompute(), ///< Reduciton identity
     ReductionOp reduction_op = ReductionOp(),     ///< Reduction operator
-    cudaStream_t stream = nullptr) {              ///< CUDA Stream into which all kernels are launched
+    hggcStream_t stream = nullptr) {              ///< device Stream into which all kernels are launched
 
     // Initial status check
     if (!good()) {
@@ -299,7 +301,7 @@ public:
     Kernel<ReductionKernel><<< grid_shape, threadblock_shape, shared_mem_bytes, stream >>>(params);
 
     // Check error condition
-    if (cudaPeekAtLastError() == cudaSuccess) {
+    if (hggcPeekAtLastError() == hggcSuccess) {
       status = Status::kSuccess;
     }
     else {
@@ -312,7 +314,7 @@ public:
       Kernel<FinalReductionKernel><<< grid_final, threadblock_final, 0, stream >>>(params);
 
       // Check error condition
-      if (cudaPeekAtLastError() == cudaSuccess) {
+      if (hggcPeekAtLastError() == hggcSuccess) {
         status = Status::kSuccess;
       }
       else {
@@ -332,7 +334,7 @@ public:
     void *device_workspace_ptr = nullptr,         ///< Pointer to device workspace
     ElementCompute reduction_identity = ElementCompute(), ///< Reduciton identity
     ReductionOp reduction_op = ReductionOp(),     ///< Reduction operator
-    cudaStream_t stream = nullptr) {              ///< CUDA Stream into which all kernels are launched
+    hggcStream_t stream = nullptr) {              ///< device Stream into which all kernels are launched
 
     return reduce(
       dst_ptr, 

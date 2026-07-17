@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief
 */
@@ -70,10 +72,10 @@ template <
     typename ElementAccumulator_ = ElementC_,
     /// Operator class tag
     typename OperatorClass_ = arch::OpClassSimt,
-    /// Tag indicating architecture to tune for.  This is the minimum SM that
+    /// Tag indicating architecture to tune for.  This is the minimum CU that
     /// supports the intended feature. The device kernel can be built
-    /// targeting any SM larger than this number.
-    typename ArchTag_ = arch::Sm70,
+    /// targeting any CU larger than this number.
+    typename ArchTag_ = arch::PPU0010,
     /// Threadblock-level tile size (concept: GemmShape)
     typename ThreadblockShape_ = typename DefaultGemmConfiguration<
         OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
@@ -204,9 +206,9 @@ template <
     typename ElementAccumulator_,
     /// Operator class tag
     typename OperatorClass_,
-    /// Tag indicating architecture to tune for.  This is the minimum SM that
+    /// Tag indicating architecture to tune for.  This is the minimum CU that
     /// supports the intended feature. The device kernel can be built
-    /// targeting any SM larger than this number.
+    /// targeting any CU larger than this number.
     typename ArchTag_,
     /// Threadblock-level tile size (concept: GemmShape)
     typename ThreadblockShape_,
@@ -313,7 +315,7 @@ public:
   }
 
   /// Gets the workspace size
-  static size_t get_workspace_size(Arguments const &args) {
+  static CUsize get_workspace_size(Arguments const &args) {
     
     return UnderlyingOperator::get_workspace_size(to_underlying_arguments(args));
   }
@@ -329,7 +331,7 @@ public:
   }
 
   /// Initializes GEMM state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
 
     return underlying_operator_.initialize(to_underlying_arguments(args), workspace, stream);
   }
@@ -341,13 +343,13 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     return underlying_operator_.run(stream);
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -355,7 +357,7 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
     Status status = initialize(args, workspace, stream);
     

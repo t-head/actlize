@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief AlignedBuffer is a container for trivially copyable elements suitable for use in
       unions and shared memory.
@@ -69,7 +71,7 @@ public:
   //
 
   typedef T value_type;
-  typedef size_t size_type;
+  typedef CUsize size_type;
   typedef ptrdiff_t difference_type;
   typedef value_type *pointer;
   typedef value_type const * const_pointer;

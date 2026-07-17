@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template wraps the tile access iterator concept to load whole tiles from tensors in
       memory used for implicit GEMM convolution.
@@ -49,7 +51,9 @@ namespace threadblock {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-template <typename TileAccessIterator_>
+template <
+  typename TileAccessIterator_
+>
 class TileIterator {
 public:
   using TileAccessIterator = TileAccessIterator_;
@@ -97,6 +101,12 @@ public:
     return TileAccessIterator::getParams(problem_size, layout);
   }
 
+#if SAIL_DGRAD_STRIDE_OPT
+  CUTLASS_HOST_DEVICE
+  TileAccessIterator get_access_iterator() {
+    return tile_access_iterator_;
+  }
+#endif
 
   /// Adds a pointer offset in units of Element
   CUTLASS_HOST_DEVICE
@@ -130,17 +140,19 @@ public:
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
       CUTLASS_PRAGMA_UNROLL
       for (int c = 0; c < ThreadMap::Iterations::kContiguous; ++c) {
+        CUTLASS_PRAGMA_UNROLL
+        for (int v = 0; v < tile_access_iterator_.kAccessesPerVector; ++v) {
+          cutlass::arch::global_load<
+            AccessType,
+            sizeof(AccessType)
+          >(
+            frag_ptr[(c + s * ThreadMap::Iterations::kContiguous) * tile_access_iterator_.kAccessesPerVector + v],
+            tile_access_iterator_.get() + pointer_offset,
+            tile_access_iterator_.valid()
+          );
 
-        cutlass::arch::global_load<
-          AccessType,
-          sizeof(AccessType)
-        >(
-          frag_ptr[c + s * ThreadMap::Iterations::kContiguous],
-          tile_access_iterator_.get() + pointer_offset,
-          tile_access_iterator_.valid()
-        );
-
-        ++tile_access_iterator_;
+          ++tile_access_iterator_;
+        }
       }
     }
   }

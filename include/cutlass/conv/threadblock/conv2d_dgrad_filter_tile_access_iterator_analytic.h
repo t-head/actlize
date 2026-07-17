@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM B (filter tile) 
     matrix from memory.
@@ -58,7 +60,9 @@ namespace threadblock {
 template <
   typename Shape_,
   typename Element_,
-  typename ThreadMap_
+  typename ThreadMap_,
+  int AccessSize = ThreadMap_::kElementsPerAccess,
+  conv::KernelType KernelType_ = conv::KernelType::kNormal
 >
 class Conv2dDgradFilterTileAccessIteratorAnalytic {
 public:
@@ -71,7 +75,7 @@ public:
   using Element = Element_;
   using Layout = layout::TensorNHWC;
   using ThreadMap = ThreadMap_;
-  using AccessType = AlignedArray<Element, ThreadMap::kElementsPerAccess>;
+  using AccessType = AlignedArray<Element, AccessSize>;
   using TensorRef = cutlass::TensorRef<Element, Layout>;
   using TensorCoord = typename Layout::TensorCoord;
   using Index = typename Layout::Index;
@@ -90,12 +94,17 @@ public:
   
   using Params = Conv2dAnalyticParams<Layout>;
 
+  static conv::KernelType const kType = KernelType_;
+
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
+
 private:
 
   Params const &params_;
   Conv2dProblemSize const &problem_size_;
   LongIndex iteration_contiguous_;
   LongIndex iteration_strided_;
+  LongIndex iteration_vector_;
   char const *pointer_;
 
   // For a fixed filter position (r,s) find and fill offset_k_, offset_c_ in strided and contiguous dimension 
@@ -103,6 +112,15 @@ private:
   int filter_s_;
   int offset_k_[ThreadMap::Iterations::kStrided]; 
   int offset_c_[ThreadMap::Iterations::kContiguous];
+
+  // Add for group conv
+  int channels_per_group_;
+  int kernels_per_group_;
+  int block_group_offset_k;
+
+  int group_coord_offset_k_[ThreadMap::Iterations::kStrided];
+  int group_offset_c_[ThreadMap::Iterations::kStrided];
+  int group_offset_k_[ThreadMap::Iterations::kContiguous];
 
 public:
 
@@ -115,31 +133,57 @@ public:
     MatrixCoord const &threadblock_offset = MatrixCoord()
   ):
     params_(params), 
-    problem_size_(problem_size), 
+    problem_size_(problem_size),
     pointer_(reinterpret_cast<char const *>(ptr)), 
     filter_r_(0),
     filter_s_(0) {
 
     layout::PitchLinearCoord thread_coord = ThreadMap::initial_offset(thread_idx);
 
-    CUTLASS_PRAGMA_UNROLL
-    for (int c = 0; c < ThreadMap::Iterations::kContiguous; ++c) {
-      offset_c_[c] = threadblock_offset.column() + thread_coord.contiguous() 
-        + c * ThreadMap::Delta::kContiguous;
+    if (kType == conv::KernelType::kMultipleGroup) {
+      channels_per_group_ = problem_size_.C / problem_size_.groups;
+      kernels_per_group_ = problem_size_.K / problem_size_.groups;
+      block_group_offset_k = threadblock_offset.column() / kernels_per_group_;
     }
 
     CUTLASS_PRAGMA_UNROLL
-    for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
-      offset_k_[s] = 
-        threadblock_offset.row() + thread_coord.strided() + s * ThreadMap::Delta::kStrided;
+    for (int c = 0; c < ThreadMap::Iterations::kContiguous; ++c) {
+      if (kType == conv::KernelType::kMultipleGroup) {
+        offset_c_[c] = threadblock_offset.column() + thread_coord.contiguous()
+          + c * ThreadMap::Delta::kContiguous;
+        group_offset_k_[c] = ((offset_c_[c]) / channels_per_group_ + 1) * kernels_per_group_;
+      } else {
+        offset_c_[c] = threadblock_offset.column() + thread_coord.contiguous()
+          + c * ThreadMap::Delta::kContiguous;
+      }
     }
+    
+    CUTLASS_PRAGMA_UNROLL
+    for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
+      if (kType == conv::KernelType::kMultipleGroup) {
+        offset_k_[s] = threadblock_offset.row() + thread_coord.strided() + s * ThreadMap::Delta::kStrided
+                     + block_group_offset_k * kernels_per_group_;
+        group_coord_offset_k_[s] = offset_k_[s] / kernels_per_group_ * channels_per_group_;
+        group_offset_c_[s] = ((threadblock_offset.row() + thread_coord.strided() + s * ThreadMap::Delta::kStrided
+                           + block_group_offset_k * kernels_per_group_) / kernels_per_group_ + 1) * channels_per_group_;
+      } else {
+        offset_k_[s] = threadblock_offset.row() + thread_coord.strided() + s * ThreadMap::Delta::kStrided;
+      }
+    }
+
+#if SAIL_TMP_WORKAROUND
+    set_iteration_index(0);
+#endif
   }
 
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
   void set_iteration_index(Index index) {
-    iteration_contiguous_ = index % ThreadMap::Iterations::kContiguous;
-    iteration_strided_ = index / ThreadMap::Iterations::kContiguous;
+    iteration_vector_ = index % kAccessesPerVector;
+    int residual_access = index / kAccessesPerVector;
+
+    iteration_contiguous_ = residual_access % ThreadMap::Iterations::kContiguous;
+    iteration_strided_ = residual_access / ThreadMap::Iterations::kContiguous;
   }
 
   /// Adds a pointer offset in units of Element
@@ -171,12 +215,13 @@ public:
   /// Returns the coordinate in the filter tensor w that is currently pointed to
   /// by the iterator.
   CUTLASS_HOST_DEVICE
-  TensorCoord at() const {
-
-    int c = offset_c_[iteration_contiguous_];
+  TensorCoord at(int c_offset = 0) const {
+    int c = kType == conv::KernelType::kNormal
+                     ? offset_c_[iteration_contiguous_] 
+                     : offset_c_[iteration_contiguous_] + iteration_vector_ * AccessType::kElements;
     int k = offset_k_[iteration_strided_];
 
-    return TensorCoord(k, filter_r_, filter_s_, c);
+    return TensorCoord(k, filter_r_, filter_s_, c - c_offset);
   }
 
   /// Returns true if the current coordinate is within the filter tensor w
@@ -184,24 +229,39 @@ public:
   bool valid() const {
 
     TensorCoord coord = at();
-
-    return coord.n() < problem_size_.K && coord.c() < problem_size_.C;
+    if (kType == conv::KernelType::kNormal) {
+      return coord.n() < problem_size_.K && coord.c() + iteration_vector_ * AccessSize < problem_size_.C;
+    } else {
+      return coord.n() < problem_size_.K && coord.c() < problem_size_.C &&
+              (coord.n() < (group_offset_k_[iteration_contiguous_] + iteration_vector_ * kernels_per_group_)) &&
+              (coord.c() < group_offset_c_[iteration_strided_]);
+    }
   }
 
   /// Returns a pointer to the vector starting at the current coordinate
   CUTLASS_HOST_DEVICE
   AccessType const *get() const {
-
-    TensorCoord coord = at();
-    LongIndex offset = params_.layout(coord);
-
-    return reinterpret_cast<AccessType const *>(pointer_ + offset * sizeof_bits<Element>::value / 8);
-
+    if (kType == conv::KernelType::kMultipleGroup) {
+      TensorCoord coord = at(group_coord_offset_k_[iteration_strided_]);
+      LongIndex offset = params_.layout(coord);
+      return reinterpret_cast<AccessType const *>(pointer_ + offset * sizeof_bits<Element>::value / 8);
+    } else {
+      TensorCoord coord = at();
+      LongIndex offset = params_.layout(coord);
+      return reinterpret_cast<AccessType const *>(pointer_ + offset * sizeof_bits<Element>::value / 8) + iteration_vector_;
+    }
   }
 
   /// Increments to the next memory access
   CUTLASS_HOST_DEVICE
   Conv2dDgradFilterTileAccessIteratorAnalytic &operator++() {
+    ++iteration_vector_;
+    if (iteration_vector_ < kAccessesPerVector) {
+      return *this;
+    }
+
+    iteration_vector_ = 0;
+
     ++iteration_contiguous_;
     if (iteration_contiguous_ < ThreadMap::Iterations::kContiguous) {
       return *this;
@@ -219,9 +279,8 @@ public:
   /// Determines whether the Implicit GEMM can execute the given problem.
   CUTLASS_HOST_DEVICE
   static Status can_implement(Conv2dProblemSize const &problem_size) {
-
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.C % (128/sizeof_bits<Element>::value)) {
+    if (problem_size.C % AccessSize) {
       return Status::kErrorInvalidProblem;
     }
 

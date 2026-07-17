@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines tags for architecture-specific configurations.
 */
@@ -34,38 +36,12 @@ namespace cutlass {
 namespace arch {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-struct Sm50 {
-  static int const kMinComputeCapability = 50;
-}; 
-struct Sm60 {
-  static int const kMinComputeCapability = 60;
-}; 
-struct Sm61 {
-  static int const kMinComputeCapability = 61;
+struct PPU0010 {
+  static int const kMinComputeCapability = 80;
 };
-struct Sm70 {
-  static int const kMinComputeCapability = 70;
+struct PPU0015 {
+  static int const kMinComputeCapability = 89;
 };
-struct Sm72 {
-  static int const kMinComputeCapability = 72;
-};
-struct Sm75 {
-  static int const kMinComputeCapability = 75;
-};
-struct Sm80 {
-  static int const kMinComputeCapability = 80; 
-};
-struct Sm86 {
-  static int const kMinComputeCapability = 86;
-};
-
-/// Triggers a breakpoint on the device
-CUTLASS_DEVICE
-void device_breakpoint() {
-#if defined(__CUDA_ARCH__)
-  asm volatile ("  brkpt;\n");
-#endif
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

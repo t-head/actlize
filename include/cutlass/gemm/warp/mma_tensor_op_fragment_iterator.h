@@ -1,3 +1,29 @@
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
+ * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted
+ * provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright notice, this list of
+ *       conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright notice, this list of
+ *       conditions and the following disclaimer in the documentation and/or other materials
+ *       provided with the distribution.
+ *     * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
+ *       to endorse or promote products derived from this software without specific prior written
+ *       permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL NVIDIA CORPORATION BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TOR (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ **************************************************************************************************/
+
 /*! \file
     \brief This defines a "fragment" iterator for visiting the fragments of a warp tile
       that participate in one warp-level mma operation.
@@ -227,6 +253,176 @@ public:
   }
 
 };
+
+// Partial specialization for col-major accumulator tile without OutputOp
+// And Element type is the same as Accumulator Element type
+
+template <
+    /// Shape of warp tile to load (concept: MatrixShape)
+    typename Shape_,
+    /// Shape of the warp accumulation tile (concept: MatrixShape)
+    typename AccumulatorShape_,
+    /// KBlocks columns to compute residual
+    int KBlocksColumn_,    
+    /// Element type
+    typename Element_,
+    /// Shape of one matrix product operation (concept: MatrixShape)
+    typename InstructionShape_>
+class MmaTensorOpFragmentIterator<Shape_, AccumulatorShape_, KBlocksColumn_, Element_, Element_,
+                                         cutlass::layout::ColumnMajor,
+                                         InstructionShape_, void> {
+ public:
+
+  /// Shape of warp tile to load (concept: MatrixShape)
+  using Shape = Shape_;
+    
+  /// Shape of the warp accumulation tile (concept: MatrixShape)
+  using AccumulatorShape = AccumulatorShape_;
+
+  /// KBlocks columns to compute residual
+  static int const kKBlockColumn = KBlocksColumn_;
+
+  /// Element type
+  using Element = Element_;
+
+  /// Layout of source tile
+  using Layout = cutlass::layout::ColumnMajor;
+
+  /// Shape of one matrix product operation (concept: MatrixShape)
+  using InstructionShape = InstructionShape_;
+
+  /// Whether beta is zero
+  static bool const IsBetaZero = true;
+
+  /// Number of participating threads
+  static int const kThreads = 32;
+
+  /// Internal structure of iterator - made public to enable introspection
+  struct Policy {
+    static_assert(
+        !(Shape::kRow % InstructionShape::kM) &&
+            !(Shape::kColumn % InstructionShape::kN),
+        "Shape of warp-level Mma must be divisible by operator shape.");
+    static_assert(
+        AccumulatorShape::kRow == Shape::kRow, 
+        "Rows of Warp Accumulator must be the same as rows of warp");
+    static_assert(
+        !(AccumulatorShape::kColumn % Shape::kColumn),
+        "Shape of Warp Accumulator must be divisible by warp shape.");
+    static_assert(
+        !(kKBlockColumn % Shape::kColumn),
+        "KBlock size must be divisible by warp shape.");
+
+    /// Number of times this iterator can be incremented
+    static int const kIterations = AccumulatorShape::kCount / Shape::kCount;
+  };
+
+private:
+
+  static int const kElementsPerAccess = InstructionShape::kM * InstructionShape::kN / kThreads;
+
+  /// Number of mma operations performed by a warp
+  using MmaIterations = MatrixShape<Shape::kRow / InstructionShape::kM,
+                                    Shape::kColumn / InstructionShape::kN>;
+  /// Number of mma operations performed by the entire accumulator
+  using AccumulatorIterations = MatrixShape<AccumulatorShape::kRow / InstructionShape::kM,
+                                              AccumulatorShape::kColumn / InstructionShape::kN>;
+
+  /// Number of K iterations    
+  static int const kKBlockIterations = (AccumulatorShape::kColumn + kKBlockColumn - 1) / kKBlockColumn;
+  static int const kResidualColumn = AccumulatorShape::kColumn - (kKBlockIterations - 1) * kKBlockColumn;
+  static int const kKBlockColumnIterations = kKBlockColumn / Shape::kColumn 
+                                     * (AccumulatorShape::kRow / Shape::kRow);
+  static int const kResidualIndex = kResidualColumn / Shape::kColumn
+                                     * (AccumulatorShape::kRow / Shape::kRow);
+
+public:
+
+  //
+  // Derived quantities
+  //
+
+  /// Fragment object holding a thread's part of a tile
+  /// This is the fragment size produced by one access of the iterator.
+  using Fragment = Array<Element, Shape::kCount / kThreads>;
+
+  /// Accumulator Fragment object
+  using AccumulatorFragment = Array<Element, AccumulatorShape::kCount / kThreads>;
+
+
+private:
+
+  /// Internal access type
+  using AccessType = Array<Element, kElementsPerAccess>;
+
+private:
+  //
+  // Data members
+  //
+
+  /// Accumulator tile
+  AccessType const *accumulators_;
+
+  /// Internal index
+  int index_;
+
+  /// Used to access residual tile first
+  bool is_residual_tile_;
+
+public:
+  /// Constructs an iterator
+  CUTLASS_HOST_DEVICE
+  MmaTensorOpFragmentIterator(AccumulatorFragment const &accum)
+      : accumulators_(reinterpret_cast<AccessType const *>(&accum)),
+        index_(0), is_residual_tile_(true) {}
+
+  /// Add offset
+  CUTLASS_HOST_DEVICE
+  void add_offset(int index_offset) {
+    index_ += index_offset; 
+    if(is_residual_tile_ && index_ >= kKBlockColumnIterations) {
+      index_ = index_ - kKBlockColumnIterations + kResidualIndex;
+      is_residual_tile_ = false;
+    }
+  }
+
+  /// Increments
+  CUTLASS_HOST_DEVICE
+  MmaTensorOpFragmentIterator &operator++() {
+    add_offset(1);
+    return *this;
+  }
+
+  /// Decrements
+  CUTLASS_HOST_DEVICE
+  MmaTensorOpFragmentIterator &operator--() {
+    add_offset(-1);
+    return *this;
+  }
+
+  /// Loads a fragment from the referenced part of the accumulator tile
+  CUTLASS_HOST_DEVICE
+  void load(Fragment &frag) const {
+    AccessType *frag_ptr = reinterpret_cast<AccessType *>(&frag);
+
+    int index = index_ * MmaIterations::kCount;
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int n = 0; n < MmaIterations::kColumn; n++) {
+      for (int m = 0; m < MmaIterations::kRow; m++) {
+        int accumulator_access_offset = 
+            n * AccumulatorIterations::kRow + m + index;
+            
+        frag_ptr[m * MmaIterations::kColumn + n].clear();
+        if(!(is_residual_tile_ && index_ >= kResidualIndex))
+            frag_ptr[m * MmaIterations::kColumn + n] = accumulators_[accumulator_access_offset];
+      }
+    }
+  }
+
+};
+
+
 
 // Partial specialization for row-major accumulator tile
 

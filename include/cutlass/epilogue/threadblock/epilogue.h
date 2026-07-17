@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -32,8 +34,8 @@
 
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cassert>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cassert>
 #else
 #include <assert.h>
 #endif
@@ -46,6 +48,7 @@
 #include "cutlass/tensor_coord.h"
 #include "cutlass/aligned_buffer.h"
 #include "cutlass/functional.h"
+#include "cutlass/utils.h"
 
 #include "cutlass/gemm/gemm.h"
 
@@ -55,6 +58,10 @@
 #include "cutlass/epilogue/threadblock/epilogue_base.h"
 #include "cutlass/epilogue/threadblock/predicated_tile_iterator.h"
 
+#if SAIL_EPILOGUE_OPT >= 1
+#include "cutlass/numeric_conversion.h"
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -62,6 +69,188 @@ namespace epilogue {
 namespace threadblock {
 
 ////////////////////////////////////////////////////////////////////////////////
+
+#if SAIL_EPILOGUE_OPT >= 1
+
+template <
+  typename ElementAccumulator,
+  typename OutputTileIterator,
+  typename OutputOp,
+  bool     InvariantOp = false
+  #if SAIL_FUSE_OP_EXT
+  , typename ElementFuseInE = typename OutputTileIterator::Fragment
+  #endif
+>
+struct StoreOutput {
+
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  #endif
+
+  CUTLASS_DEVICE
+  void operator()(
+    ElementAccumulator const &accum_fragment,
+    OutputTileIterator &dst_iterator,     ///< Tile iterator for destination
+    OutputOp const &output_op
+  ) {
+    /// Array type used by output functor
+    using AccumAccessType = Array<
+      typename ElementAccumulator::Element, OutputTileIterator::kElementsPerAccess>;
+
+    /// Array type used to output
+    using OutputAccessType = Array<
+      typename OutputTileIterator::Element, OutputTileIterator::kElementsPerAccess>;
+
+    static int const kOutputOpIterations =
+      OutputTileIterator::Fragment::kElements / OutputTileIterator::kElementsPerAccess;
+
+    typename OutputTileIterator::Fragment out_fragment;
+
+    AccumAccessType const *compute_frag_ptr =
+      reinterpret_cast<AccumAccessType const *>(&accum_fragment);
+
+    OutputAccessType *output_frag_ptr =
+      reinterpret_cast<OutputAccessType *>(&out_fragment);
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kOutputOpIterations; ++i) {
+      // Call the output operator
+      output_frag_ptr[i] = output_op(compute_frag_ptr[i]);
+    }
+
+    dst_iterator.store(out_fragment);
+  }
+
+#if SAIL_FUSE_OP_EXT
+  CUTLASS_DEVICE
+  void operator()(
+    ElementAccumulator const &accum_fragment,
+    OutputTileIterator &dst_iterator,     ///< Tile iterator for destination
+    OutputOp const &output_op,
+    ElementFuseInE (&extra_input_frags)[kExtraInputNum]
+  ) {
+    /// Array type used by output functor
+    using AccumAccessType = Array<
+      typename ElementAccumulator::Element, OutputTileIterator::kElementsPerAccess>;
+
+    /// Array type used by output functor
+    using InputEAccessType = Array<
+      typename ElementFuseInE::Element, OutputTileIterator::kElementsPerAccess>;
+
+    /// Array type used to output
+    using OutputAccessType = Array<
+      typename OutputTileIterator::Element, OutputTileIterator::kElementsPerAccess>;
+
+    static int const kOutputOpIterations =
+      OutputTileIterator::Fragment::kElements / OutputTileIterator::kElementsPerAccess;
+
+    typename OutputTileIterator::Fragment out_fragment;
+
+    AccumAccessType const *compute_frag_ptr =
+      reinterpret_cast<AccumAccessType const *>(&accum_fragment);
+
+
+    OutputAccessType *output_frag_ptr =
+      reinterpret_cast<OutputAccessType *>(&out_fragment);
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kOutputOpIterations; ++i) {
+      InputEAccessType extra_input_vals[OutputOp::kExtraEpilogueInputs];
+      CUTLASS_PRAGMA_UNROLL
+      for (int k = 0; k < kExtraInputLoopNum; ++k) {
+        InputEAccessType const *input_frag_ptr = reinterpret_cast<InputEAccessType const *>(&extra_input_frags[k]);
+        extra_input_vals[k] = input_frag_ptr[i];
+      }
+      // Call the output operator
+      output_frag_ptr[i] = output_op(compute_frag_ptr[i], extra_input_vals);
+    }
+    dst_iterator.store(out_fragment);
+  }
+#endif
+};
+
+template <
+  typename ElementAccumulator,
+  typename OutputTileIterator,
+  typename OutputOp
+  #if SAIL_FUSE_OP_EXT
+  , typename ElementFuseInE
+  #endif
+>
+#if SAIL_FUSE_OP_EXT
+struct StoreOutput<ElementAccumulator, OutputTileIterator, OutputOp, true, ElementFuseInE> {
+#else
+struct StoreOutput<ElementAccumulator, OutputTileIterator, OutputOp, true> {
+#endif
+
+#if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+
+  CUTLASS_DEVICE
+  void operator()(
+    ElementAccumulator const &accum_fragment,
+    OutputTileIterator &dst_iterator,      ///< Tile iterator for destination
+    OutputOp const &out_op,
+    ElementFuseInE (&extra_input_frags)[kExtraInputNum]
+  ) {
+    operator()(accum_fragment, dst_iterator, out_op);
+  }
+#endif
+
+  CUTLASS_DEVICE
+  void operator()(
+    ElementAccumulator const &accum_fragment,
+    OutputTileIterator &dst_iterator,      ///< Tile iterator for destination
+    OutputOp const &out_op
+  ) {
+    // Convert to destination numeric type
+    NumericArrayConverter<typename OutputTileIterator::Element, typename ElementAccumulator::Element,
+                          ElementAccumulator::kElements, OutputOp::kRound> destination_converter;
+    dst_iterator.store(destination_converter(accum_fragment));
+  }
+};
+
+template <
+  typename OutputTileIterator,
+  typename OutputOp
+  #if SAIL_FUSE_OP_EXT
+  , typename ElementFuseInE
+  #endif
+>
+#if SAIL_FUSE_OP_EXT
+struct StoreOutput<typename OutputTileIterator::Fragment, OutputTileIterator, OutputOp, true, ElementFuseInE>{
+#else
+struct StoreOutput<typename OutputTileIterator::Fragment, OutputTileIterator, OutputOp, true>{
+#endif
+
+#if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+
+  CUTLASS_DEVICE
+  void operator()(
+    typename OutputTileIterator::Fragment const &accum_fragment,
+    OutputTileIterator &dst_iterator,      ///< Tile iterator for destination
+    OutputOp const &out_op,
+    ElementFuseInE (&extra_input_frags)[kExtraInputNum]
+  ) {
+    operator()(accum_fragment, dst_iterator, out_op);
+  }
+#endif
+
+  CUTLASS_DEVICE
+  void operator()(
+    typename OutputTileIterator::Fragment const &accum_fragment,
+    OutputTileIterator &dst_iterator,      ///< Tile iterator for destination
+    OutputOp const &out_op
+  ) {
+    dst_iterator.store(accum_fragment);
+  }
+};
+
+#endif
 
 /// Epilogue operator
 template <
@@ -74,28 +263,31 @@ template <
   typename SharedLoadIterator_,             ///< Threadblock-scoped tile iterator loading from SMEM
   typename OutputOp_,                       ///< Output operator
   typename Padding_,                        ///< Padding added to SMEM allocation to avoid bank conflicts (concept: MatrixShape)
-  int FragmentsPerPartition = 1                 ///< Used to coarsten the epilogue granularity
+  int FragmentsPerPartition = 1,            ///< Used to coarsten the epilogue granularity
+  bool Transpose = false                   ///< transpose tensor cell output before shared memory
 >
-class Epilogue : 
+class Epilogue :
   public EpilogueBase<
-    Shape_, 
-    typename WarpMmaOperator_::Shape, 
-    PartitionsK, 
-    AccumulatorFragmentIterator_, 
-    WarpTileIterator_, 
+    Shape_,
+    typename WarpMmaOperator_::Shape,
+    PartitionsK,
+    AccumulatorFragmentIterator_,
+    WarpTileIterator_,
     Padding_,
-    FragmentsPerPartition> {
+    FragmentsPerPartition,
+    Transpose> {
 
 public:
 
   using Base = EpilogueBase<
-    Shape_, 
-    typename WarpMmaOperator_::Shape, 
-    PartitionsK, 
-    AccumulatorFragmentIterator_, 
-    WarpTileIterator_, 
+    Shape_,
+    typename WarpMmaOperator_::Shape,
+    PartitionsK,
+    AccumulatorFragmentIterator_,
+    WarpTileIterator_,
     Padding_,
-    FragmentsPerPartition>;
+    FragmentsPerPartition,
+    Transpose>;
 
   using Shape = Shape_;
   using WarpMmaOperator = WarpMmaOperator_;
@@ -136,13 +328,19 @@ public:
     typename OutputTileIterator::Element, OutputTileIterator::kElementsPerAccess>;
 
   /// Array type used by output functor
-  using AccumulatorAccessType = Array<typename WarpTileIterator::Element, OutputTileIterator::kElementsPerAccess>; 
-  
+  using AccumulatorAccessType = Array<typename WarpTileIterator::Element, OutputTileIterator::kElementsPerAccess>;
+
   /// Number of warps
   using WarpCount = typename Base::WarpCount;
 
   int const kSmemTiles = Base::kFragmentsPerIteration > 1 ? Base::kFragmentsPerIteration : kPartitionsK;
   int const kSmemPointerOffset = Base::SharedStorage::StorageShape::kCount / kSmemTiles;
+
+#if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  static bool const kSupportExtraInput = OutputOp::kExtraEpilogueOpsNum > 0;
+#endif
 
 public:
 
@@ -152,7 +350,7 @@ public:
 
   static_assert(OutputTileIterator::kElementsPerAccess, "OutputTileIterator::kElementsPerAccess must not be zero.");
 
-  static_assert(!(OutputTileIterator::Fragment::kElements % OutputTileIterator::kElementsPerAccess), 
+  static_assert(!(OutputTileIterator::Fragment::kElements % OutputTileIterator::kElementsPerAccess),
     "Divisibility");
 
 private:
@@ -165,15 +363,15 @@ public:
   /// Constructor
   CUTLASS_DEVICE
   Epilogue(
-    typename Base::SharedStorage &shared_storage,    ///< Shared storage object    
+    typename Base::SharedStorage &shared_storage,    ///< Shared storage object
     int thread_idx,                   ///< ID of a thread within the threadblock
     int warp_idx,                     ///< ID of warp within threadblock
     int lane_idx                     ///< Id of thread within warp
   ):
     Base(shared_storage, thread_idx, warp_idx, lane_idx),
-    shared_load_iterator_(shared_storage.reference(), thread_idx) 
+    shared_load_iterator_(shared_storage.reference(), thread_idx)
   {
-    
+
   }
 
   /// Streams the result to global memory
@@ -183,26 +381,83 @@ public:
     OutputTileIterator destination_iterator,      ///< Tile iterator for destination
     AccumulatorTile const &accumulators,          ///< Complete warp-level accumulator tile
     OutputTileIterator source_iterator) {         ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
-    
+
     if (!output_op.is_source_needed()) {
-      compute_source_not_needed_(output_op, destination_iterator, accumulators);  
+#if SAIL_EPILOGUE_OPT >= 1
+      if (output_op.is_invariant()) {
+        compute_source_not_needed_<true>(output_op, destination_iterator, accumulators);
+      } else
+#endif
+      {
+        compute_source_not_needed_(output_op, destination_iterator, accumulators);
+      }
     }
     else {
       compute_source_needed_(output_op, destination_iterator, accumulators, source_iterator);
     }
   }
 
+#if SAIL_FUSE_OP_EXT
+
+  CUTLASS_DEVICE
+  void operator()(
+    OutputOp const &output_op,                    ///< Output operator
+    OutputTileIterator destination_iterator,      ///< Tile iterator for destination
+    AccumulatorTile const &accumulators,          ///< Complete warp-level accumulator tile
+    OutputTileIterator source_iterator,           ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum] ) {
+    if (!output_op.is_source_needed()) {
+#if SAIL_EPILOGUE_OPT >= 1
+      if (output_op.is_invariant()) {
+        compute_source_not_needed_<true>(output_op, destination_iterator, accumulators, extra_input_iters);
+      } else
+#endif
+      {
+        compute_source_not_needed_(output_op, destination_iterator, accumulators, extra_input_iters);
+      }
+    }
+    else {
+      compute_source_needed_(output_op, destination_iterator, accumulators, source_iterator, extra_input_iters);
+    }
+  }
+
+  /// runEpilogue is to separate calling paths w and w/o extra input in epilogue phase, then can optimize vreg usage for the path w/o extra input
+  template <bool Support = kSupportExtraInput>
+  CUTLASS_DEVICE
+  typename platform::enable_if<Support, void>::type runEpilogue(
+    OutputOp const &output_op,                    ///< Output operator
+    OutputTileIterator destination_iterator,      ///< Tile iterator for destination
+    AccumulatorTile const &accumulators,          ///< Complete warp-level accumulator tile
+    OutputTileIterator source_iterator,           ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum] ) {
+      operator()(output_op, destination_iterator, accumulators, source_iterator, extra_input_iters);
+  }
+
+  template <bool Support = kSupportExtraInput>
+  CUTLASS_DEVICE
+  typename platform::enable_if<!Support, void>::type runEpilogue(
+    OutputOp const &output_op,                    ///< Output operator
+    OutputTileIterator destination_iterator,      ///< Tile iterator for destination
+    AccumulatorTile const &accumulators,          ///< Complete warp-level accumulator tile
+    OutputTileIterator source_iterator,           ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum] ) {
+      operator()(output_op, destination_iterator, accumulators, source_iterator);
+  }
+#endif
 private:
 
   static_assert(kPartitionsK == 1 || Base::kFragmentsPerIteration == 1, "One of these must be exactly 1.");
-  
+
   /// Streams the result to global memory
+#if SAIL_EPILOGUE_OPT >= 1
+  template<bool InvariantOp = false>
+#endif
   CUTLASS_DEVICE
   void compute_source_not_needed_(
     OutputOp const &output_op,                    ///< Output operator
     OutputTileIterator destination_iterator,      ///< Tile iterator for destination
-    AccumulatorTile const &accumulators          ///< Complete warp-level accumulator tile 
-    ) { 
+    AccumulatorTile const &accumulators          ///< Complete warp-level accumulator tile
+    ) {
 
     //
     // Iterator over warp-level accumulator fragment
@@ -212,7 +467,7 @@ private:
 
     //
     // Iterate over accumulator tile
-    // 
+    //
 
     CUTLASS_PRAGMA_UNROLL
     for (int iter = 0; iter < OutputTileIterator::kIterations; iter += Base::kFragmentsPerIteration) {
@@ -220,8 +475,13 @@ private:
       //
       // Convert and store fragment
       //
-      
+
+// deadlock in compiler in some gemm wmma instance???
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
       __syncthreads();
+#endif
 
 
       CUTLASS_PRAGMA_UNROLL
@@ -231,7 +491,7 @@ private:
         accum_fragment_iterator.load(accum_fragment);
         ++accum_fragment_iterator;
 
-        this->warp_tile_iterator_.store(accum_fragment); 
+        this->warp_tile_iterator_.store(accum_fragment);
 
         if (p < Base::kFragmentsPerIteration - 1) {
           this->warp_tile_iterator_.add_pointer_offset(kSmemPointerOffset);
@@ -242,7 +502,11 @@ private:
         this->warp_tile_iterator_.add_pointer_offset(kSmemPointerOffset * (1 - Base::kFragmentsPerIteration));
       }
 
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
       __syncthreads();
+#endif
 
       //
       // Load fragments from shared memory
@@ -273,6 +537,10 @@ private:
           shared_load_iterator_.add_pointer_offset((1 - kPartitionsK) * kSmemPointerOffset);
         }
 
+#if SAIL_EPILOGUE_OPT >= 1
+        StoreOutput<typename SharedLoadIterator::Fragment, OutputTileIterator, OutputOp, InvariantOp>()(
+          aligned_accum_fragment[0], destination_iterator, output_op);
+#else
         //
         // Compute the output result
         //
@@ -281,12 +549,12 @@ private:
 
         apply_output_operator_source_not_needed_(output_fragment, output_op, aligned_accum_fragment[0]);
 
-
         //
         // Store the final result
         //
 
         destination_iterator.store(output_fragment);
+#endif
         ++destination_iterator;
       }
 
@@ -295,7 +563,141 @@ private:
       }
     }
   }
-  
+
+#if SAIL_FUSE_OP_EXT
+  template <bool Support = kSupportExtraInput>
+  CUTLASS_DEVICE
+  typename platform::enable_if<Support, void>::type load_epilogue_frags(
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum],
+    typename OutputTileIterator::Fragment (&extra_input_fragments)[kExtraInputNum]) {
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < kExtraInputLoopNum; i++) {
+          extra_input_iters[i].load(extra_input_fragments[i]);
+          ++extra_input_iters[i];
+      }
+  }
+
+  #if SAIL_EPILOGUE_OPT >= 1
+  template<bool InvariantOp = false>
+  #endif
+  CUTLASS_DEVICE
+  void compute_source_not_needed_(
+    OutputOp const &output_op,                                                ///< Output operator
+    OutputTileIterator destination_iterator,                                  ///< Tile iterator for destination
+    AccumulatorTile const &accumulators,                                      ///< Complete warp-level accumulator tile
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum]                   ///< Tile iterator for the extra input E
+  ) {
+    //
+    // Iterator over warp-level accumulator fragment
+    //
+
+    AccumulatorFragmentIterator accum_fragment_iterator(accumulators);
+    typename OutputTileIterator::Fragment extra_input_fragments[kExtraInputNum];
+
+    //
+    // Iterate over accumulator tile
+    //
+
+    static int const kUnrollNum = cutlass::epilogue::IsEpilogueFunctorHeavy<OutputOp_>::value
+                                ? 1
+                                : OutputTileIterator::kIterations / Base::kFragmentsPerIteration;
+    #pragma unroll kUnrollNum
+    for (int iter = 0; iter < OutputTileIterator::kIterations; iter += Base::kFragmentsPerIteration) {
+
+      load_epilogue_frags(extra_input_iters, extra_input_fragments);
+
+      // Convert and store fragment
+      //
+
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
+      __syncthreads();
+#endif
+
+
+      CUTLASS_PRAGMA_UNROLL
+      for (int p = 0; p < Base::kFragmentsPerIteration; ++p) {
+        typename AccumulatorFragmentIterator::Fragment accum_fragment;
+
+        accum_fragment_iterator.load(accum_fragment);
+        ++accum_fragment_iterator;
+
+        this->warp_tile_iterator_.store(accum_fragment);
+
+        if (p < Base::kFragmentsPerIteration - 1) {
+          this->warp_tile_iterator_.add_pointer_offset(kSmemPointerOffset);
+        }
+      }
+
+      if (Base::kFragmentsPerIteration > 1) {
+        this->warp_tile_iterator_.add_pointer_offset(kSmemPointerOffset * (1 - Base::kFragmentsPerIteration));
+      }
+
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
+      __syncthreads();
+#endif
+
+      //
+      // Load fragments from shared memory
+      //
+
+      CUTLASS_PRAGMA_UNROLL
+      for (int p = 0; p < Base::kFragmentsPerIteration; ++p) {
+
+
+        typename SharedLoadIterator::Fragment aligned_accum_fragment[kPartitionsK];
+
+        shared_load_iterator_.load(aligned_accum_fragment[0]);
+
+        if (p < Base::kFragmentsPerIteration - 1) {
+          shared_load_iterator_.add_pointer_offset(kSmemPointerOffset);
+        }
+        else if (kPartitionsK > 1) {
+
+          plus <typename SharedLoadIterator::Fragment> add_fragments;
+
+          CUTLASS_PRAGMA_UNROLL
+          for ( int i = 1; i < kPartitionsK; ++i) {
+            shared_load_iterator_.add_pointer_offset(kSmemPointerOffset);
+            shared_load_iterator_.load(aligned_accum_fragment[i]);
+            aligned_accum_fragment[0] = add_fragments(aligned_accum_fragment[0], aligned_accum_fragment[i]);
+          }
+
+          shared_load_iterator_.add_pointer_offset((1 - kPartitionsK) * kSmemPointerOffset);
+        }
+
+#if SAIL_EPILOGUE_OPT >= 1
+        StoreOutput<typename SharedLoadIterator::Fragment, OutputTileIterator, OutputOp, InvariantOp>()(
+          aligned_accum_fragment[0], destination_iterator, output_op, extra_input_fragments);
+#else
+        //
+        // Compute the output result
+        //
+
+        typename OutputTileIterator::Fragment output_fragment;
+
+        apply_output_operator_source_not_needed_(output_fragment, output_op, aligned_accum_fragment[0], extra_input_fragments);
+
+
+        //
+        // Store the final result
+        //
+
+        destination_iterator.store(output_fragment);
+#endif
+        ++destination_iterator;
+      }
+
+      if (Base::kFragmentsPerIteration > 1) {
+        shared_load_iterator_.add_pointer_offset(kSmemPointerOffset * (1 - Base::kFragmentsPerIteration));
+      }
+    }
+  }
+#endif
+
   /// Streams the result to global memory
   CUTLASS_DEVICE
   void compute_source_needed_(
@@ -303,8 +705,8 @@ private:
     OutputTileIterator destination_iterator,      ///< Tile iterator for destination
     AccumulatorTile const &accumulators,          ///< Complete warp-level accumulator tile
     OutputTileIterator source_iterator           ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
-    ) { 
-    
+    ) {
+
     typename OutputTileIterator::Fragment source_fragment;
 
     source_fragment.clear();
@@ -317,7 +719,7 @@ private:
 
     //
     // Iterate over accumulator tile
-    // 
+    //
 
     CUTLASS_PRAGMA_UNROLL
     for (int iter = 0; iter < OutputTileIterator::kIterations; ++iter) {
@@ -332,8 +734,12 @@ private:
       //
       // Convert and store fragment
       //
-      
+
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
       __syncthreads();
+#endif
 
       typename AccumulatorFragmentIterator::Fragment accum_fragment;
 
@@ -342,7 +748,11 @@ private:
 
       this->warp_tile_iterator_.store(accum_fragment);
 
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
       __syncthreads();
+#endif
 
       //
       // Load fragments from shared memory
@@ -370,7 +780,7 @@ private:
       //
       // Compute the output result
       //
-     
+
       typename OutputTileIterator::Fragment output_fragment;
 
       apply_output_operator_(output_fragment, output_op, aligned_accum_fragment[0], source_fragment);
@@ -380,11 +790,115 @@ private:
       // Store the final result
       //
 
-      destination_iterator.store(output_fragment);      
+      destination_iterator.store(output_fragment);
       ++destination_iterator;
 
     }
   }
+
+  #if SAIL_FUSE_OP_EXT
+  CUTLASS_DEVICE
+  void compute_source_needed_(
+    OutputOp const &output_op,                              ///< Output operator
+    OutputTileIterator destination_iterator,                ///< Tile iterator for destination
+    AccumulatorTile const &accumulators,                    ///< Complete warp-level accumulator tile
+    OutputTileIterator source_iterator,                     ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum] ///< Tile iterator for extra inputs
+    ) {
+    typename OutputTileIterator::Fragment source_fragment;
+    source_fragment.clear();
+
+    typename OutputTileIterator::Fragment extra_input_fragments[kExtraInputNum];
+
+    //
+    // Iterator over warp-level accumulator fragment
+    //
+
+    AccumulatorFragmentIterator accum_fragment_iterator(accumulators);
+
+    //
+    // Iterate over accumulator tile
+    //
+
+    static int const kUnrollNum = cutlass::epilogue::IsEpilogueFunctorHeavy<OutputOp_>::value
+                                ? 1
+                                : OutputTileIterator::kIterations;
+    #pragma unroll kUnrollNum
+    for (int iter = 0; iter < OutputTileIterator::kIterations; ++iter) {
+
+      //
+      // Load the source
+      //
+
+      source_iterator.load(source_fragment);
+      ++source_iterator;
+
+      load_epilogue_frags(extra_input_iters, extra_input_fragments);
+
+      //
+      // Convert and store fragment
+      //
+
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
+      __syncthreads();
+#endif
+
+      typename AccumulatorFragmentIterator::Fragment accum_fragment;
+
+      accum_fragment_iterator.load(accum_fragment);
+      ++accum_fragment_iterator;
+
+      this->warp_tile_iterator_.store(accum_fragment);
+
+#if SAIL_PPU_MMA
+      __ppu_barrier_sync_nocnt(0, 1);
+#else
+      __syncthreads();
+#endif
+
+      //
+      // Load fragments from shared memory
+      //
+
+      typename SharedLoadIterator::Fragment aligned_accum_fragment[kPartitionsK];
+
+      shared_load_iterator_.load(aligned_accum_fragment[0]);
+
+      // If the number of k-slices is > 1 - perform a reduction amongst the k-slices
+      if (kPartitionsK > 1) {
+
+        plus <typename SharedLoadIterator::Fragment> add_fragments;
+
+        CUTLASS_PRAGMA_UNROLL
+        for ( int i = 1; i < kPartitionsK; ++i) {
+          shared_load_iterator_.add_pointer_offset(kSmemPointerOffset);
+          shared_load_iterator_.load(aligned_accum_fragment[i]);
+          aligned_accum_fragment[0] = add_fragments(aligned_accum_fragment[0], aligned_accum_fragment[i]);
+        }
+
+        shared_load_iterator_.add_pointer_offset((1 - kPartitionsK) * kSmemPointerOffset);
+      }
+
+      //
+      // Compute the output result
+      //
+
+      typename OutputTileIterator::Fragment output_fragment;
+
+      apply_output_operator_(output_fragment, output_op, aligned_accum_fragment[0], source_fragment, extra_input_fragments);
+
+
+      //
+      // Store the final result
+      //
+
+      destination_iterator.store(output_fragment);
+      ++destination_iterator;
+    }
+  }
+  #endif
 
   /// Helper to invoke the output functor over each vector of output
   CUTLASS_DEVICE
@@ -393,17 +907,17 @@ private:
     OutputOp const &output_op,                    ///< Output operator
     typename SharedLoadIterator::Fragment const &aligned_accum_fragment,
     typename OutputTileIterator::Fragment const &source_fragment) {
-      
-    OutputAccessType *output_frag_ptr = 
+
+    OutputAccessType *output_frag_ptr =
       reinterpret_cast<OutputAccessType *>(&output_fragment);
 
-    AccumulatorAccessType const *compute_frag_ptr = 
+    AccumulatorAccessType const *compute_frag_ptr =
       reinterpret_cast<AccumulatorAccessType const *>(&aligned_accum_fragment);
 
-    OutputAccessType const *source_frag_ptr = 
+    OutputAccessType const *source_frag_ptr =
       reinterpret_cast<OutputAccessType const *>(&source_fragment);
 
-    int const kOutputOpIterations = 
+    int const kOutputOpIterations =
       OutputTileIterator::Fragment::kElements / OutputTileIterator::kElementsPerAccess;
 
     CUTLASS_PRAGMA_UNROLL
@@ -414,20 +928,54 @@ private:
     }
   }
 
+  #if SAIL_FUSE_OP_EXT
+  CUTLASS_DEVICE
+  void apply_output_operator_(
+    typename OutputTileIterator::Fragment &output_fragment,
+    OutputOp const &output_op,                    ///< Output operator
+    typename SharedLoadIterator::Fragment const &aligned_accum_fragment,
+    typename OutputTileIterator::Fragment const &source_fragment,
+    typename OutputTileIterator::Fragment const (&extra_input_frags)[kExtraInputNum] ) {
+
+    OutputAccessType *output_frag_ptr =
+      reinterpret_cast<OutputAccessType *>(&output_fragment);
+
+    AccumulatorAccessType const *compute_frag_ptr =
+      reinterpret_cast<AccumulatorAccessType const *>(&aligned_accum_fragment);
+
+    OutputAccessType const *source_frag_ptr =
+      reinterpret_cast<OutputAccessType const *>(&source_fragment);
+    int const kOutputOpIterations =
+      OutputTileIterator::Fragment::kElements / OutputTileIterator::kElementsPerAccess;
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kOutputOpIterations; ++i) {
+      OutputAccessType extra_input_vals[OutputOp::kExtraEpilogueInputs];
+      CUTLASS_PRAGMA_UNROLL
+      for (int k = 0; k < kExtraInputLoopNum; ++k) {
+        OutputAccessType const *input_frag_ptr = reinterpret_cast<OutputAccessType const *>(&extra_input_frags[k]);
+        extra_input_vals[k] = input_frag_ptr[i];
+      }
+      // Call the output operator
+      output_frag_ptr[i] = output_op(compute_frag_ptr[i], source_frag_ptr[i], extra_input_vals);
+    }
+  }
+  #endif
+
   /// Helper to invoke the output functor over each vector of output
   CUTLASS_DEVICE
   void apply_output_operator_source_not_needed_(
     typename OutputTileIterator::Fragment &output_fragment,
     OutputOp const &output_op,                    ///< Output operator
     typename SharedLoadIterator::Fragment const &aligned_accum_fragment) {
-    
-    OutputAccessType *output_frag_ptr = 
+
+    OutputAccessType *output_frag_ptr =
       reinterpret_cast<OutputAccessType *>(&output_fragment);
 
-    AccumulatorAccessType const *compute_frag_ptr = 
+    AccumulatorAccessType const *compute_frag_ptr =
       reinterpret_cast<AccumulatorAccessType const *>(&aligned_accum_fragment);
 
-    int const kOutputOpIterations = 
+    int const kOutputOpIterations =
       OutputTileIterator::Fragment::kElements / OutputTileIterator::kElementsPerAccess;
 
     CUTLASS_PRAGMA_UNROLL
@@ -437,6 +985,37 @@ private:
       output_frag_ptr[i] = output_op(compute_frag_ptr[i]);
     }
   }
+
+  #if SAIL_FUSE_OP_EXT
+  CUTLASS_DEVICE
+  void apply_output_operator_source_not_needed_(
+    typename OutputTileIterator::Fragment &output_fragment,
+    OutputOp const &output_op,                    ///< Output operator
+    typename SharedLoadIterator::Fragment const &aligned_accum_fragment,
+    typename OutputTileIterator::Fragment const (&extra_input_frags)[kExtraInputNum] ) {
+
+    OutputAccessType *output_frag_ptr =
+      reinterpret_cast<OutputAccessType *>(&output_fragment);
+
+    AccumulatorAccessType const *compute_frag_ptr =
+      reinterpret_cast<AccumulatorAccessType const *>(&aligned_accum_fragment);
+    int const kOutputOpIterations =
+      OutputTileIterator::Fragment::kElements / OutputTileIterator::kElementsPerAccess;
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kOutputOpIterations; ++i) {
+      OutputAccessType extra_input_vals[OutputOp::kExtraEpilogueInputs];
+      CUTLASS_PRAGMA_UNROLL
+      for (int k = 0; k < kExtraInputLoopNum; ++k) {
+        OutputAccessType const *input_frag_ptr = reinterpret_cast<OutputAccessType const *>(&extra_input_frags[k]);
+        extra_input_vals[k] = input_frag_ptr[i];
+      }
+
+      // Call the output operator
+      output_frag_ptr[i] = output_op(compute_frag_ptr[i], extra_input_vals);
+    }
+  }
+  #endif
 };
 
 ////////////////////////////////////////////////////////////////////////////////

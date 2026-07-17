@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a double-buffered threadblock-scoped GEMM kernel.
 */
@@ -74,7 +76,7 @@ struct SparseMmaPolicy {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math
+/// Structure to compute the matrix product targeting alu cores and SIMT math
 /// instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>
@@ -84,7 +86,12 @@ template <
     /// Number of stages,
     int Stages,
     /// Used for partial specialization
-    typename Enable = bool>
+    typename Enable = bool
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for Compression matrix.
+    , Operand CompressOp_ = Operand::kA
+#endif
+    >
 class SparseMmaBase {
  public:
   ///< Size of the Gemm problem - concept: gemm::GemmShape<>
@@ -120,6 +127,10 @@ class SparseMmaBase {
 
   static int const kElementsPerElementE = Operator::kElementsPerElementE;
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+  static int const kInterleavedE = Policy::Operator::kInterleaved;
+#endif
+
   /// Tensor reference to the A operand
   using TensorRefA = TensorRef<typename Operator::ElementA, typename Operator::LayoutA>;
 
@@ -132,7 +143,6 @@ class SparseMmaBase {
   //
   // Nested structs
   //
-
   /// Shared storage object needed by threadblock-scoped GEMM
   class SharedStorage {
    public:
@@ -140,22 +150,43 @@ class SparseMmaBase {
     // Type definitions
     //
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Shape of the A matrix operand in shared memory
+    using ShapeA = typename platform::conditional<
+                   CompressOp_ == Operand::kB,
+                   MatrixShape<Shape::kM + Policy::SmemPaddingA::kRow,
+                             Shape::kK * kStages + Policy::SmemPaddingA::kColumn>,
+                   MatrixShape<Shape::kM + Policy::SmemPaddingA::kRow,
+                             Shape::kK / kSparse * kStages + Policy::SmemPaddingA::kColumn>>::type;
+
+    using ShapeB = typename platform::conditional<
+                   CompressOp_ == Operand::kB,
+                   MatrixShape<Shape::kK / kSparse * kStages + Policy::SmemPaddingB::kRow,
+                             Shape::kN + Policy::SmemPaddingB::kColumn>,
+                   MatrixShape<Shape::kK * kStages + Policy::SmemPaddingB::kRow,
+                             Shape::kN + Policy::SmemPaddingB::kColumn>>::type;
+
+    using ShapeE = typename platform::conditional<
+                   CompressOp_ == Operand::kB,
+                   MatrixShape<Shape::kK / kSparse / kElementsPerElementE / kInterleavedE * kStages +
+                             Policy::SmemPaddingE::kColumn,
+                   Shape::kN * kInterleavedE + Policy::SmemPaddingB::kColumn>,
+                   MatrixShape<Shape::kM * kInterleavedE + Policy::SmemPaddingE::kRow,
+                   Shape::kK / kSparse / kElementsPerElementE / kInterleavedE * kStages +
+                             Policy::SmemPaddingE::kColumn>>::type;
+#else
     /// Shape of the A matrix operand in shared memory
     using ShapeA = MatrixShape<Shape::kM + Policy::SmemPaddingA::kRow,
-                               Shape::kK / kSparse * kStages +
-                                   Policy::SmemPaddingA::kColumn>;
+                               Shape::kK / kSparse * kStages + Policy::SmemPaddingA::kColumn>;
 
-    /// Shape of the B matrix operand in shared memory
-    using ShapeB =
-        MatrixShape<Shape::kK * kStages + Policy::SmemPaddingB::kRow,
-                    Shape::kN + Policy::SmemPaddingB::kColumn>;
+    using ShapeB = MatrixShape<Shape::kK * kStages + Policy::SmemPaddingB::kRow,
+                               Shape::kN + Policy::SmemPaddingB::kColumn>;
 
     /// Shape of the E matrix operand in shared memory
-    using ShapeE =
-        MatrixShape<Shape::kM * 2 + Policy::SmemPaddingE::kRow,
-                    Shape::kK / kSparse / kElementsPerElementE / 2 * kStages +
-                        Policy::SmemPaddingE::kColumn>;
-
+    using ShapeE = MatrixShape<Shape::kM * 2 + Policy::SmemPaddingE::kRow,
+                   Shape::kK / kSparse / kElementsPerElementE / 2 * kStages +
+                             Policy::SmemPaddingE::kColumn>;
+#endif
    public:
     //
     // Data members
@@ -246,7 +277,6 @@ public:
       warp_tile_iterator_A_(shared_storage.operand_A_ref(), lane_idx),
       warp_tile_iterator_B_(shared_storage.operand_B_ref(), lane_idx),
       warp_tile_iterator_E_(shared_storage.operand_E_ref(), lane_idx) {
-
   }
 };
 

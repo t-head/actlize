@@ -1,3 +1,4 @@
+# Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
 # Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -21,7 +22,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(cutlass_tools_util_includes INTERFACE)
-add_library(nvidia::cutlass::tools::util ALIAS cutlass_tools_util_includes)
+add_library(ppu::cutlass::tools::util ALIAS cutlass_tools_util_includes)
 set_target_properties(cutlass_tools_util_includes PROPERTIES EXPORT_NAME tools::util)
 
 target_include_directories(
@@ -34,7 +35,6 @@ target_include_directories(
 target_link_libraries(
   cutlass_tools_util_includes
   INTERFACE
- 	$<$<BOOL:${CUTLASS_ENABLE_CUBLAS}>:cublas>
   )
 
 install(
@@ -44,6 +44,6 @@ install(
 
 install(
   TARGETS cutlass_tools_util_includes
-  EXPORT NvidiaCutlass
+  EXPORT PPUCutlass
   )
 

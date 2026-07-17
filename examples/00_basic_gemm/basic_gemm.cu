@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -35,8 +36,6 @@
   See the CUTLASS Parallel for All blog post for more exposition on the tunable parameters available
   in CUTLASS.
 
-  https://devblogs.nvidia.com/cutlass-linear-algebra-cuda/
-
   Aside from defining and launching the SGEMM kernel, this example does not use any other components
   or utilities within CUTLASS. Such utilities are demonstrated elsewhere in other examples and are
   prevalent in the CUTLASS unit tests.
@@ -59,18 +58,21 @@
 // CUTLASS includes needed for single-precision GEMM kernel
 //
 
+// PTG cutlass propriatary configs
+#include "accutlass.h"
+
 // Defines cutlass::gemm::device::Gemm, the generic Gemm computation template class.
 #include "cutlass/gemm/device/gemm.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // This function defines a CUTLASS GEMM kernel instantiation, constructs its parameters object,
-// and launches it on the CUDA device.
+// and launches it on the device.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Define a CUTLASS GEMM template and launch a GEMM kernel.
-cudaError_t CutlassSgemmNN(
+hggcError_t CutlassSgemmNN(
   int M,
   int N,
   int K,
@@ -127,21 +129,21 @@ cudaError_t CutlassSgemmNN(
   cutlass::Status status = gemm_operator(args);
 
   //
-  // Return a cudaError_t if the CUTLASS GEMM operator returned an error code.
+  // Return a hggcError_t if the CUTLASS GEMM operator returned an error code.
   //
 
   if (status != cutlass::Status::kSuccess) {
-    return cudaErrorUnknown;
+    return hggcErrorUnknown;
   }
 
   // Return success, if no errors were encountered.
-  return cudaSuccess;
+  return hggcSuccess;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// The source code after this point in the file is generic CUDA using the CUDA Runtime API
-// and simple CUDA kernels to initialize matrices and compute the general matrix product.
+// The source code after this point in the file is generic device using the device Runtime API
+// and simple device kernels to initialize matrices and compute the general matrix product.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -169,7 +171,7 @@ __global__ void InitializeMatrix_kernel(
 }
 
 /// Simple function to initialize a matrix to arbitrary small integers.
-cudaError_t InitializeMatrix(float *matrix, int ldm, int rows, int columns, int seed = 0) {
+hggcError_t InitializeMatrix(float *matrix, int ldm, int rows, int columns, int seed = 0) {
 
   dim3 block(16, 16);
   dim3 grid(
@@ -179,41 +181,41 @@ cudaError_t InitializeMatrix(float *matrix, int ldm, int rows, int columns, int 
 
   InitializeMatrix_kernel<<< grid, block >>>(matrix, ldm, rows, columns, seed);
 
-  return cudaGetLastError();
+  return hggcGetLastError();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Allocates device memory for a matrix then fills with arbitrary small integers.
-cudaError_t AllocateMatrix(float **matrix, int ldm, int rows, int columns, int seed = 0) {
-  cudaError_t result;
+hggcError_t AllocateMatrix(float **matrix, int ldm, int rows, int columns, int seed = 0) {
+  hggcError_t result;
 
   size_t sizeof_matrix = sizeof(float) * ldm * columns;
 
   // Allocate device memory.
-  result = cudaMalloc(reinterpret_cast<void **>(matrix), sizeof_matrix);
+  result = hggcMalloc(reinterpret_cast<void **>(matrix), sizeof_matrix);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Failed to allocate matrix: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
     return result;
   }
 
   // Clear the allocation.
-  result = cudaMemset(*matrix, 0, sizeof_matrix);
+  result = hggcMemset(*matrix, 0, sizeof_matrix);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Failed to clear matrix device memory: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
     return result;
   }
 
   // Initialize matrix elements to arbitrary small integers.
   result = InitializeMatrix(*matrix, ldm, rows, columns, seed);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Failed to initialize matrix: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
     return result;
   }
 
@@ -251,7 +253,7 @@ __global__ void ReferenceGemm_kernel(
 }
 
 /// Reference GEMM computation.
-cudaError_t ReferenceGemm(
+hggcError_t ReferenceGemm(
   int M,
   int N,
   int K,
@@ -272,15 +274,15 @@ cudaError_t ReferenceGemm(
 
   ReferenceGemm_kernel<<< grid, block >>>(M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
 
-  return cudaGetLastError();
+  return hggcGetLastError();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Allocate several matrices in GPU device memory and call a single-precision
+/// Allocate several matrices in PPU device memory and call a single-precision
 /// CUTLASS GEMM kernel.
-cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
-  cudaError_t result;
+hggcError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
+  hggcError_t result;
 
   //
   // Define several matrices to be used as operands to GEMM kernels.
@@ -294,56 +296,56 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
   // Compute size in bytes of the C matrix.
   size_t sizeof_C = sizeof(float) * ldc * N;
 
-  // Define pointers to matrices in GPU device memory.
+  // Define pointers to matrices in PPU device memory.
   float *A;
   float *B;
   float *C_cutlass;
   float *C_reference;
 
   //
-  // Allocate matrices in GPU device memory with arbitrary seeds.
+  // Allocate matrices in PPU device memory with arbitrary seeds.
   //
 
   result = AllocateMatrix(&A, lda, M, K, 0);
 
-  if (result !=  cudaSuccess) {
+  if (result !=  hggcSuccess) {
     return result;
   }
 
   result = AllocateMatrix(&B, ldb, K, N, 17);
 
-  if (result !=  cudaSuccess) {
-    cudaFree(A);
+  if (result !=  hggcSuccess) {
+    hggcFree(A);
     return result;
   }
 
   result = AllocateMatrix(&C_cutlass, ldc, M, N, 101);
 
-  if (result != cudaSuccess) {
-    cudaFree(A);
-    cudaFree(B);
+  if (result != hggcSuccess) {
+    hggcFree(A);
+    hggcFree(B);
     return result;
   }
 
   result = AllocateMatrix(&C_reference, ldc, M, N, 101);
 
-  if (result != cudaSuccess) {
-    cudaFree(A);
-    cudaFree(B);
-    cudaFree(C_cutlass);
+  if (result != hggcSuccess) {
+    hggcFree(A);
+    hggcFree(B);
+    hggcFree(C_cutlass);
     return result;
   }
 
-  result = cudaMemcpy(C_reference, C_cutlass, sizeof_C, cudaMemcpyDeviceToDevice);
+  result = hggcMemcpy(C_reference, C_cutlass, sizeof_C, hggcMemcpyDeviceToDevice);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Failed to copy C_cutlass matrix to C_reference: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
 
-    cudaFree(C_reference);
-    cudaFree(C_cutlass);
-    cudaFree(B);
-    cudaFree(A);
+    hggcFree(C_reference);
+    hggcFree(C_cutlass);
+    hggcFree(B);
+    hggcFree(A);
 
     return result;
   }
@@ -354,14 +356,14 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
 
   result = CutlassSgemmNN(M, N, K, alpha, A, lda, B, ldb, beta, C_cutlass, ldc);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "CUTLASS GEMM kernel failed: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
 
-    cudaFree(C_reference);
-    cudaFree(C_cutlass);
-    cudaFree(B);
-    cudaFree(A);
+    hggcFree(C_reference);
+    hggcFree(C_cutlass);
+    hggcFree(B);
+    hggcFree(A);
 
     return result;
   }
@@ -373,14 +375,14 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
   // Launch reference GEMM
   result = ReferenceGemm(M, N, K, alpha, A, lda, B, ldb, beta, C_reference, ldc);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Reference GEMM kernel failed: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
 
-    cudaFree(C_reference);
-    cudaFree(C_cutlass);
-    cudaFree(B);
-    cudaFree(A);
+    hggcFree(C_reference);
+    hggcFree(C_cutlass);
+    hggcFree(B);
+    hggcFree(A);
 
     return result;
   }
@@ -389,30 +391,30 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
   std::vector<float> host_cutlass(ldc * N, 0);
   std::vector<float> host_reference(ldc * N, 0);
 
-  result = cudaMemcpy(host_cutlass.data(), C_cutlass, sizeof_C, cudaMemcpyDeviceToHost);
+  result = hggcMemcpy(host_cutlass.data(), C_cutlass, sizeof_C, hggcMemcpyDeviceToHost);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Failed to copy CUTLASS GEMM results: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
 
-    cudaFree(C_reference);
-    cudaFree(C_cutlass);
-    cudaFree(B);
-    cudaFree(A);
+    hggcFree(C_reference);
+    hggcFree(C_cutlass);
+    hggcFree(B);
+    hggcFree(A);
 
     return result;
   }
 
-  result = cudaMemcpy(host_reference.data(), C_reference, sizeof_C, cudaMemcpyDeviceToHost);
+  result = hggcMemcpy(host_reference.data(), C_reference, sizeof_C, hggcMemcpyDeviceToHost);
 
-  if (result != cudaSuccess) {
+  if (result != hggcSuccess) {
     std::cerr << "Failed to copy Reference GEMM results: "
-      << cudaGetErrorString(result) << std::endl;
+      << hggcGetErrorString(result) << std::endl;
 
-    cudaFree(C_reference);
-    cudaFree(C_cutlass);
-    cudaFree(B);
-    cudaFree(A);
+    hggcFree(C_reference);
+    hggcFree(C_cutlass);
+    hggcFree(B);
+    hggcFree(A);
 
     return result;
   }
@@ -421,10 +423,10 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
   // Free device memory allocations.
   //
 
-  cudaFree(C_reference);
-  cudaFree(C_cutlass);
-  cudaFree(B);
-  cudaFree(A);
+  hggcFree(C_reference);
+  hggcFree(C_cutlass);
+  hggcFree(B);
+  hggcFree(A);
 
   //
   // Test for bit equivalence of results.
@@ -433,10 +435,10 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
   if (host_cutlass != host_reference) {
     std::cerr << "CUTLASS results incorrect." << std::endl;
 
-    return cudaErrorUnknown;
+    return hggcErrorUnknown;
   }
 
-  return cudaSuccess;
+  return hggcSuccess;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -473,7 +475,7 @@ int main(int argc, const char *arg[]) {
   // Run the CUTLASS GEMM test.
   //
 
-  cudaError_t result = TestCutlassGemm(
+  hggcError_t result = TestCutlassGemm(
     problem[0],     // GEMM M dimension
     problem[1],     // GEMM N dimension
     problem[2],     // GEMM K dimension
@@ -481,12 +483,12 @@ int main(int argc, const char *arg[]) {
     scalars[1]      // beta
   );
 
-  if (result == cudaSuccess) {
+  if (result == hggcSuccess) {
     std::cout << "Passed." << std::endl;
   }
 
   // Exit.
-  return result == cudaSuccess ? 0 : -1;
+  return result == hggcSuccess ? 0 : -1;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

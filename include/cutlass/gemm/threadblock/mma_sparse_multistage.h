@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a double-buffered threadblock-scoped GEMM kernel.
 */
@@ -46,7 +48,7 @@ namespace threadblock {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math
+/// Structure to compute the matrix product targeting alu cores and SIMT math
 /// instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>
@@ -87,12 +89,23 @@ template <
     /// Number of stages,
     int Stages,
     /// Used for partial specialization
-    typename Enable = bool>
-class SparseMmaMultistage : 
-  public SparseMmaBase<Shape_, Policy_, Stages> {
+    typename Enable = bool
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    , Operand CompressOp_ = Operand::kA
+#endif
+    >
+class SparseMmaMultistage :
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+  public SparseMmaBase<Shape_, Policy_, Stages, Enable, CompressOp_> {
 public:
   ///< Base class
-  using Base = SparseMmaBase<Shape_, Policy_, Stages>;
+  using Base = SparseMmaBase<Shape_, Policy_, Stages, Enable, CompressOp_>;
+#else
+  public SparseMmaBase<Shape_, Policy_, Stages, Enable> {
+public:
+  ///< Base class
+  using Base = SparseMmaBase<Shape_, Policy_, Stages, Enable>;
+#endif
   ///< Size of the Gemm problem - concept: gemm::GemmShape<>
   using Shape = Shape_;
   ///< Iterates over tiles of A operand in global memory
@@ -136,10 +149,10 @@ public:
   using ElementE = typename IteratorE::Element;
 
   /// LayoutE
-  using LayoutE = typename IteratorE::Layout; 
+  using LayoutE = typename IteratorE::Layout;
 
-  /// Minimum architecture is Sm80 to support cp.async
-  using ArchTag = arch::Sm80;
+  /// Minimum architecture is PPU1.0 to support cp.async
+  using ArchTag = arch::PPU0010;
   
   /// Complex transform on A operand
   static ComplexTransform const kTransformA = Operator::kTransformA;
@@ -181,6 +194,8 @@ public:
     static int const kAccessesPerGroupE =
         (TBLDGSTSIterationsE + Base::kWarpGemmIterations - 1) / Base::kWarpGemmIterations;
 
+    static int const kBValidWarps = IteratorB::ThreadMap::kThreads / 32;
+
     /// E operand is tiny.  For the most of time, not all the warps are needed
     /// to load it from the global memory.
     static int const kValidWarps = IteratorE::ThreadMap::kThreads / 32;
@@ -196,7 +211,18 @@ public:
          (Operator::Shape::kM >= 64 && Operator::Shape::kN >= 64))
             ? 1
             : 2;
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    static int const kABufferSize =
+        ((sizeof(typename Operator::ElementC) == 4) &&
+          ((platform::is_same<typename Operator::Policy::Operator::ElementA,
+                          typename Operator::ElementA>::value &&
+        platform::is_same<typename Operator::Policy::Operator::ElementB,
+                          typename Operator::ElementB>::value)) &&
+      (Operator::Shape::kM >= 32 && Operator::Shape::kN >= 64))
+        ? 1
+        : 2;
   };
+#endif
 
  private:
 
@@ -223,6 +249,7 @@ public:
 
   /// Warp id
   bool is_warp_valid_;
+  bool is_warp_valid_b_;
 
 public:
 
@@ -244,6 +271,7 @@ public:
       smem_iterator_E_(shared_storage.operand_E_ref(), thread_idx)
   {
     is_warp_valid_ = warp_idx < Detail::kValidWarps;
+    is_warp_valid_b_ = warp_idx < Detail::kBValidWarps;
 
     // Compute warp location within threadblock tile by mapping the warp_id to
     // three coordinates:
@@ -262,8 +290,15 @@ public:
         {warp_idx_m, Base::kWarpGemmIterations * warp_idx_k});
     this->warp_tile_iterator_B_.add_tile_offset(
         {Base::kWarpGemmIterations * warp_idx_k, warp_idx_n});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    this->warp_tile_iterator_E_.add_tile_offset(
+        (CompressOp_ == Operand::kB)
+        ? make_Coord(Base::kWarpGemmIterations * warp_idx_k, warp_idx_n)
+        : make_Coord(warp_idx_m, Base::kWarpGemmIterations * warp_idx_k));
+#else
     this->warp_tile_iterator_E_.add_tile_offset(
         {warp_idx_m, Base::kWarpGemmIterations * warp_idx_k});
+#endif
   }
 
   CUTLASS_DEVICE
@@ -321,7 +356,7 @@ public:
           auto gmem_ptr = iterator_B.get();
 
           cutlass::arch::cp_async<kSrcBytes, kCacheOpB>(
-              dst_ptr + v, gmem_ptr, iterator_B.valid());
+              dst_ptr + v, gmem_ptr, iterator_B.valid() && is_warp_valid_b_);
 
           ++iterator_B;
         }
@@ -373,6 +408,9 @@ public:
     //
     // Prologue
     //
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+      auto k_sparse_tile = ((CompressOp_ == Operand::kB)) ? make_Coord(1, 0) : make_Coord(0, 1);
+#endif
 
     // Issue several complete stages
     CUTLASS_PRAGMA_UNROLL
@@ -428,8 +466,9 @@ public:
               IteratorB::ThreadMap::kElementsPerAccess /
               IteratorB::kAccessesPerVector / 8;
 
-          cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpB>(
-              dst_ptr + v, iterator_B.get(), iterator_B.valid());
+          if (is_warp_valid_b_)
+            cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpB>(
+                dst_ptr + v, iterator_B.get(), iterator_B.valid());
 
           ++iterator_B;
         }
@@ -449,6 +488,7 @@ public:
 
         int const kSrcBytes = sizeof_bits<typename IteratorE::Element>::value *
                               IteratorE::ThreadMap::kElementsPerAccess / 8;
+
         if (is_warp_valid_)
           cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpE>(
               dst_ptr, iterator_E.get(), iterator_E.valid());
@@ -461,12 +501,18 @@ public:
       // Move to the next stage
       iterator_A.add_tile_offset({0, 1});
       iterator_B.add_tile_offset({1, 0});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+      iterator_E.add_tile_offset(k_sparse_tile);
+#else
       iterator_E.add_tile_offset({0, 1});
-
+#endif
       this->smem_iterator_A_.add_tile_offset({0, 1});
       this->smem_iterator_B_.add_tile_offset({1, 0});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+      this->smem_iterator_E_.add_tile_offset(k_sparse_tile);
+#else
       this->smem_iterator_E_.add_tile_offset({0, 1});
-
+#endif
       // LDGDEPBAR - completes a stage
       cutlass::arch::cp_async_fence();
     }
@@ -480,9 +526,14 @@ public:
 
     // Pair of fragments used to overlap shared memory loads and math
     // instructions
+  #ifdef SAIL_CUSTOMIZE_CUTLASS
+    WarpLoadedFragmentA warp_loaded_frag_A[Detail::kABufferSize];
+    WarpTransformedFragmentA warp_transformed_frag_A[Detail::kABufferSize];
+  #else
     WarpLoadedFragmentA warp_loaded_frag_A[2];
-    WarpLoadedFragmentB warp_loaded_frag_B[Detail::kBBufferSize];
     WarpTransformedFragmentA warp_transformed_frag_A[2];
+  #endif
+    WarpLoadedFragmentB warp_loaded_frag_B[Detail::kBBufferSize];
     WarpTransformedFragmentB warp_transformed_frag_B[Detail::kBBufferSize];
     WarpFragmentE warp_frag_E[2];
 
@@ -527,18 +578,24 @@ public:
       CUTLASS_PRAGMA_UNROLL
       for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations;
            ++warp_mma_k) {
-
         // Load warp-level tiles from shared memory, wrapping to k offset if
         // this is the last group as the case may be.
-
-        this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
         this->warp_tile_iterator_E_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
-        
-        this->warp_tile_iterator_A_.load(warp_loaded_frag_A[(warp_mma_k + 1) % 2]);
         this->warp_tile_iterator_E_.load(warp_frag_E[(warp_mma_k + 1) % 2]);
-
-        ++this->warp_tile_iterator_A_;
         ++this->warp_tile_iterator_E_;
+
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+        if (Detail::kABufferSize == 2) {
+          this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+          this->warp_tile_iterator_A_.load(
+              warp_loaded_frag_A[(warp_mma_k + 1) % Detail::kABufferSize]);
+          ++this->warp_tile_iterator_A_;
+        }
+#else
+        this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+        this->warp_tile_iterator_A_.load(warp_loaded_frag_A[(warp_mma_k + 1) % 2]);
+        ++this->warp_tile_iterator_A_;
+#endif
 
        if (Detail::kBBufferSize == 2) {
           this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
@@ -548,23 +605,30 @@ public:
         }
 
         if (warp_mma_k > 0)
-          warp_mma.transform(warp_transformed_frag_A[warp_mma_k % 2],
+          warp_mma.transform(warp_transformed_frag_A[warp_mma_k % Detail::kABufferSize],
                              warp_transformed_frag_B[warp_mma_k % Detail::kBBufferSize],
-                             warp_loaded_frag_A[warp_mma_k % 2],
+                             warp_loaded_frag_A[warp_mma_k % Detail::kABufferSize],
                              warp_loaded_frag_B[warp_mma_k % Detail::kBBufferSize]);
 
         warp_mma(
           accum,
-          warp_transformed_frag_A[warp_mma_k % 2],
+          warp_transformed_frag_A[warp_mma_k % Detail::kABufferSize],
           warp_transformed_frag_B[warp_mma_k % Detail::kBBufferSize], accum,
           warp_frag_E[warp_mma_k % 2]
         );
+
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+        if (Detail::kABufferSize == 1) {
+          this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+          this->warp_tile_iterator_A_.load(warp_loaded_frag_A[0]);
+          ++this->warp_tile_iterator_A_;
+        }
+#endif
 
         if (Detail::kBBufferSize == 1) {
           this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
           this->warp_tile_iterator_B_.load(warp_loaded_frag_B[0]);
           ++this->warp_tile_iterator_B_;
-  
         }
 
         // Issue global->shared copies for the this stage
@@ -603,18 +667,28 @@ public:
           // Move to the next stage
           iterator_A.add_tile_offset({0, 1});
           iterator_B.add_tile_offset({1, 0});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+          iterator_E.add_tile_offset(k_sparse_tile);
+#else
           iterator_E.add_tile_offset({0, 1});
-
+#endif
           this->smem_iterator_A_.add_tile_offset({0, 1});
           this->smem_iterator_B_.add_tile_offset({1, 0});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+          this->smem_iterator_E_.add_tile_offset(k_sparse_tile);
+#else
           this->smem_iterator_E_.add_tile_offset({0, 1});
-
+#endif
           // Add negative offsets to return iterators to the 'start' of the
           // circular buffer in shared memory
           if (smem_write_stage_idx == (Base::kStages - 1)) {
             this->smem_iterator_A_.add_tile_offset({0, -Base::kStages});
             this->smem_iterator_B_.add_tile_offset({-Base::kStages, 0});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+            this->smem_iterator_E_.add_tile_offset((CompressOp_ == Operand::kB) ? make_Coord(-Base::kStages, 0) : make_Coord(0, -Base::kStages));
+#else
             this->smem_iterator_E_.add_tile_offset({0, -Base::kStages});
+#endif
             smem_write_stage_idx = 0;
           } else {
             ++smem_write_stage_idx;
@@ -626,11 +700,18 @@ public:
                         Base::kWarpGemmIterations});
             this->warp_tile_iterator_B_.add_tile_offset(
                 {-Base::kStages * Policy::kPartitionsK *
-                     Base::kWarpGemmIterations,
+                        Base::kWarpGemmIterations,
                  0});
+#ifdef SAIL_CUSTOMIZE_CUTLASS
             this->warp_tile_iterator_E_.add_tile_offset(
-                {0, -Base::kStages * Policy::kPartitionsK *
-                        Base::kWarpGemmIterations});
+                (CompressOp_ == Operand::kB)
+                ? make_Coord(-Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations, 0)
+                : make_Coord(0, -Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations));
+#else
+            this->warp_tile_iterator_E_.add_tile_offset(
+                   {0, -Base::kStages * Policy::kPartitionsK *
+                         Base::kWarpGemmIterations});
+#endif
             smem_read_stage_idx = 0;
           } else {
             ++smem_read_stage_idx;
@@ -647,10 +728,10 @@ public:
         // Do any conversions feeding the first stage at the end of the loop so
         // we can start right away on mma instructions
         if (warp_mma_k + 1 == Base::kWarpGemmIterations)
-          warp_mma.transform(warp_transformed_frag_A[(warp_mma_k + 1) % 2],
-                             warp_transformed_frag_B[(warp_mma_k + 1) % 2],
-                             warp_loaded_frag_A[(warp_mma_k + 1) % 2],
-                             warp_loaded_frag_B[(warp_mma_k + 1) % 2]);
+          warp_mma.transform(warp_transformed_frag_A[(warp_mma_k + 1) % Detail::kABufferSize],
+                             warp_transformed_frag_B[(warp_mma_k + 1) % Detail::kBBufferSize],
+                             warp_loaded_frag_A[(warp_mma_k + 1) % Detail::kABufferSize],
+                             warp_loaded_frag_B[(warp_mma_k + 1) % Detail::kBBufferSize]);
       }
 
     }

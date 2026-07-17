@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM B (activation tile) 
     matrix from memory.
@@ -57,7 +59,8 @@ namespace threadblock {
 template <
   typename Shape_,
   typename Element_,
-  typename ThreadMap_
+  typename ThreadMap_,
+  int AccessSize = ThreadMap_::kElementsPerAccess
 >
 class Conv3dWgradActivationTileAccessIteratorOptimized {
 public:
@@ -69,7 +72,7 @@ public:
   using Element = Element_;
   using Layout = layout::TensorNDHWC;
   using ThreadMap = ThreadMap_;
-  using AccessType = AlignedArray<Element, ThreadMap::kElementsPerAccess>;
+  using AccessType = AlignedArray<Element, AccessSize>;
   using TensorRef = cutlass::TensorRef<Element, Layout>;
   using TensorCoord = typename Layout::TensorCoord;
   using Index = typename Layout::Index;
@@ -81,6 +84,8 @@ public:
   
   static_assert(sizeof_bits<Element>::value >= 8,
     "WGRAD requires elements of size 8b or greater.");
+
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
 
   //
   // Parameters structure
@@ -150,16 +155,17 @@ private:
   Conv3dProblemSize const &problem_size_;
   LongIndex iteration_contiguous_;
   LongIndex iteration_strided_;
+  LongIndex iteration_vector_;
   char const *pointer_;
 
   // Precomputed effective filter postion (t,r,s) in contiguous dimension stays constant for each gemm_iteration_k
   // required for nzpq -> ndhw translation
-  int precomputed_filter_t_[ThreadMap::Iterations::kContiguous];
-  int precomputed_filter_r_[ThreadMap::Iterations::kContiguous];
-  int precomputed_filter_s_[ThreadMap::Iterations::kContiguous];
+  int precomputed_filter_t_[ThreadMap::Iterations::kContiguous][kAccessesPerVector];
+  int precomputed_filter_r_[ThreadMap::Iterations::kContiguous][kAccessesPerVector];
+  int precomputed_filter_s_[ThreadMap::Iterations::kContiguous][kAccessesPerVector];
 
   // Channel dimension in contiguous dimension stays constant for each gemm_iteration_k
-  int filter_c_[ThreadMap::Iterations::kContiguous];
+  int filter_c_[ThreadMap::Iterations::kContiguous][kAccessesPerVector];
 
   int offset_nzpq_[ThreadMap::Iterations::kStrided];
 
@@ -182,43 +188,45 @@ public:
     // initialize t,r,s,c filter position for every contiguous iteration
     CUTLASS_PRAGMA_UNROLL
     for(int c = 0; c < ThreadMap::Iterations::kContiguous; ++c) {
+      CUTLASS_PRAGMA_UNROLL
+      for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
 
-      int trsc_offset = threadblock_offset.column() + thread_coord.contiguous()
-                        + c * ThreadMap::Delta::kContiguous;
+        int trsc_offset = threadblock_offset.column() + thread_coord.contiguous()
+                          + c * ThreadMap::Delta::kContiguous + v_idx * AccessType::kElements;
 
-      // The subseqnet fast_divmod() operations are equivalent to the following logical computation:
-      //
-      // 
-      // filter_t_[c] = trsc_offset / (problem_size_.R * problem_size_.S * problem_size_.C);
-      // int residual = trsc_offset % (problem_size_.R * problem_size_.S * problem_size_.C);
-      //
-      // filter_r_[c] = residual / (problem_size_.S * problem_size_.C);
-      // residual = residual % (problem_size_.S * problem_size_.C);
-      //
-      // filter_s_[c] = residual / problem_size_.C;
-      // filter_c_[c] = residual % problem_size_.C;
+        // The subseqnet fast_divmod() operations are equivalent to the following logical computation:
+        //
+        // 
+        // filter_t_[c] = trsc_offset / (problem_size_.R * problem_size_.S * problem_size_.C);
+        // int residual = trsc_offset % (problem_size_.R * problem_size_.S * problem_size_.C);
+        //
+        // filter_r_[c] = residual / (problem_size_.S * problem_size_.C);
+        // residual = residual % (problem_size_.S * problem_size_.C);
+        //
+        // filter_s_[c] = residual / problem_size_.C;
+        // filter_c_[c] = residual % problem_size_.C;
 
-      int residual;
-      fast_divmod(precomputed_filter_t_[c], residual, trsc_offset, params_.RSC, params_.rsc_mul, params_.rsc_shr);
-      fast_divmod(precomputed_filter_r_[c], residual, residual, params_.SC, params_.sc_mul, params_.sc_shr);
-      fast_divmod(precomputed_filter_s_[c], filter_c_[c], residual, problem_size_.C, params_.c_mul, params_.c_shr);
+        int residual;
+        fast_divmod(precomputed_filter_t_[c][v_idx], residual, trsc_offset, params_.RSC, params_.rsc_mul, params_.rsc_shr);
+        fast_divmod(precomputed_filter_r_[c][v_idx], residual, residual, params_.SC, params_.sc_mul, params_.sc_shr);
+        fast_divmod(precomputed_filter_s_[c][v_idx], filter_c_[c][v_idx], residual, problem_size_.C, params_.c_mul, params_.c_shr);
 
-      int t = precomputed_filter_t_[c];
-      int r = precomputed_filter_r_[c];
-      int s = precomputed_filter_s_[c];
+        int t = precomputed_filter_t_[c][v_idx];
+        int r = precomputed_filter_r_[c][v_idx];
+        int s = precomputed_filter_s_[c][v_idx];
 
-      if (problem_size_.mode == Mode::kConvolution) {
-        t = (problem_size_.T - 1 - t);
-        r = (problem_size_.R - 1 - r);
-        s = (problem_size_.S - 1 - s);
+        if (problem_size_.mode == Mode::kConvolution) {
+          t = (problem_size_.T - 1 - t);
+          r = (problem_size_.R - 1 - r);
+          s = (problem_size_.S - 1 - s);
+        }
+        
+        // efective t,r,s for every contiguous dimension
+        precomputed_filter_t_[c][v_idx] = - problem_size_.pad_d + t * problem_size_.dilation_d;
+        precomputed_filter_r_[c][v_idx] = - problem_size_.pad_h + r * problem_size_.dilation_h;
+        precomputed_filter_s_[c][v_idx] = - problem_size_.pad_w + s * problem_size_.dilation_w;
+
       }
-      
-      // efective t,r,s for every contiguous dimension
-      precomputed_filter_t_[c] = - problem_size_.pad_d + t * problem_size_.dilation_d;
-      precomputed_filter_r_[c] = - problem_size_.pad_h + r * problem_size_.dilation_h;
-      precomputed_filter_s_[c] = - problem_size_.pad_w + s * problem_size_.dilation_w;
-
-
     }
 
     // initialize n, z, p, q offset for every strided iteration
@@ -228,13 +236,20 @@ public:
       offset_nzpq_[s] = threadblock_offset.row() + thread_coord.strided() 
                       + s * ThreadMap::Delta::kStrided;   
     }
+
+#if SAIL_TMP_WORKAROUND
+    set_iteration_index(0);
+#endif
   }
 
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
   void set_iteration_index(Index index) {
-    iteration_contiguous_ = index % ThreadMap::Iterations::kContiguous;
-    iteration_strided_ = index / ThreadMap::Iterations::kContiguous;
+    iteration_vector_ = index % kAccessesPerVector;
+    int residual_access = index / kAccessesPerVector;
+
+    iteration_contiguous_ = residual_access % ThreadMap::Iterations::kContiguous;
+    iteration_strided_ = residual_access / ThreadMap::Iterations::kContiguous;
   }
 
   /// Adds a pointer offset in units of Element
@@ -276,11 +291,11 @@ public:
     fast_divmod(z, residual, residual, params_.PQ, params_.pq_mul, params_.pq_shr);
     fast_divmod(p, q, residual, problem_size_.Q, params_.q_mul, params_.q_shr);
  
-    int d = z * problem_size_.stride_d + precomputed_filter_t_[iteration_contiguous_];
-    int h = p * problem_size_.stride_h + precomputed_filter_r_[iteration_contiguous_];;
-    int w = q * problem_size_.stride_w + precomputed_filter_s_[iteration_contiguous_];
+    int d = z * problem_size_.stride_d + precomputed_filter_t_[iteration_contiguous_][iteration_vector_];
+    int h = p * problem_size_.stride_h + precomputed_filter_r_[iteration_contiguous_][iteration_vector_];
+    int w = q * problem_size_.stride_w + precomputed_filter_s_[iteration_contiguous_][iteration_vector_];
 
-    return TensorCoord(n, d, h, w, filter_c_[iteration_contiguous_]);
+    return TensorCoord(n, d, h, w, filter_c_[iteration_contiguous_][iteration_vector_]);
   }
 
   /// Returns true if the current coordinate is within the activation tensor x
@@ -308,6 +323,13 @@ public:
   /// Increments to the next memory access
   CUTLASS_HOST_DEVICE
   Conv3dWgradActivationTileAccessIteratorOptimized &operator++() {
+    ++iteration_vector_;
+    if (iteration_vector_ < kAccessesPerVector) {
+      return *this;
+    }
+
+    iteration_vector_ = 0;
+
     ++iteration_contiguous_;
     if (iteration_contiguous_ < ThreadMap::Iterations::kContiguous) {
       return *this;
@@ -327,7 +349,7 @@ public:
   static Status can_implement(Conv3dProblemSize const &problem_size) {
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.K % (128/sizeof_bits<Element>::value)) {
+    if (problem_size.C % AccessSize) {
       return Status::kErrorInvalidProblem;
     }
 

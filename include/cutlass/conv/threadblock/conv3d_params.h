@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! 
   \file 
   \brief Extracts the host-params objects into non-template code.
@@ -237,6 +239,12 @@ struct Conv3dDgradOutputGradientIteratorOptimizedParams {
   int64_t inc_next[4];    // {next S, next R, next T, next K}
   int filter_k_delta;     // number of logical elements to add to filter_k_
 
+  int DHW;
+
+  int step_d = 1;
+  int step_h = 1;
+  int step_w = 1;
+
   FastDivmod dhw_divmod;
   FastDivmod hw_divmod;
   FastDivmod w_divmod;
@@ -259,8 +267,9 @@ struct Conv3dDgradOutputGradientIteratorOptimizedParams {
     layout::PitchLinearCoord threadmap_iterations,
     layout::PitchLinearCoord threadmap_delta
   ): 
-    layout(layout), 
-    dhw_divmod(problem_size.D * problem_size.H * problem_size.W),
+    layout(layout),
+    DHW(problem_size.D * problem_size.H * problem_size.W),
+    dhw_divmod(DHW),
     hw_divmod(problem_size.H * problem_size.W), 
     w_divmod(problem_size.W) {
 
@@ -269,30 +278,69 @@ struct Conv3dDgradOutputGradientIteratorOptimizedParams {
 
     int conv_sign = (problem_size.mode == Mode::kConvolution ? 1 : -1);
 
+    int fold_t = (problem_size.fold_num != 1) ? problem_size.fold_d : 1;
+    int fold_r = (problem_size.fold_num != 1) ? problem_size.fold_h : 1;
+    int fold_s = (problem_size.fold_num != 1) ? problem_size.fold_w : 1;
+
+    // original cutlass's optimize iterator only support stride=1, one dx's different s corresponds to dy with dilation_w distance
+    step_d = problem_size.dilation_d;
+    step_h = problem_size.dilation_h;
+    step_w = problem_size.dilation_w;
+    // when consider stride it's different, normal stride=2 support has consider this in iterator
+    if (problem_size.fold_num != 1) {
+      if (problem_size.stride_d >= problem_size.dilation_d && (problem_size.stride_d % problem_size.dilation_d) == 0) {
+        step_d = 1;
+      } else if (problem_size.stride_d < problem_size.dilation_d && (problem_size.dilation_d % problem_size.stride_d) == 0) {
+        step_d = problem_size.dilation_d / problem_size.stride_d;
+      }
+      
+      if (problem_size.stride_h >= problem_size.dilation_h && (problem_size.stride_h % problem_size.dilation_h) == 0) {
+        step_h = 1;
+      } else if (problem_size.stride_h < problem_size.dilation_h && (problem_size.dilation_h % problem_size.stride_h) == 0) {
+        step_h = problem_size.dilation_h / problem_size.stride_h;
+      }
+
+      if (problem_size.stride_w >= problem_size.dilation_w && (problem_size.stride_w % problem_size.dilation_w) == 0) {
+        step_w = 1;
+      } else if (problem_size.stride_w < problem_size.dilation_w && (problem_size.dilation_w % problem_size.stride_w) == 0) {
+        step_w = problem_size.dilation_w / problem_size.stride_w;
+      }
+    }
+
+    // to get hw position in current stride part, M is folded by stride not fold
+    if (problem_size.fold_num != 1) {
+      int folded_d = (problem_size.D + problem_size.stride_d - 1) / problem_size.stride_d;
+      int folded_h = (problem_size.H + problem_size.stride_h - 1) / problem_size.stride_h;
+      int folded_w = (problem_size.W + problem_size.stride_w - 1) / problem_size.stride_w;
+      dhw_divmod = FastDivmod(folded_d * folded_h * folded_w);
+      hw_divmod = FastDivmod(folded_h * folded_w);
+      w_divmod = FastDivmod(folded_w);
+    }
+
     // next S
     inc_next[0] = conv_sign * (
-      int64_t(layout.stride()[0]) * problem_size.dilation_w
+      int64_t(layout.stride()[0]) * step_w
     ) * element_size_bits / 8;
 
     // next R
     inc_next[1] = conv_sign * (
-        int64_t(layout.stride()[1]) * problem_size.dilation_h
-        - (problem_size.S - 1) * layout.stride()[0] * problem_size.dilation_w
+        int64_t(layout.stride()[1]) * step_h
+        - (problem_size.S - 1) / fold_s * layout.stride()[0] * step_w
       ) * element_size_bits / 8;
 
     // next T
     inc_next[2] = conv_sign * (
-      int64_t(layout.stride()[2]) * problem_size.dilation_d
-      - (problem_size.R - 1) * layout.stride()[1] * problem_size.dilation_h
-      - (problem_size.S - 1) * layout.stride()[0] * problem_size.dilation_w
+      int64_t(layout.stride()[2]) * step_d
+      - (problem_size.R - 1) / fold_r * layout.stride()[1] * step_h
+      - (problem_size.S - 1) / fold_s * layout.stride()[0] * step_w
       ) * element_size_bits / 8;
 
     // next K
     inc_next[3] = (
         threadblock_shape.column() * problem_size.split_k_slices
-        - conv_sign * int64_t(problem_size.T - 1) * layout.stride()[2] * problem_size.dilation_d
-        - conv_sign * int64_t(problem_size.R - 1) * layout.stride()[1] * problem_size.dilation_h
-        - conv_sign * int64_t(problem_size.S - 1) * layout.stride()[0] * problem_size.dilation_w
+        - conv_sign * int64_t(problem_size.T - 1) / fold_t * layout.stride()[2] * step_d
+        - conv_sign * int64_t(problem_size.R - 1) / fold_r * layout.stride()[1] * step_h
+        - conv_sign * int64_t(problem_size.S - 1) / fold_s * layout.stride()[0] * step_w
       ) * element_size_bits / 8;
 
     // logical offset added to internal channel counter - units are elements, not bytes
@@ -337,17 +385,21 @@ struct Conv3dDgradFilterIteratorOptimizedParams {
     TRACE_CONV_INITIALIZERS("conv3d_dgrad", "filter", 
       element_size_bits, threadblock_shape, thread_count, access_size, threadmap_iterations, threadmap_delta);
 
+    int fold_t = (problem_size.fold_num != 1) ? problem_size.fold_d : 1;
+    int fold_r = (problem_size.fold_num != 1) ? problem_size.fold_h : 1;
+    int fold_s = (problem_size.fold_num != 1) ? problem_size.fold_w : 1;
+
     inc_next_strided = (layout.stride()[3] * threadmap_delta.strided() * element_size_bits) / 8;
 
     inc_next_trs =
-      ( layout.stride()[0]
+      ( layout.stride()[0] * fold_t * fold_r * fold_s
         - (threadmap_iterations.strided() - 1) * threadmap_delta.strided() * layout.stride()[3]
       ) * element_size_bits / 8;
 
     inc_next_k =
       (
         threadblock_shape.row() * problem_size.split_k_slices * layout.stride()[3]
-        - (problem_size.T * problem_size.R * problem_size.S - 1) * layout.stride()[0]
+        - (problem_size.T / fold_t * problem_size.R / fold_r * problem_size.S / fold_s - 1) * layout.stride()[0] * fold_t * fold_r * fold_s
         - (threadmap_iterations.strided() - 1) * threadmap_delta.strided() * layout.stride()[3]
       ) * element_size_bits / 8;
 

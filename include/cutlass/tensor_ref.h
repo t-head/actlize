@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines a structure containing strides, bounds, and a pointer to tensor data.
 */
@@ -132,7 +134,7 @@ public:
 
     int ldm;                     // leading dimension
     layout::Matrix kind;         // Could be layout::Matrix::kRowMajor or layout::Matrix::kColumnMajor
-    
+
 
     TensorRef<int, layout::ContiguousMatrix> E(ptr_E, {ldm, kind});
 
@@ -209,7 +211,7 @@ class TensorRef {
     Layout const &layout = Layout()           ///< layout object containing stride and mapping function
   ):
     ptr_(ptr), layout_(layout) {
-  
+
   }
 
   /// Converting constructor from TensorRef to non-constant data.
@@ -300,6 +302,12 @@ class TensorRef {
   CUTLASS_HOST_DEVICE
   LongIndex offset(TensorCoord const& coord) const {
     return layout_(coord);
+  }
+
+  /// Computes the offset of an index from the origin of the tensor
+  CUTLASS_HOST_DEVICE
+  Index offset_s(TensorCoord const& coord) const {
+    return layout_.offset(coord);
   }
 
   /// Returns a reference to the element at a given Coord

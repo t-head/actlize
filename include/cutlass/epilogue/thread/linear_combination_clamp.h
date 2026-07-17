@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear scaling operations used by epilogues. Values are clamped before
          converting to the output element type.
@@ -71,6 +73,11 @@ public:
 
   static FloatRoundStyle const kRound = Round;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
+
   /// Host-constructable parameters structure
   struct Params {
 
@@ -109,8 +116,11 @@ public:
     Params(
       ElementCompute const *alpha_ptr,
       ElementCompute const *beta_ptr
+#if SAIL_TMP_WORKAROUND
+    ): alpha(alpha_ptr ? *alpha_ptr : 0), beta(beta_ptr ? *beta_ptr : 0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
+#else
     ): alpha(0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
-
+#endif
     }
 
     CUTLASS_HOST_DEVICE
@@ -135,9 +145,13 @@ public:
   /// Constructs the function object, possibly loading from pointers in host memory
   CUTLASS_HOST_DEVICE
   LinearCombinationClamp(Params const &params) {
-
+#if SAIL_TMP_WORKAROUND
+    alpha_ = params.alpha;
+    beta_ = params.beta;
+#else
     alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
     beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+#endif
   }
 
   /// Returns true if source is needed
@@ -149,6 +163,12 @@ public:
 
     return beta_ != ElementCompute(0);
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  bool is_invariant() const { return false; }
+#endif
 
   /// Functionally required for serial reduction in the epilogue
   CUTLASS_HOST_DEVICE
@@ -236,7 +256,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Conditional guards to enable partial specialization for packed integers
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 720) && ((__CUDACC_VER_MAJOR__ > 10) || ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && ((__HGGCCC_VER_MAJOR__ > 10) || ((__HGGCCC_VER_MAJOR__ >= 10) && (__HGGCCC_VER_MINOR__ >= 2)))
 
 /// Applies a linear combination operator to an array of elements then clamps the output before
 /// converting to the output element type.
@@ -276,6 +296,11 @@ public:
 
   static FloatRoundStyle const kRound = Round;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
+
   /// Host-constructable parameters structure
   struct Params {
 
@@ -314,8 +339,11 @@ public:
     Params(
       ElementCompute const *alpha_ptr,
       ElementCompute const *beta_ptr
+#if SAIL_TMP_WORKAROUND
+    ): alpha(alpha_ptr ? *alpha_ptr : 0), beta(beta_ptr ? *beta_ptr : 0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
+#else
     ): alpha(0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
-
+#endif
     }
 
     CUTLASS_HOST_DEVICE
@@ -340,9 +368,13 @@ public:
   /// Constructs the function object, possibly loading from pointers in host memory
   CUTLASS_HOST_DEVICE
   LinearCombinationClamp(Params const &params) {
-
+#if SAIL_TMP_WORKAROUND
+    alpha_ = params.alpha;
+    beta_ = params.beta;
+#else
     alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
     beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+#endif
   }
 
   /// Returns true if source is needed
@@ -354,6 +386,12 @@ public:
 
     return beta_ != ElementCompute(0);
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  bool is_invariant() const { return false; }
+#endif
 
   /// Functionally required for serial reduction in the epilogue
   CUTLASS_HOST_DEVICE
@@ -481,6 +519,11 @@ class FastLinearCombinationClamp {
 
   static FloatRoundStyle const kRound = Round;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
+
   /// Host-constructable parameters structure
   struct Params {
     /// scales accumulators
@@ -513,7 +556,11 @@ class FastLinearCombinationClamp {
 
     CUTLASS_HOST_DEVICE
     Params(ElementCompute const *alpha_ptr, ElementCompute const *beta_ptr)
+#if SAIL_TMP_WORKAROUND
+        : alpha(alpha_ptr ? *alpha_ptr : 0), beta(beta_ptr ? *beta_ptr : 0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {}
+#else
         : alpha(0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {}
+#endif
 
     CUTLASS_HOST_DEVICE
     Params(ElementCompute const *alpha_ptr)
@@ -533,8 +580,13 @@ class FastLinearCombinationClamp {
   /// memory
   CUTLASS_HOST_DEVICE
   FastLinearCombinationClamp(Params const &params) {
+#if SAIL_TMP_WORKAROUND
+    alpha_ = params.alpha;
+    beta_ = params.beta;
+#else
     alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
     beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+#endif
   }
 
   /// Returns true if source is needed
@@ -546,6 +598,12 @@ class FastLinearCombinationClamp {
 
     return beta_ != ElementCompute(0);
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  bool is_invariant() const { return false; }
+#endif
 
   /// Functionally required for serial reduction in the epilogue
   CUTLASS_HOST_DEVICE

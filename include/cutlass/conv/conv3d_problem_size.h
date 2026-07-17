@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief This file contains definitions and utility functions for describing convolution problem sizes.
 
@@ -68,6 +70,7 @@ struct Conv3dProblemSize : public Conv2dProblemSize {
   int stride_d;   // stride in depth dimension
   int dilation_d; // dilation in depth dimension
 
+  int fold_d;
   //
   // Methods
   //
@@ -127,16 +130,20 @@ public:
     int dilation_w,
     Mode mode,
     int split_k_slices = 1,
-    int groups = 1
+    int groups = 1,
+    int fold_num = 1,
+    int fold_d = 1,
+    int fold_h = 1,
+    int fold_w = 1
   ): 
     D(D), T(T), Z(Z), 
-    pad_d(pad_d), stride_d(stride_d), dilation_d(dilation_d),
+    pad_d(pad_d), stride_d(stride_d), dilation_d(dilation_d), fold_d(fold_d),
     Conv2dProblemSize(
       N, H, W, C, K, R, S, P, Q, 
       pad_h, pad_w, 
       stride_h, stride_w, 
       dilation_h, dilation_w,
-      mode, split_k_slices, groups) { }
+      mode, split_k_slices, groups, fold_num, fold_h, fold_w) { }
 
   /// Constructs convolution problem size from cutlass Tensor5DCoord and Coord3D 
   // set *user-defined* output size and sets Z, P, and Q (include all data members in ctor)
@@ -150,10 +157,14 @@ public:
     cutlass::Tensor5DCoord output_size,   // NZPQK
     cutlass::conv::Mode mode = cutlass::conv::Mode::kCrossCorrelation,
     int split_k_slices = 1,
-    int groups = 1
+    int groups = 1,
+    int fold_num = 1,
+    int fold_d = 1,
+    int fold_h = 1,
+    int fold_w = 1
   ):
     D(input_size.d()), T(filter_size.d()), Z(output_size.d()),
-    pad_d(padding[0]), stride_d(stride[0]), dilation_d(dilation[0]),
+    pad_d(padding[0]), stride_d(stride[0]), dilation_d(dilation[0]), fold_d(fold_d),
     Conv2dProblemSize(
       {input_size.n(), input_size.h(), input_size.w(), input_size.c()},
       {filter_size.n(), filter_size.h(), filter_size.w(), filter_size.c()},
@@ -161,7 +172,7 @@ public:
       {stride[1], stride[2]},
       {dilation[1], dilation[2]},
       {output_size.n(), output_size.h(), output_size.w(), output_size.c()},
-      mode, split_k_slices, groups
+      mode, split_k_slices, groups, fold_num, fold_h, fold_w
     ) { }
 
   /// Constructs convolution problem size from cutlass Tensor5DCoord and Coord3D 
@@ -175,17 +186,21 @@ public:
     Coord3D dilation,                     // dilation_d, dilation_h, dilation_w
     cutlass::conv::Mode mode = cutlass::conv::Mode::kCrossCorrelation,
     int split_k_slices = 1,
-    int groups = 1
+    int groups = 1,
+    int fold_num = 1,
+    int fold_d = 1,
+    int fold_h = 1,
+    int fold_w = 1
   ):
     D(input_size.d()), T(filter_size.d()),
-    pad_d(padding[0]), stride_d(stride[0]), dilation_d(dilation[0]),
+    pad_d(padding[0]), stride_d(stride[0]), dilation_d(dilation[0]), fold_d(fold_d),
     Conv2dProblemSize(
       {input_size.n(), input_size.h(), input_size.w(), input_size.c()},
       {filter_size.n(), filter_size.h(), filter_size.w(), filter_size.c()},
       {padding[1], padding[1], padding[2], padding[2]},
       {stride[1], stride[2]},
       {dilation[1], dilation[2]},
-      mode, split_k_slices, groups
+      mode, split_k_slices, groups, fold_num, fold_h, fold_w
     ) { 
       // set output Z
       Z = ((D + pad_d * 2 - T * dilation_d) / stride_d) + 1;      
@@ -301,6 +316,10 @@ CUTLASS_HOST_DEVICE
 cutlass::gemm::GemmCoord implicit_gemm_problem_size(
   Operator conv_operator, 
   Conv3dProblemSize const &problem_size) {
+  int fold_t = problem_size.fold_d;
+  int fold_r = problem_size.fold_h;
+  int fold_s = problem_size.fold_w;
+    
   // Compute problem size
   switch (conv_operator) {
   case Operator::kFprop:
@@ -310,11 +329,22 @@ cutlass::gemm::GemmCoord implicit_gemm_problem_size(
       problem_size.T * problem_size.R * problem_size.S * problem_size.C
     );
   case Operator::kDgrad:
-    return gemm::GemmCoord(
-      problem_size.N * problem_size.D * problem_size.H * problem_size.W,
-      problem_size.C,
-      problem_size.T * problem_size.R * problem_size.S * problem_size.K
-    );
+    if (problem_size.fold_num != 1) {
+      int folded_d = (problem_size.D + problem_size.stride_d - 1) / problem_size.stride_d;
+      int folded_h = (problem_size.H + problem_size.stride_h - 1) / problem_size.stride_h;
+      int folded_w = (problem_size.W + problem_size.stride_w - 1) / problem_size.stride_w;
+      return gemm::GemmCoord(
+        problem_size.N * folded_d * folded_h * folded_w,
+        problem_size.C * fold_t * fold_r * fold_s,
+        problem_size.T * problem_size.R * problem_size.S * problem_size.K / fold_t / fold_r / fold_s
+      );
+    } else {
+      return gemm::GemmCoord(
+        problem_size.N * problem_size.D * problem_size.H * problem_size.W,
+        problem_size.C,
+        problem_size.T * problem_size.R * problem_size.S * problem_size.K
+      );
+    }
   case Operator::kWgrad:
     return gemm::GemmCoord(
       problem_size.K,
@@ -325,6 +355,41 @@ cutlass::gemm::GemmCoord implicit_gemm_problem_size(
     break;
   }
   return gemm::GemmCoord();
+}
+
+CUTLASS_HOST_DEVICE
+cutlass::Coord<3> implicit_gemm_problem_transpose_size(
+  Operator conv_operator, 
+  Conv3dProblemSize const &problem_size) {
+  switch (conv_operator) {
+  case Operator::kFprop:
+    return Coord<3>(
+      {
+        problem_size.N,
+        problem_size.Z * problem_size.P * problem_size.Q,
+        problem_size.K
+      }
+    );
+  case Operator::kDgrad:
+    return Coord<3>(
+      {
+        problem_size.N,
+        problem_size.D * problem_size.H * problem_size.W,
+        problem_size.C
+      }
+    );
+  case Operator::kWgrad:
+    return Coord<3>(
+      {
+        problem_size.K,
+        problem_size.T * problem_size.R * problem_size.S,
+        problem_size.C
+      }
+    );
+  default:
+    break;
+  }
+  return Coord<3>();
 }
 
 // Determine the number of gemm_k iterations for conv2d problem using implicit gemm algorithm
@@ -344,8 +409,14 @@ int implicit_gemm_k_iterations(
       break;
   
     case Operator::kDgrad:
-      elements_per_split_k_slice =  (problem_size.K + problem_size.split_k_slices - 1) / problem_size.split_k_slices;
-      iterations = problem_size.T * problem_size.R * problem_size.S * ((elements_per_split_k_slice + threadblock_K - 1) / threadblock_K);
+      if (problem_size.fold_num != 1) {
+        assert(problem_size.split_k_slices == 1);
+        elements_per_split_k_slice = (problem_size.K + problem_size.split_k_slices - 1) / problem_size.split_k_slices;
+        iterations = problem_size.T / problem_size.fold_d * problem_size.R / problem_size.fold_h * problem_size.S / problem_size.fold_w * ((elements_per_split_k_slice + threadblock_K - 1) / threadblock_K);
+      } else {
+        elements_per_split_k_slice =  (problem_size.K + problem_size.split_k_slices - 1) / problem_size.split_k_slices;
+        iterations = problem_size.T * problem_size.R * problem_size.S * ((elements_per_split_k_slice + threadblock_K - 1) / threadblock_K);
+      }
       break;
   
     case Operator::kWgrad:

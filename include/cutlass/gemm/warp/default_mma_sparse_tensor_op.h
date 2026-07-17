@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Default warp-level GEMM operators selected by data type, size, and layouts of operands.
 */
@@ -60,7 +62,14 @@ template <
     int PartitionsK = 1,
     /// Store the accumulators in row major or column major.  Row major is used
     /// when output layout is interleaved.
-    bool AccumulatorsInRowMajor = false
+    bool AccumulatorsInRowMajor = false,
+    // cube_ndhw size
+    int CubeA = 1,
+    int CubeB = 1
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    , Operand CompressOp_ = Operand::kA
+#endif
 >
 struct DefaultSparseMmaTensorOp;
 
@@ -82,15 +91,26 @@ template <
     int PartitionsK,
     /// Store the accumulators in row major or column major.  Row major is used
     /// when output layout is interleaved.
-    bool AccumulatorsInRowMajor>
+    bool AccumulatorsInRowMajor,
+    // cube_ndhw size
+    int CubeA,
+    int CubeB
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    , Operand CompressOp_
+#endif
+    >
 struct DefaultSparseMmaTensorOp<
   WarpShape_, 
   InstructionShape_, 
   float, LayoutA, 
   float, LayoutB, 
-  float, LayoutC, 
+  float, LayoutC,
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+  arch::OpMultiplyAdd, PartitionsK, AccumulatorsInRowMajor, CubeA, CubeB, CompressOp_> {
+#else
   arch::OpMultiplyAdd, PartitionsK, AccumulatorsInRowMajor> {
-
+#endif
   // Uses TF32 internally
   using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<
       cutlass::arch::SparseMma<
@@ -106,7 +126,7 @@ struct DefaultSparseMmaTensorOp<
   // Define the warp-level tensor op
   using Type = cutlass::gemm::warp::SparseMmaTensorOp<
       WarpShape_, float, LayoutA, float, LayoutB, float, LayoutC,
-      Policy, PartitionsK, AccumulatorsInRowMajor>;
+      Policy, PartitionsK, AccumulatorsInRowMajor, bool, CubeA, CubeB>;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,7 +155,15 @@ template <
     int PartitionsK,
     /// Store the accumulators in row major or column major.  Row major is used
     /// when output layout is interleaved.
-    bool AccumulatorsInRowMajor>
+    bool AccumulatorsInRowMajor,
+    // cube_ndhw size
+    int CubeA,
+    int CubeB
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    , Operand CompressOp_
+#endif
+    >
 struct DefaultSparseMmaTensorOp {
   using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<
       cutlass::arch::SparseMma<InstructionShape_, 32, ElementA,
@@ -144,10 +172,17 @@ struct DefaultSparseMmaTensorOp {
                                cutlass::layout::RowMajor, Operator_>,
       cutlass::MatrixShape<1, 1> >;
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
   // Define the warp-level tensor op
   using Type = cutlass::gemm::warp::SparseMmaTensorOp<
       WarpShape_, ElementA, LayoutA, ElementB, LayoutB, ElementC, LayoutC,
-      Policy, PartitionsK, AccumulatorsInRowMajor>;
+      Policy, PartitionsK, AccumulatorsInRowMajor, bool, CubeA, CubeB, CompressOp_>;
+#else
+  // Define the warp-level tensor op
+  using Type = cutlass::gemm::warp::SparseMmaTensorOp<
+      WarpShape_, ElementA, LayoutA, ElementB, LayoutB, ElementC, LayoutC,
+      Policy, PartitionsK, AccumulatorsInRowMajor, bool, CubeA, CubeB>;
+#endif
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

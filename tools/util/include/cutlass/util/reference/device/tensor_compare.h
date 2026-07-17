@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /* \file
   \brief Defines host-side elementwise operations on TensorView.
 */
@@ -108,28 +110,28 @@ bool BlockCompareEqual(
   int equal_flag = 1;
   int *device_equal_flag = nullptr;
 
-  if (cudaMalloc((void **)&device_equal_flag, sizeof(int)) != cudaSuccess) {
+  if (hggcMalloc((void **)&device_equal_flag, sizeof(int)) != hggcSuccess) {
     throw std::runtime_error("Failed to allocate device flag.");
   }
 
-  if (cudaMemcpy(
+  if (hggcMemcpy(
     device_equal_flag, 
     &equal_flag, 
     sizeof(int), 
-    cudaMemcpyHostToDevice) != cudaSuccess) {
+    hggcMemcpyHostToDevice) != hggcSuccess) {
 
     throw std::runtime_error("Failed to copy equality flag to device.");
   }
 
   if (!grid_size || !block_size) {
 
-    // if grid_size or block_size are zero, query occupancy using the CUDA Occupancy API
-    cudaError_t result = cudaOccupancyMaxPotentialBlockSize(
+    // if grid_size or block_size are zero, query occupancy using the device Occupancy API
+    hggcError_t result = hggcOccupancyMaxPotentialBlockSize(
       &grid_size,
       &block_size,
       reinterpret_cast<void const *>(kernel::BlockCompareEqual<Element>));
 
-    if (result != cudaSuccess) {
+    if (result != hggcSuccess) {
       throw std::runtime_error("Failed to query occupancy.");
     }
 
@@ -143,18 +145,18 @@ bool BlockCompareEqual(
 
   kernel::BlockCompareEqual<Element><<< grid, block >>>(device_equal_flag, ptr_A, ptr_B, capacity);
 
-  if (cudaMemcpy(
+  if (hggcMemcpy(
     &equal_flag, 
     device_equal_flag,
     sizeof(int), 
-    cudaMemcpyDeviceToHost) != cudaSuccess) {
+    hggcMemcpyDeviceToHost) != hggcSuccess) {
     
-    cudaFree(device_equal_flag);
+    hggcFree(device_equal_flag);
 
     throw std::runtime_error("Failed to copy equality flag from device.");
   }
 
-  cudaFree(device_equal_flag);
+  hggcFree(device_equal_flag);
 
   return equal_flag;
 }
@@ -175,28 +177,28 @@ bool BlockCompareRelativelyEqual(
   int equal_flag = 1;
   int *device_equal_flag = nullptr;
 
-  if (cudaMalloc((void **)&device_equal_flag, sizeof(int)) != cudaSuccess) {
+  if (hggcMalloc((void **)&device_equal_flag, sizeof(int)) != hggcSuccess) {
     throw std::runtime_error("Failed to allocate device flag.");
   }
 
-  if (cudaMemcpy(
+  if (hggcMemcpy(
     device_equal_flag, 
     &equal_flag, 
     sizeof(int), 
-    cudaMemcpyHostToDevice) != cudaSuccess) {
+    hggcMemcpyHostToDevice) != hggcSuccess) {
 
     throw std::runtime_error("Failed to copy equality flag to device.");
   }
 
   if (!grid_size || !block_size) {
 
-    // if grid_size or block_size are zero, query occupancy using the CUDA Occupancy API
-    cudaError_t result = cudaOccupancyMaxPotentialBlockSize(
+    // if grid_size or block_size are zero, query occupancy using the device Occupancy API
+    hggcError_t result = hggcOccupancyMaxPotentialBlockSize(
       &grid_size,
       &block_size,
       reinterpret_cast<void const *>(kernel::BlockCompareRelativelyEqual<Element>));
 
-    if (result != cudaSuccess) {
+    if (result != hggcSuccess) {
       throw std::runtime_error("Failed to query occupancy.");
     }
 
@@ -217,18 +219,18 @@ bool BlockCompareRelativelyEqual(
     nonzero_floor
   );
 
-  if (cudaMemcpy(
+  if (hggcMemcpy(
     &equal_flag, 
     device_equal_flag,
     sizeof(int), 
-    cudaMemcpyDeviceToHost) != cudaSuccess) {
+    hggcMemcpyDeviceToHost) != hggcSuccess) {
     
-    cudaFree(device_equal_flag);
+    hggcFree(device_equal_flag);
 
     throw std::runtime_error("Failed to copy equality flag from device.");
   }
 
-  cudaFree(device_equal_flag);
+  hggcFree(device_equal_flag);
 
   return equal_flag;
 }

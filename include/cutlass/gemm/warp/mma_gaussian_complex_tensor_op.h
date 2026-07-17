@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,9 +23,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations targeting
-      Tensor Cores.
+      Tensor Cells.
 */
 
 #pragma once
@@ -36,9 +38,9 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h"
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -47,7 +49,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_gaussian_complex_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_gaussian_complex_tensor_op_tile_iterator_ppu.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -229,7 +231,7 @@ public:
   /// Storage for C tile, the accumulator. Note, regardless of multiplicand type, this
   /// storage arrangement is to be considered 'gaussian complex' in the sense that the accumulation is
   /// done in three parts namely part1, part2, and part3. The parts 1, 2, and 3 are stored consecutively 
-  /// in InteratorC::Frament. This matches the structure of Tensor Cores which are always real-valued matrix multiplies.
+  /// in InteratorC::Frament. This matches the structure of Tensor Cells which are always real-valued matrix multiplies.
   using FragmentC = typename IteratorC::Fragment;
 
   static_assert(

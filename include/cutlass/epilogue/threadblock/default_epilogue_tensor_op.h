@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -56,6 +58,10 @@
 #include "cutlass/epilogue/warp/tile_iterator_tensor_op_mixed.h"
 #include "cutlass/epilogue/threadblock/default_thread_map_tensor_op.h"
 #include "cutlass/epilogue/threadblock/predicated_tile_iterator.h"
+#include "cutlass/epilogue/threadblock/prefetch_tile_iterator.h"
+#if SAIL_DGRAD_STRIDE_OPT
+#include "cutlass/epilogue/threadblock/predicated_tile_iterator_strided.h"
+#endif
 #include "cutlass/epilogue/threadblock/shared_load_iterator.h"
 #include "cutlass/epilogue/threadblock/shared_load_iterator_mixed.h"
 
@@ -79,16 +85,31 @@ template <
   typename ThreadblockShape,
   typename WarpShape,
   typename InstructionShape,
-  typename ThreadMap
+  typename ThreadMap,
+  bool Transpose = false,
+  // conv transfer to output before store to smem, acc type is output type
+  // use this to transfer actual acc type
+  typename MmaElementOutput = ElementAccumulator
 >
 struct DefaultIteratorsTensorOp {
-  
-  using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOp<
-    WarpShape,
-    InstructionShape,
-    ElementAccumulator,
-    layout::RowMajor
-  >;
+
+  using WarpTileIterator = typename platform::conditional<
+    // transpose's fragment size is different, should add another TileIteratorTensorOpFP16Acc
+    sizeof(MmaElementOutput) == 2 && Transpose == false,
+    // FP16's acc is different to FP32, each lane store two successive elems
+    cutlass::epilogue::warp::TileIteratorTensorOpFP16Acc<
+      WarpShape,
+      InstructionShape,
+      ElementAccumulator
+    >,
+    cutlass::epilogue::warp::TileIteratorTensorOp<
+      WarpShape,
+      InstructionShape,
+      ElementAccumulator,
+      layout::RowMajor,
+      Transpose
+    >
+  >::type;
 
   using SharedLoadIterator = cutlass::epilogue::threadblock::SharedLoadIterator<
     ThreadMap,
@@ -103,15 +124,17 @@ template <
   typename ThreadblockShape,
   typename WarpShape,
   typename InstructionShape,
-  typename ThreadMap
+  typename ThreadMap,
+  bool Transpose
 >
-struct DefaultIteratorsTensorOp<float, float, 4, ThreadblockShape, WarpShape, InstructionShape, ThreadMap> {
-  
+struct DefaultIteratorsTensorOp<float, float, 4, ThreadblockShape, WarpShape, InstructionShape, ThreadMap, Transpose> {
+
   using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOp<
     WarpShape,
     InstructionShape,
     float,
-    layout::RowMajor
+    layout::RowMajor,
+    Transpose
   >;
 
   using SharedLoadIterator = cutlass::epilogue::threadblock::SharedLoadIterator<
@@ -130,14 +153,52 @@ template <
   typename ThreadMap
 >
 struct DefaultIteratorsTensorOp<
-  half_t, 
-  float, 
-  8, 
-  ThreadblockShape, 
-  WarpShape, 
-  InstructionShape, 
+  half_t,
+  float,
+  8,
+  ThreadblockShape,
+  WarpShape,
+  InstructionShape,
   ThreadMap> {
-  
+
+  using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOpMixed<
+    WarpShape,
+    InstructionShape,
+    float,
+    32,
+    16,
+    8,
+    8
+  >;
+
+  using SharedLoadIterator = cutlass::epilogue::threadblock::SharedLoadIteratorMixed<
+    ThreadMap,
+    float,
+    32,
+    16,
+    8,
+    8
+  >;
+
+  static int const kFragmentsPerIteration = 2;
+};
+
+/// Partial specialization for bf16 <= float x 8 epilogues avoids shared memory bank conflicts.
+template <
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename ThreadMap
+>
+struct DefaultIteratorsTensorOp<
+  bfloat16_t,
+  float,
+  8,
+  ThreadblockShape,
+  WarpShape,
+  InstructionShape,
+  ThreadMap> {
+
   using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOpMixed<
     WarpShape,
     InstructionShape,
@@ -167,14 +228,14 @@ template <
   typename ThreadMap
 >
 struct DefaultIteratorsTensorOp<
-  int8_t, 
-  int32_t, 
-  16, 
-  gemm::GemmShape<128, 128, K>, 
-  gemm::GemmShape<64, 64, K>, 
-  InstructionShape, 
+  int8_t,
+  int32_t,
+  16,
+  gemm::GemmShape<128, 128, K>,
+  gemm::GemmShape<64, 64, K>,
+  InstructionShape,
   ThreadMap> {
-  
+
   using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOpMixed<
     gemm::GemmShape<64, 64, K>,
     InstructionShape,
@@ -204,14 +265,14 @@ template <
   typename ThreadMap
 >
 struct DefaultIteratorsTensorOp<
-  int8_t, 
-  int32_t, 
-  8, 
-  gemm::GemmShape<128, 64, K>, 
-  gemm::GemmShape<64, 32, K>, 
-  InstructionShape, 
+  int8_t,
+  int32_t,
+  8,
+  gemm::GemmShape<128, 64, K>,
+  gemm::GemmShape<64, 32, K>,
+  InstructionShape,
   ThreadMap> {
-  
+
   using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOpMixed<
     gemm::GemmShape<64, 32, K>,
     InstructionShape,
@@ -241,14 +302,14 @@ template <
   typename ThreadMap
 >
 struct DefaultIteratorsTensorOp<
-  int8_t, 
-  int32_t, 
-  8, 
-  gemm::GemmShape<64, 64, K>, 
-  gemm::GemmShape<32, 32, K>, 
-  InstructionShape, 
+  int8_t,
+  int32_t,
+  8,
+  gemm::GemmShape<64, 64, K>,
+  gemm::GemmShape<32, 32, K>,
+  InstructionShape,
   ThreadMap> {
-  
+
   using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOpMixed<
     gemm::GemmShape<32, 32, K>,
     InstructionShape,
@@ -281,7 +342,15 @@ template <
   typename WarpMmaTensorOp_,
   int PartitionsK,
   typename OutputOp_,
-  int ElementsPerAccess
+  int ElementsPerAccess,
+#if SAIL_DGRAD_STRIDE_OPT
+// for conv dgrad with stride!=1
+  int Strided_ = 0,
+#endif
+  // whether to do transpose in epilogue
+  bool Transpose = false,
+  // wgrad group conv output multiple groups combined flag
+  bool MultGroup = false
 >
 struct DefaultEpilogueTensorOp {
 
@@ -293,7 +362,11 @@ struct DefaultEpilogueTensorOp {
 
   using ElementOutput = typename OutputOp::ElementOutput;
   using LayoutC = typename WarpMmaTensorOp::LayoutC;
+#if SAIL_EPILOGUE_OPT >= 2
+  using ElementAccumulator = typename OutputOp::ElementAccumulator;
+#else
   using ElementAccumulator = typename WarpMmaTensorOp::ElementC;
+#endif
 
   //
   // Thread map
@@ -304,15 +377,32 @@ struct DefaultEpilogueTensorOp {
     typename WarpMmaTensorOp::Shape,
     kPartitionsK,
     ElementOutput,
-    kElementsPerAccess
+    kElementsPerAccess,
+    Transpose
   >::Type;
 
+#if SAIL_DGRAD_STRIDE_OPT
+  using OutputTileIterator = typename platform::conditional<
+                              Strided_ == 1,
+                              cutlass::epilogue::threadblock::PredicatedTileIteratorStrided<
+                                OutputTileThreadMap,
+                                ElementOutput
+                              >,
+                              cutlass::epilogue::threadblock::PredicatedTileIterator<
+                                OutputTileThreadMap,
+                                ElementOutput,
+                                Transpose,
+                                MultGroup
+                              >
+                            >::type;
+#else
   using OutputTileIterator = cutlass::epilogue::threadblock::PredicatedTileIterator<
     OutputTileThreadMap,
     ElementOutput
   >;
+#endif
 
-  using AccumulatorFragmentIterator = typename std::conditional<is_complex<ElementOutput>::value,
+  using AccumulatorFragmentIterator = typename platform::conditional<is_complex<ElementOutput>::value,
                                     cutlass::epilogue::warp::FragmentIteratorComplexTensorOp<
                                         typename WarpMmaTensorOp::Shape,
                                         typename WarpMmaTensorOp::Policy::Operator::Shape,
@@ -324,24 +414,63 @@ struct DefaultEpilogueTensorOp {
                                         typename WarpMmaTensorOp::Policy::Operator::Shape,
                                         typename WarpMmaTensorOp::Policy::Operator::ElementC,
                                         typename WarpMmaTensorOp::Policy::Operator::FragmentC,
-                                        LayoutC> >::type;
+                                        LayoutC,
+                                        Transpose
+#if SAIL_EPILOGUE_OPT >= 2
+                                        , ElementAccumulator
+#endif
+                                        > >::type;
 
   /// Support several implementations depending on structure of epilogue
   using DefaultIterators = detail::DefaultIteratorsTensorOp<
     ElementOutput,
+// #if SAIL_EPILOGUE_OPT >= 2
+//     // already converted
+//     ElementOutput,
+// #else
     ElementAccumulator,
+// #endif
     kElementsPerAccess,
     Shape,
     typename WarpMmaTensorOp::Shape,
     typename WarpMmaTensorOp::Policy::Operator::Shape,
-    typename OutputTileThreadMap::CompactedThreadMap
+    typename OutputTileThreadMap::CompactedThreadMap,
+    Transpose,
+    // conv transfer to output before store to smem, ElementAccumulator is output type
+    // use this to transfer actual acc type to choose fp16 tsm iter when acc is fp16
+    typename WarpMmaTensorOp::Policy::Operator::ElementC
   >;
 
   using WarpTileIterator = typename DefaultIterators::WarpTileIterator;
   using SharedLoadIterator = typename DefaultIterators::SharedLoadIterator;
 
-  /// Hard-coded padding elements added 
-  using Padding = cutlass::MatrixShape<0, 64 / sizeof_bits<ElementAccumulator>::value * 4>;
+  /// Hard-coded padding elements added
+#if ACOMPUTE_VERSION == 10000
+  // always padding 4 for col major
+  using Padding = typename platform::conditional<
+                    Transpose == true,
+                    // 0/4/8/12/16/20/24/48 store 8 elements, 1/5/9/13/17/21/25/29 should interleave 8 elements
+                    cutlass::MatrixShape<0, 8>,
+                    // ppu four thread store four elements once
+                    // ppu's tsm_load_B32x4 needn't tsm address aligned?
+                    cutlass::MatrixShape<0, 4>
+                  >::type;
+#else
+  // always padding 4 for col major
+  using Padding = typename platform::conditional<
+                    Transpose == true,
+                    typename platform::conditional<
+                      sizeof_bits<ElementAccumulator>::value == 16,
+                      // fp16 can't padding 8, otherwise start add of second row will be misaligned
+                      // still have no bank conflict, since each lane only write 16b, 32 lane will only use 16 bank each loop
+                      cutlass::MatrixShape<0, 8>,
+                      // each lane store successive two rows, t0 and t1 only interleave 8/2=4 elements
+                      cutlass::MatrixShape<0, 4>
+                      >::type,
+                    // each lane store 2 elements once, 4 lane store 8 elements
+                    cutlass::MatrixShape<0, 8>
+                  >::type;
+#endif
 
   static int const kFragmentsPerIteration = (kPartitionsK == 1 ? DefaultIterators::kFragmentsPerIteration : 1);
 
@@ -358,7 +487,171 @@ struct DefaultEpilogueTensorOp {
     SharedLoadIterator,
     OutputOp,
     Padding,
-    kFragmentsPerIteration
+    kFragmentsPerIteration,
+    Transpose
+  >;
+};
+
+// Add arch for acompute 1.0/1.5 build, host no ACOMPUTE_VERSION
+template <
+  typename Shape_,
+  typename WarpMmaTensorOp_,
+  int PartitionsK,
+  typename OutputOp_,
+  int ElementsPerAccess,
+  typename ArchTag,
+#if SAIL_DGRAD_STRIDE_OPT
+// for conv dgrad with stride!=1
+  int Strided_ = 0,
+#endif
+  // whether to do transpose in epilogue
+  bool Transpose = false,
+  // wgrad group conv output multiple groups combined flag
+  bool MultGroup = false
+>
+struct DefaultEpilogueTensorOpArch {
+
+  using Shape = Shape_;
+  using WarpMmaTensorOp = WarpMmaTensorOp_;
+  static int const kPartitionsK = PartitionsK;
+  using OutputOp = OutputOp_;
+  static int const kElementsPerAccess = ElementsPerAccess;
+
+  using ElementOutput = typename OutputOp::ElementOutput;
+  using LayoutC = typename WarpMmaTensorOp::LayoutC;
+#if SAIL_EPILOGUE_OPT >= 2
+  using ElementAccumulator = typename OutputOp::ElementAccumulator;
+#else
+  using ElementAccumulator = typename WarpMmaTensorOp::ElementC;
+#endif
+
+  //
+  // Thread map
+  //
+
+  using OutputTileThreadMap = typename cutlass::epilogue::threadblock::DefaultThreadMapTensorOp<
+    Shape,
+    typename WarpMmaTensorOp::Shape,
+    kPartitionsK,
+    ElementOutput,
+    kElementsPerAccess,
+    Transpose
+  >::Type;
+
+#if SAIL_DGRAD_STRIDE_OPT
+  using OutputTileIterator = typename platform::conditional<
+                              Strided_ == 1,
+                              cutlass::epilogue::threadblock::PredicatedTileIteratorStrided<
+                                OutputTileThreadMap,
+                                ElementOutput
+                              >,
+                              cutlass::epilogue::threadblock::PredicatedTileIterator<
+                                OutputTileThreadMap,
+                                ElementOutput,
+                                Transpose,
+                                MultGroup
+                              >
+                            >::type;
+#else
+  using OutputTileIterator = cutlass::epilogue::threadblock::PredicatedTileIterator<
+    OutputTileThreadMap,
+    ElementOutput
+  >;
+#endif
+
+  using AccumulatorFragmentIterator = typename platform::conditional<is_complex<ElementOutput>::value,
+                                    cutlass::epilogue::warp::FragmentIteratorComplexTensorOp<
+                                        typename WarpMmaTensorOp::Shape,
+                                        typename WarpMmaTensorOp::Policy::Operator::Shape,
+                                        typename WarpMmaTensorOp::Policy::Operator::ElementC,
+                                        typename WarpMmaTensorOp::Policy::Operator::FragmentC,
+                                        LayoutC>,
+                                    cutlass::epilogue::warp::FragmentIteratorTensorOp<
+                                        typename WarpMmaTensorOp::Shape,
+                                        typename WarpMmaTensorOp::Policy::Operator::Shape,
+                                        typename WarpMmaTensorOp::Policy::Operator::ElementC,
+                                        typename WarpMmaTensorOp::Policy::Operator::FragmentC,
+                                        LayoutC,
+                                        Transpose
+#if SAIL_EPILOGUE_OPT >= 2
+                                        , ElementAccumulator
+#endif
+                                        > >::type;
+
+  /// Support several implementations depending on structure of epilogue
+  using DefaultIterators = detail::DefaultIteratorsTensorOp<
+    ElementOutput,
+// #if SAIL_EPILOGUE_OPT >= 2
+//     // already converted
+//     ElementOutput,
+// #else
+    ElementAccumulator,
+// #endif
+    kElementsPerAccess,
+    Shape,
+    typename WarpMmaTensorOp::Shape,
+    typename WarpMmaTensorOp::Policy::Operator::Shape,
+    typename OutputTileThreadMap::CompactedThreadMap,
+    Transpose,
+    // conv transfer to output before store to smem, ElementAccumulator is output type
+    // use this to transfer actual acc type to choose fp16 tsm iter when acc is fp16
+    typename WarpMmaTensorOp::Policy::Operator::ElementC
+  >;
+
+  using WarpTileIterator = typename DefaultIterators::WarpTileIterator;
+  using SharedLoadIterator = typename DefaultIterators::SharedLoadIterator;
+
+  
+  using Padding_PPU0010 = typename platform::conditional<
+                    Transpose == true,
+                    // 0/4/8/12/16/20/24/48 store 8 elements, 1/5/9/13/17/21/25/29 should interleave 8 elements
+                    cutlass::MatrixShape<0, 8>,
+                    // ppu four thread store four elements once
+                    // ppu's tsm_load_B32x4 needn't tsm address aligned?
+                    cutlass::MatrixShape<0, 4>
+                  >::type;
+  using Padding_Default = typename platform::conditional<
+                    Transpose == true,
+                    typename platform::conditional<
+                      sizeof_bits<ElementAccumulator>::value == 16,
+                      // fp16 can't padding 8, otherwise start add of second row will be misaligned
+                      // still have no bank conflict, since each lane only write 16b, 32 lane will only use 16 bank each loop
+                      cutlass::MatrixShape<0, 8>,
+                      // each lane store successive two rows, t0 and t1 only interleave 8/2=4 elements
+                      cutlass::MatrixShape<0, 4>
+                      >::type,
+                    // each lane store 2 elements once, 4 lane store 8 elements
+                    cutlass::MatrixShape<0, 8>
+                  >::type;
+
+#if defined(__HGGCCC_RTC__)
+#if ACOMPUTE_VERSION == 10000 // ppu1.0 rtc
+  using Padding = Padding_PPU0010;
+#else // ppu1.5 rtc
+  using Padding = Padding_Default;
+#endif
+#else
+  // host no ACOMPUTE_VERSION: use ArchTag to judge
+  using Padding = typename platform::conditional<ArchTag::kMinComputeCapability <= 80, Padding_PPU0010, Padding_Default>::type;
+#endif
+
+  static int const kFragmentsPerIteration = (kPartitionsK == 1 ? DefaultIterators::kFragmentsPerIteration : 1);
+
+  //
+  // Define the epilogue
+  //
+  using Epilogue = cutlass::epilogue::threadblock::Epilogue<
+    Shape,
+    WarpMmaTensorOp,
+    kPartitionsK,
+    OutputTileIterator,
+    AccumulatorFragmentIterator,
+    WarpTileIterator,
+    SharedLoadIterator,
+    OutputOp,
+    Padding,
+    kFragmentsPerIteration,
+    Transpose
   >;
 };
 

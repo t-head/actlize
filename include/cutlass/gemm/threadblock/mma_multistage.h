@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a double-buffered threadblock-scoped GEMM kernel.
 */
@@ -46,7 +48,7 @@ namespace threadblock {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math
+/// Structure to compute the matrix product targeting alu cores and SIMT math
 /// instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>
@@ -79,7 +81,7 @@ template <
     int Stages,
     /// Used for partial specialization
     typename Enable = bool>
-class MmaMultistage : 
+class MmaMultistage :
   public MmaBase<Shape_, Policy_, Stages> {
 public:
   ///< Base class
@@ -113,9 +115,9 @@ public:
   /// Warp-level Mma
   using Operator = typename Policy::Operator;
 
-  /// Minimum architecture is Sm80 to support cp.async
-  using ArchTag = arch::Sm80;
-  
+  /// Minimum architecture is PPU1.0 to support cp.async
+  using ArchTag = arch::PPU0010;
+
   /// Complex transform on A operand
   static ComplexTransform const kTransformA = Operator::kTransformA;
 
@@ -147,6 +149,14 @@ public:
     /// Number of cp.async instructions to load on group of operand B
     static int const kAccessesPerGroupB =
         (AsyncCopyIterationsPerStageB + Base::kWarpGemmIterations - 1) / Base::kWarpGemmIterations;
+
+    // Optional staged-accumulation (e.g., tf32x3 kernels) for improved numerical
+    // accuracy, where each mainloop iteration first accumulates into a temporary
+    // set of freshly-cleared accumulators, which are subsequently added to the
+    // final accumulator set.
+    static bool const kStagedAccumulation =
+      platform::is_same<typename Operator::MathOperator, arch::OpMultiplyAddFastF32>::value ||
+      platform::is_same<typename Operator::MathOperator, arch::OpMultiplyAddComplexFastF32>::value;
   };
 
  private:
@@ -155,6 +165,8 @@ public:
   using WarpLoadedFragmentB = typename Operator::FragmentB;
   using WarpTransformedFragmentA = typename Operator::TransformedFragmentA;
   using WarpTransformedFragmentB = typename Operator::TransformedFragmentB;
+
+  FragmentC tmp_accum_;
 
  private:
 
@@ -397,6 +409,10 @@ public:
     warp_mma.transform(warp_transformed_frag_A[0], warp_transformed_frag_B[0],
                        warp_loaded_frag_A[0], warp_loaded_frag_B[0]);
 
+    if (Detail::kStagedAccumulation) {
+      tmp_accum_.clear();
+    }
+
     //
     // Mainloop
     //
@@ -418,7 +434,7 @@ public:
 
         this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
         this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
-        
+
         this->warp_tile_iterator_A_.load(warp_loaded_frag_A[(warp_mma_k + 1) % 2]);
         this->warp_tile_iterator_B_.load(warp_loaded_frag_B[(warp_mma_k + 1) % 2]);
 
@@ -431,12 +447,27 @@ public:
                              warp_loaded_frag_A[warp_mma_k % 2],
                              warp_loaded_frag_B[warp_mma_k % 2]);
 
-        warp_mma(
-          accum, 
-          warp_transformed_frag_A[warp_mma_k % 2],
-          warp_transformed_frag_B[warp_mma_k % 2], 
-          accum
-        );
+        if (Detail::kStagedAccumulation) {
+          warp_mma(
+            tmp_accum_,
+            warp_transformed_frag_A[warp_mma_k % 2],
+            warp_transformed_frag_B[warp_mma_k % 2],
+            tmp_accum_
+          );
+
+          if (warp_mma_k == 0) {
+            plus<FragmentC> plus_accum;
+            accum = plus_accum(accum, tmp_accum_);
+            tmp_accum_.clear();
+          }
+        } else {
+          warp_mma(
+            accum,
+            warp_transformed_frag_A[warp_mma_k % 2],
+            warp_transformed_frag_B[warp_mma_k % 2],
+            accum
+          );
+        }
 
         // Issue global->shared copies for the this stage
         if (warp_mma_k < Base::kWarpGemmIterations - 1) {
@@ -445,7 +476,7 @@ public:
           group_start_iteration_A = warp_mma_k * Detail::kAccessesPerGroupA;
           group_start_iteration_B = warp_mma_k * Detail::kAccessesPerGroupB;
 
-          copy_tiles_and_advance(iterator_A, iterator_B, group_start_iteration_A, 
+          copy_tiles_and_advance(iterator_A, iterator_B, group_start_iteration_A,
                                group_start_iteration_B);
         }
 
@@ -456,7 +487,7 @@ public:
           group_start_iteration_B =
               (warp_mma_k + 1) * Detail::kAccessesPerGroupB;
 
-          copy_tiles_and_advance(iterator_A, iterator_B, group_start_iteration_A, 
+          copy_tiles_and_advance(iterator_A, iterator_B, group_start_iteration_A,
                                group_start_iteration_B);
 
           // Inserts a memory fence between stages of cp.async instructions.
@@ -513,7 +544,12 @@ public:
       }
 
     }
-    
+
+    if (Detail::kStagedAccumulation) {
+      plus<FragmentC> plus_accum;
+      accum = plus_accum(accum, tmp_accum_);
+    }
+
     // commit and drain all pending and predicated LDGSTS pnz from the GEMM mainloop
     cutlass::arch::cp_async_fence();
     cutlass::arch::cp_async_wait<0>();

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM A (output gradient tile) 
     matrix from memory.
@@ -57,7 +59,8 @@ namespace threadblock {
 template <
   typename Shape_,
   typename Element_,
-  typename ThreadMap_
+  typename ThreadMap_,
+  int AccessSize = ThreadMap_::kElementsPerAccess
 >
 class Conv3dWgradOutputGradientTileAccessIteratorOptimized {
 public:
@@ -69,7 +72,7 @@ public:
   using Element = Element_;
   using Layout = layout::TensorNDHWC;
   using ThreadMap = ThreadMap_;
-  using AccessType = AlignedArray<Element, ThreadMap::kElementsPerAccess>;
+  using AccessType = AlignedArray<Element, AccessSize>;
   using TensorRef = cutlass::TensorRef<Element, Layout>;
   using TensorCoord = typename Layout::TensorCoord;
   using Index = typename Layout::Index;
@@ -81,6 +84,8 @@ public:
   
   static_assert(sizeof_bits<Element>::value >= 8,
     "WGRAD requires elements of size 8b or greater.");
+
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
 
   //
   // Parameters structure
@@ -148,9 +153,10 @@ private:
   Conv3dProblemSize const &problem_size_;
   LongIndex iteration_contiguous_;
   LongIndex iteration_strided_;
+  LongIndex iteration_vector_;
   char const *pointer_;
     
-  uint32_t predicates_;
+  uint32_t predicates_[kAccessesPerVector];
   int filter_k_;
   int offset_nzpq_;
 
@@ -167,7 +173,7 @@ public:
     params_(params), 
     problem_size_(problem_size),
     pointer_(reinterpret_cast<char const *>(ptr)),
-    predicates_(0),
+    predicates_{0},
     filter_k_(0),
     offset_nzpq_(0) {
 
@@ -185,13 +191,14 @@ public:
         int filter_k = filter_k_ + c * ThreadMap::Delta::kContiguous;
         int offset_nzpq = offset_nzpq_ + s * ThreadMap::Delta::kStrided;
 
-        bool predicate = valid_(at_(offset_nzpq, filter_k));
-
-        uint32_t pred = (predicate ? 1u : 0);
-
         int pred_idx = c + s * ThreadMap::Iterations::kContiguous;
-        
-        predicates_ |= (pred << pred_idx);
+        auto coord = at_(offset_nzpq, filter_k);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+          uint32_t pred = ((coord.n() < problem_size_.N && coord.c() + v_idx * AccessType::kElements < problem_size_.K) ? 1u : 0);
+          predicates_[v_idx] |= (pred << pred_idx);
+        }
       }
     }
 
@@ -211,8 +218,11 @@ public:
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
   void set_iteration_index(Index index) {
-    iteration_contiguous_ = index % ThreadMap::Iterations::kContiguous;
-    iteration_strided_ = index / ThreadMap::Iterations::kContiguous;
+    iteration_vector_ = index % kAccessesPerVector;
+    int residual_access = index / kAccessesPerVector;
+
+    iteration_contiguous_ = residual_access % ThreadMap::Iterations::kContiguous;
+    iteration_strided_ = residual_access / ThreadMap::Iterations::kContiguous;
   }
 
   /// Adds a pointer offset in units of Element
@@ -231,7 +241,10 @@ public:
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
       if (offset_nzpq_ + s * ThreadMap::Delta::kStrided >= params_.NZPQ) {
         uint32_t kClearMask = ((1u << ThreadMap::Iterations::kContiguous) - 1) << (s * ThreadMap::Iterations::kContiguous); 
-        predicates_ = (predicates_ & (~kClearMask));
+        CUTLASS_PRAGMA_UNROLL
+        for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
+          predicates_[v_idx] = (predicates_[v_idx] & (~kClearMask));
+        }
       }
     }
     pointer_ += params_.inc_next_nzpq; 
@@ -279,7 +292,7 @@ public:
   bool valid() const {
 
     LongIndex pred_idx = iteration_contiguous_ + iteration_strided_ * ThreadMap::Iterations::kContiguous;
-    return (predicates_ & (1u << pred_idx));
+    return (predicates_[iteration_vector_] & (1u << pred_idx));
   }
 
   /// Returns a pointer to the vector starting at the current coordinate
@@ -290,13 +303,20 @@ public:
       pointer_ +
       iteration_strided_ * params_.offset_next_strided + 
       iteration_contiguous_ * params_.offset_next_contiguous
-    );
+    ) + iteration_vector_;
 
   }
 
   /// Increments to the next memory access
   CUTLASS_HOST_DEVICE
   Conv3dWgradOutputGradientTileAccessIteratorOptimized &operator++() {
+    ++iteration_vector_;
+    if (iteration_vector_ < kAccessesPerVector) {
+      return *this;
+    }
+
+    iteration_vector_ = 0;
+
     ++iteration_contiguous_;
     if (iteration_contiguous_ < ThreadMap::Iterations::kContiguous) {
       return *this;
@@ -316,7 +336,7 @@ public:
   static Status can_implement(Conv3dProblemSize const &problem_size) {
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.C % (128/sizeof_bits<Element>::value)) {
+    if (problem_size.K % AccessSize) {
       return Status::kErrorInvalidProblem;
     }
 

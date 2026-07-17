@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*!
     \file
     \brief Defines a proxy class for storing non-standard 16-bit floating point values with
@@ -29,11 +31,13 @@
 */
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <cmath>
 #include <limits>
 #include <cstdint>
 #endif
+
+#include "hggc_bf16.h"
 
 #include "cutlass/cutlass.h"
 
@@ -71,9 +75,11 @@ struct alignas(2) bfloat16_t {
   CUTLASS_HOST_DEVICE
   explicit bfloat16_t(float x) {
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDACC_VER_MAJOR__ >= 11)
+    #if defined(__HGGC_ARCH__)
+    storage = __ppu_bfloat16_raw(__float2bfloat16(x)).x;
 
-    asm("cvt.rn.bf16.f32 %0, %1;\n" : "=h"(storage) : "f"(x));
+    #elif defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && (__HGGCCC_VER_MAJOR__ >= 11)
+    asm("ppu.cvt.rtte.bf16.f32 %0, %1;\n" : "=h"(storage) : "f"(x));
 
     #else
     uint32_t bits = reinterpret_cast<uint32_t &>(x);
@@ -107,6 +113,13 @@ struct alignas(2) bfloat16_t {
   explicit bfloat16_t(int x) {
     float flt = static_cast<float>(x);
     storage = uint16_t(reinterpret_cast<uint32_t const &>(flt) >> 16);
+  }
+
+  /// Assignment
+  CUTLASS_HOST_DEVICE
+  bfloat16_t & operator=(__ppu_bfloat16 const &x) {
+    storage = reinterpret_cast<uint16_t const &>(x);
+    return *this;
   }
 
   /// Converts to float
@@ -188,7 +201,6 @@ bool isfinite(cutlass::bfloat16_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::bfloat16_t nan_bf16(const char*) {
-  // NVIDIA canonical NaN
   return cutlass::bfloat16_t::bitcast(0x7fff);
 }
 
@@ -227,7 +239,7 @@ int fpclassify(cutlass::bfloat16_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::bfloat16_t sqrt(cutlass::bfloat16_t const& h) {
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
   return cutlass::bfloat16_t(sqrtf(float(h)));
 #else
   return cutlass::bfloat16_t(std::sqrt(float(h)));
@@ -256,7 +268,7 @@ bfloat16_t copysign(bfloat16_t const& a, bfloat16_t const& b) {
 
 namespace std {
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 /// Numeric limits
 template <>
 struct numeric_limits<cutlass::bfloat16_t> {

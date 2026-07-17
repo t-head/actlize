@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,9 +23,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate
-   operations targeting sparse Tensor Cores.
+   operations targeting sparse Tensor Cells.
 */
 
 #pragma once
@@ -37,9 +39,9 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h" 
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
+#include "cutlass/arch/mma_ppu.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -48,7 +50,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu.h"
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sparse.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +61,7 @@ namespace warp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
   /// Size of the Gemm problem - concept: gemm::GemmShape<>
   typename Shape_,
@@ -83,7 +85,14 @@ template <
   /// when output layout is interleaved.
   bool AccumulatorsInRowMajor = false,
   /// Used for partial specialization
-  typename Enable = bool
+  typename Enable = bool,
+  // aiu cube size
+  int CubeA = 1,
+  int CubeB = 1
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+    /// Sparse is used for compression matrix.
+    , Operand CompressOp_ = Operand::kA
+#endif
 >
 class SparseMmaTensorOp {
 public:
@@ -114,7 +123,7 @@ public:
   /// Equivalant base dense mma
   using Base = MmaTensorOp<Shape, ElementA, LayoutA, ElementB, LayoutB,
                            ElementC, LayoutC, Policy, PartitionsK_,
-                           AccumulatorsInRowMajor, Enable>;
+                           AccumulatorsInRowMajor, Enable, CubeA, CubeB>;
 
   /// Underlying matrix multiply operator (concept: arch::Mma)
   using ArchMmaOperator = typename Base::ArchMmaOperator;
@@ -143,7 +152,7 @@ public:
   /// Sparsity in Operand A
   static int const kSparse = Policy::Operator::kSparse;
 
-  /// Meta data size in bits 
+  /// Meta data size in bits
   static int const kMetaSizeInBits = Policy::Operator::kMetaSizeInBits;
 
   /// Max ID2
@@ -154,26 +163,50 @@ public:
       typename cutlass::platform::conditional<kMaxID2 == 1, uint32_t,
                                               uint16_t>::type;
 
-  /// Number of ElementA that is associated with one ElementE
-  static int const kElementsPerElementE =
-      128 / cutlass::sizeof_bits<ElementA>::value;
+  /// Number of ElementA/ElementB that is associated with one ElementE
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+  static int const kElementsPerElementE = (CompressOp_ == Operand::kB)
+                                        ? 128 / cutlass::sizeof_bits<ElementB>::value
+                                        : 128 / cutlass::sizeof_bits<ElementA>::value;
+#else
+  static int const kElementsPerElementE = 128 / cutlass::sizeof_bits<ElementA>::value;
+#endif
 
+  /// Layout of meta E
+#ifdef SAIL_CUSTOMIZE_CUTLASS
   /// Meta data is essentially interleaved but mapped to ColumnMajor internally
+  static int const kInterleaved = InstructionShape::kK / kSparse / kElementsPerElementE;
+
+  using LayoutE = typename platform::conditional<
+        CompressOp_ == Operand::kB,
+        cutlass::layout::RowMajor,
+        cutlass::layout::ColumnMajor>::type;
+#else
   static int const kInterleaved = 2;
 
-  /// Layout of meta E 
   using LayoutE = cutlass::layout::ColumnMajor;
-
+#endif
  public:
 
+#ifdef SAIL_CUSTOMIZE_CUTLASS
   /// Iterates over the A operand in memory
- using IteratorA = MmaTensorOpMultiplicandTileIterator<
-     MatrixShape<Shape::kM, Shape::kK / kSparse>, Operand::kA, ElementA,
-     LayoutA,
-     MatrixShape<Policy::Operator::Shape::kM,
+  using IteratorA = typename platform::conditional<
+      CompressOp_ == Operand::kB,
+      typename Base::IteratorA,
+      MmaTensorOpMultiplicandTileIterator<
+        MatrixShape<Shape::kM, Shape::kK / kSparse>, Operand::kA, ElementA,
+        LayoutA,
+        MatrixShape<Policy::Operator::Shape::kM,
                  Policy::Operator::Shape::kK / kSparse>,
-     Policy::OpDelta::kRow, kThreadCount, kPartitionsK>;
-
+        Policy::OpDelta::kRow, kThreadCount, kPartitionsK, CubeA>>::type;
+#else
+  using IteratorA = MmaTensorOpMultiplicandTileIterator<
+                    MatrixShape<Shape::kM, Shape::kK / kSparse>, Operand::kA, ElementA,
+                    LayoutA,
+                    MatrixShape<Policy::Operator::Shape::kM,
+                            Policy::Operator::Shape::kK / kSparse>,
+                    Policy::OpDelta::kRow, kThreadCount, kPartitionsK, CubeA>;
+#endif
  /// Storage for A tile
  using FragmentA = typename IteratorA::Fragment;
 
@@ -182,13 +215,24 @@ public:
      Array<typename Policy::Operator::ElementA, FragmentA::kElements>;
 
  /// Iterates over the B operand in memory
- using IteratorB = typename Base::IteratorB;
+#ifdef SAIL_CUSTOMIZE_CUTLASS
+ using IteratorB = typename platform::conditional<
+      CompressOp_ == Operand::kB,
+      MmaTensorOpMultiplicandTileIterator<
+      MatrixShape<Shape::kK / kSparse, Shape::kN>, Operand::kB, ElementB, LayoutB,
+      MatrixShape<ArchMmaOperator::Shape::kK / kSparse, ArchMmaOperator::Shape::kN>,
+      Policy::OpDelta::kRow, kThreadCount, kPartitionsK, CubeB>,
+      typename Base::IteratorB>::type;
+#else
+  using IteratorB = typename Base::IteratorB;
+#endif
 
- /// Storage for B tile
- using FragmentB = typename Base::FragmentB;
+  /// Storage for B tile
+  using FragmentB = typename IteratorB::Fragment;
 
- /// Storage for transformed B tile
- using TransformedFragmentB = typename Base::TransformedFragmentB;
+  /// Storage for transformed B tile
+  using TransformedFragmentB =
+     Array<typename Policy::Operator::ElementB, FragmentB::kElements>;
 
  /// Iterates over the C operand in memory
  using IteratorC = typename Base::IteratorC;
@@ -196,15 +240,31 @@ public:
  /// Storage for C tile
  using FragmentC = typename Base::FragmentC;
 
- /// Iterates over the E operand in memory
- using IteratorE = SparseMmaTensorOpMetaTileIterator<
-     MatrixShape<Shape::kM * kInterleaved,
+ // Iterates over the E operand in memory
+ #ifdef SAIL_CUSTOMIZE_CUTLASS
+ using IteratorE = typename platform::conditional<
+      CompressOp_ == Operand::kB,
+      SparseMmaTensorOpMetaTileIterator<
+      MatrixShape<Shape::kK / kSparse / kElementsPerElementE / kInterleaved, Shape::kN * kInterleaved>,
+      ElementE, LayoutE,
+      MatrixShape<Policy::Operator::Shape::kK / kSparse / kElementsPerElementE / kInterleaved, Policy::Operator::Shape::kN>,
+      Policy::OpDelta::kRow, kThreadCount, kPartitionsK>,
+      SparseMmaTensorOpMetaTileIterator<
+      MatrixShape<Shape::kM * kInterleaved,
                  Shape::kK / kSparse / kElementsPerElementE / kInterleaved>,
-     ElementE, LayoutE,
-     MatrixShape<Policy::Operator::Shape::kM,
-                 Policy::Operator::Shape::kK / kSparse / kElementsPerElementE /
-                     kInterleaved>,
-     Policy::OpDelta::kRow, kThreadCount, kPartitionsK>;
+      ElementE, LayoutE,
+      MatrixShape<Policy::Operator::Shape::kM,
+                 Policy::Operator::Shape::kK / kSparse / kElementsPerElementE / kInterleaved>,
+      Policy::OpDelta::kRow, kThreadCount, kPartitionsK>>::type;
+#else
+  using IteratorE = SparseMmaTensorOpMetaTileIterator<
+                    MatrixShape<Shape::kM * kInterleaved,
+                              Shape::kK / kSparse / kElementsPerElementE / kInterleaved>,
+                    ElementE, LayoutE,
+                    MatrixShape<Policy::Operator::Shape::kM,
+                              Policy::Operator::Shape::kK / kSparse / kElementsPerElementE / kInterleaved>,
+                    Policy::OpDelta::kRow, kThreadCount, kPartitionsK>;
+#endif
 
  /// Storage for E tile
  using FragmentE = typename IteratorE::Fragment;
@@ -230,9 +290,9 @@ public:
   /// Performs a warp-level matrix multiply-accumulate operation
   CUTLASS_DEVICE
   void operator()(
-    FragmentC &D, 
-    TransformedFragmentA const &A, 
-    TransformedFragmentB const &B, 
+    FragmentC &D,
+    TransformedFragmentA const &A,
+    TransformedFragmentB const &B,
     FragmentC const &C,
     FragmentE const &E
   ) const {
@@ -242,7 +302,7 @@ public:
     using MmaOperandC = typename Policy::Operator::FragmentC;
     using MmaOperandE = typename Policy::Operator::FragmentE;
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     D = C;
 
@@ -251,34 +311,100 @@ public:
     MmaOperandC *ptr_D = reinterpret_cast<MmaOperandC *>(&D);
     MmaOperandE const *ptr_E = reinterpret_cast<MmaOperandE const *>(&E);
 
+    CUTLASS_PRAGMA_UNROLL
+    for (int m = 0; m < MmaIterations::kRow; ++m) {
+
+      int id2 = m % kMaxID2;
+
       CUTLASS_PRAGMA_UNROLL
-      for (int m = 0; m < MmaIterations::kRow; ++m) {
+      for (int n = 0; n < MmaIterations::kColumn; ++n) {
 
-        int id2 = m % kMaxID2;
+        int n_serpentine = ((m % 2) ? (MmaIterations::kColumn - 1 - n) : n);
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int n = 0; n < MmaIterations::kColumn; ++n) {
-
-          int n_serpentine = ((m % 2) ? (MmaIterations::kColumn - 1 - n) : n);
-
-          if (AccumulatorsInRowMajor) {  // matrix B is reordered
-            mma(
-              ptr_D[n_serpentine + m * MmaIterations::kColumn],
+        if (AccumulatorsInRowMajor) {  // matrix B is reordered
+          mma(
+            ptr_D[n_serpentine + m * MmaIterations::kColumn],
+            ptr_A[m],
+            ptr_B[n_serpentine],
+            ptr_D[n_serpentine + m * MmaIterations::kColumn],
+            ptr_E[(m / kMaxID2)],
+            id2);
+        } else {
+          mma(ptr_D[m + n_serpentine * MmaIterations::kRow],
               ptr_A[m],
               ptr_B[n_serpentine],
-              ptr_D[n_serpentine + m * MmaIterations::kColumn],
+              ptr_D[m + n_serpentine * MmaIterations::kRow],
               ptr_E[(m / kMaxID2)],
               id2);
-          } else {
-            mma(ptr_D[m + n_serpentine * MmaIterations::kRow],
-                ptr_A[m],
-                ptr_B[n_serpentine],
-                ptr_D[m + n_serpentine * MmaIterations::kRow],
-                ptr_E[(m / kMaxID2)],
-                id2);
-          }
         }
       }
+    }
+    #elif (defined(__HGGCCC__) || defined(__HGGCCC_RTC__)) && ACOMPUTE_VERSION == 10000
+
+    D = C;
+
+    MmaOperandA const *ptr_A = reinterpret_cast<MmaOperandA const *>(&A);
+    MmaOperandB const *ptr_B = reinterpret_cast<MmaOperandB const *>(&B);
+    MmaOperandC *ptr_D = reinterpret_cast<MmaOperandC *>(&D);
+    MmaOperandE const *ptr_E = reinterpret_cast<MmaOperandE const *>(&E);
+
+    // CUTLASS_PRAGMA_UNROLL
+    // for (int m = 0; m < MmaIterations::kRow; ++m) {
+
+    //   CUTLASS_PRAGMA_UNROLL
+    //   for (int n = 0; n < MmaIterations::kColumn; ++n) {
+    //     int n_serpentine = ((m % 2) ? (MmaIterations::kColumn - 1 - n) : n);
+
+    //     int sparse_serpentine = (CompressOp_ == Operand::kB) ? n_serpentine : m;
+
+    //     int id2 = sparse_serpentine % kMaxID2;
+
+    //     if (AccumulatorsInRowMajor) {  // matrix B is reordered
+    //       mma(
+    //         ptr_D[n_serpentine + m * MmaIterations::kColumn],
+    //         ptr_A[m],
+    //         ptr_B[n_serpentine],
+    //         ptr_D[n_serpentine + m * MmaIterations::kColumn],
+    //         ptr_E[(sparse_serpentine / kMaxID2)],
+    //         id2);
+    //     } else {
+    //       mma(ptr_D[m + n_serpentine * MmaIterations::kRow],
+    //           ptr_A[m],
+    //           ptr_B[n_serpentine],
+    //           ptr_D[m + n_serpentine * MmaIterations::kRow],
+    //           ptr_E[(sparse_serpentine / kMaxID2)],
+    //           id2);
+    //     }
+    //   }
+    // }
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int n = 0; n < MmaIterations::kColumn; ++n) {
+      CUTLASS_PRAGMA_UNROLL
+      for (int m = 0; m < MmaIterations::kRow; ++m) {
+        int m_serpentine = ((n % 2) ? (MmaIterations::kRow - 1 - m) : m);
+        int sparse_serpentine = (CompressOp_ == Operand::kB) ? n : m_serpentine;
+        int id2 = sparse_serpentine % kMaxID2;
+
+        if (AccumulatorsInRowMajor) {  // matrix B is reordered
+          mma(
+            ptr_D[n + m_serpentine * MmaIterations::kColumn],
+            ptr_A[m_serpentine],
+            ptr_B[n],
+            ptr_D[n + m_serpentine * MmaIterations::kColumn],
+            ptr_E[(sparse_serpentine / kMaxID2)],
+            id2);
+        } else {
+          mma(
+            ptr_D[m_serpentine + n * MmaIterations::kRow],
+            ptr_A[m_serpentine],
+            ptr_B[n],
+            ptr_D[m_serpentine + n * MmaIterations::kRow],
+            ptr_E[(sparse_serpentine / kMaxID2)],
+            id2);
+        }
+      }
+    }
     #else
       assert(0);
     #endif
@@ -289,7 +415,7 @@ public:
   void transform(TransformedFragmentA &dst_A, TransformedFragmentB &dst_B,
                  FragmentA const &A, FragmentB const &B) const {
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     //
     // Define conversions from source type to instruction type
     //
@@ -315,6 +441,32 @@ public:
 
     ptr_dst_A[0] = convert_A(ptr_A[0]);
     ptr_dst_A[1] = convert_A(ptr_A[1]);
+
+    #elif (defined(__HGGCCC__) || defined(__HGGCCC_RTC__)) && ACOMPUTE_VERSION == 10000
+
+    FloatRoundStyle const kRoundA =
+    PreferredRoundingMode<typename ArchMmaOperator::ElementA,
+                          ElementA>::kRound;
+    FloatRoundStyle const kRoundB =
+        PreferredRoundingMode<typename ArchMmaOperator::ElementB,
+                              ElementB>::kRound;
+    detail::ConvertAndPack<typename ArchMmaOperator::ElementA, ElementA,
+                           FragmentA::kElements / 2, kRoundA>
+        convert_A;
+    NumericArrayConverter<typename ArchMmaOperator::ElementB, ElementB,
+                          FragmentB::kElements, kRoundB>
+        convert_B;
+    Array<ElementA, FragmentA::kElements / 2> const *ptr_A =
+        reinterpret_cast<Array<ElementA, FragmentA::kElements / 2> const *>(&A);
+    Array<typename ArchMmaOperator::ElementA, FragmentA::kElements / 2> *
+        ptr_dst_A = reinterpret_cast<Array<typename ArchMmaOperator::ElementA,
+                                           FragmentA::kElements / 2> *>(&dst_A);
+
+    dst_B = convert_B(B);
+
+    ptr_dst_A[0] = convert_A(ptr_A[0]);
+    ptr_dst_A[1] = convert_A(ptr_A[1]);
+
     #else
       assert(0);
     #endif

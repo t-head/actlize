@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines common types used for all GEMM-like operators.
 */
@@ -251,6 +253,11 @@ struct GemmCoord : public Coord<3, int> {
     Base::operator/=(b);
     return *this;
   }
+
+  CUTLASS_HOST_DEVICE
+  void print() const {
+    printf("m: %d, n: %d, k: %d\n", m(), n(), k());
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -402,6 +409,14 @@ enum class GemmUniversalMode {
   kBatched,
   kArray,
   kInvalid
+};
+////////////////////////////////////////////////////////////////////////////////
+
+/// Some options for clearing shared memory
+enum class SharedMemoryClearOption {
+  kNone,            ///< SMEM is in don't-care state
+  kZfill,           ///< Kernels fill out of bounds accesses with zeros
+  kClearLastStage   ///< Last SMEM stage is explicitly cleared. Mainloop uses 'kNone'
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

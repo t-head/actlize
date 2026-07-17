@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! 
   \file
   \brief The universal GEMM accommodates serial reductions, parallel reductions, batched strided, and 
@@ -145,11 +147,11 @@ public:
   }
 
   /// Gets the workspace size
-  static size_t get_workspace_size(Arguments const &args) {
+  static CUsize get_workspace_size(Arguments const &args) {
 
     CUTLASS_TRACE_HOST("GemmUniversalBase::get_workspace_size()");
  
-    size_t workspace_bytes = 0;
+    CUsize workspace_bytes = 0;
 
     // Determine grid shape
     cutlass::gemm::GemmCoord grid_tiled_shape;
@@ -209,13 +211,13 @@ public:
 
     if (smem_size <= (48 << 10)) {
 
-      cudaError_t result = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      hggcError_t result = hggcOccupancyMaxActiveBlocksPerMultiprocessor(
         &max_active_blocks,
         Kernel<GemmKernel>,
         GemmKernel::kThreadCount,
         smem_size);
 
-      if (result == cudaSuccess) {
+      if (result == hggcSuccess) {
         CUTLASS_TRACE_HOST("  max_active_blocks: " << max_active_blocks);
         return max_active_blocks;
       }
@@ -223,33 +225,33 @@ public:
     else {
 
       // Query assuming zero shared memory then compute occupancy limit based on SMEM
-      cudaError_t result = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      hggcError_t result = hggcOccupancyMaxActiveBlocksPerMultiprocessor(
         &max_active_blocks,
         Kernel<GemmKernel>,
         GemmKernel::kThreadCount,
         0);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
 
         CUTLASS_TRACE_HOST(
-          "  cudaOccupancyMaxActiveBlocksPerMultiprocessor() returned error "
-          << cudaGetErrorString(result));
+          "  hggcOccupancyMaxActiveBlocksPerMultiprocessor() returned error "
+          << hggcGetErrorString(result));
 
         return -1;
       }
 
       if (smem_capacity < 0) {
         int device_idx = 0;
-        result = cudaGetDevice(&device_idx);
+        result = hggcGetDevice(&device_idx);
 
-        if (result != cudaSuccess) {
+        if (result != hggcSuccess) {
           return -1;
         }
 
-        cudaDeviceProp properties;
-        result = cudaGetDeviceProperties(&properties, device_idx);
+        hggcDeviceProp properties;
+        result = hggcGetDeviceProperties(&properties, device_idx);
 
-        if (result != cudaSuccess) {
+        if (result != hggcSuccess) {
           return -1;
         }
 
@@ -269,12 +271,12 @@ public:
   }
 
   /// Initializes GEMM state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
 
     CUTLASS_TRACE_HOST("GemmUniversalBase::initialize() - workspace " 
       << workspace << ", stream: " << (stream ? "non-null" : "null"));
 
-    size_t workspace_bytes = get_workspace_size(args);
+    CUsize workspace_bytes = get_workspace_size(args);
 
     CUTLASS_TRACE_HOST("  workspace_bytes: " << workspace_bytes);
 
@@ -288,17 +290,17 @@ public:
 
       if (args.mode == GemmUniversalMode::kGemm) {
         CUTLASS_TRACE_HOST("  clearing device workspace");
-        cudaError_t result = cudaMemsetAsync(workspace, 0, workspace_bytes, stream);
+        hggcError_t result = hggcMemsetAsync(workspace, 0, workspace_bytes, stream);
 
-        if (result != cudaSuccess) {
-          CUTLASS_TRACE_HOST("  cudaMemsetAsync() returned error " << cudaGetErrorString(result));
+        if (result != hggcSuccess) {
+          CUTLASS_TRACE_HOST("  hggcMemsetAsync() returned error " << hggcGetErrorString(result));
 
           return Status::kErrorInternal;
         }
       }
     }
 
-    // Get CUDA grid shape
+    // Get device grid shape
     cutlass::gemm::GemmCoord grid_tiled_shape;
     int gemm_k_size = 0;
 
@@ -316,19 +318,19 @@ public:
     int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
 
     if (smem_size >= (48 << 10)) {
-      cudaError_t result = cudaFuncSetAttribute(Kernel<GemmKernel>,
-                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+      hggcError_t result = hggcFuncSetAttribute(Kernel<GemmKernel>,
+                                    hggcFuncAttributeMaxDynamicSharedMemorySize,
                                     smem_size);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
 
-      result = cudaFuncSetAttribute(
+      result = hggcFuncSetAttribute(
           Kernel<GemmKernel>,
-          cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+          hggcFuncAttributePreferredSharedMemoryCarveout, 100);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
     }
@@ -341,7 +343,7 @@ public:
 
     CUTLASS_TRACE_HOST("GemmUniversalBase()::update() - workspace: " << workspace);
 
-    size_t workspace_bytes = get_workspace_size(args);
+    CUsize workspace_bytes = get_workspace_size(args);
 
     if (workspace_bytes && !workspace) {
       return Status::kErrorWorkspaceNull;
@@ -353,7 +355,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
     CUTLASS_TRACE_HOST("GemmUniversalBase::run()");
 
     //
@@ -380,10 +382,10 @@ public:
     //
     // Query for errors
     //
-    cudaError_t result = cudaGetLastError();
+    hggcError_t result = hggcGetLastError();
 
-    if (result != cudaSuccess) {
-      CUTLASS_TRACE_HOST("  grid launch failed with error " << cudaGetErrorString(result));
+    if (result != hggcSuccess) {
+      CUTLASS_TRACE_HOST("  grid launch failed with error " << hggcGetErrorString(result));
       return Status::kErrorInternal;
     }
   
@@ -391,7 +393,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -399,7 +401,7 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
     Status status = initialize(args, workspace, stream);
     

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of tiles from pitch-linear rank=2 tensors. 
 
@@ -991,6 +993,185 @@ class PredicatedTileIterator<Shape_, Element_,
   using Element = Element_;
   static int const kInterleavedK = InterleavedK;
   using Layout = layout::RowMajorInterleaved<kInterleavedK>;
+  static int const kAdvanceRank = AdvanceRank;
+  using ThreadMap = ThreadMap_;
+
+  using Index = typename Layout::Index;
+  using LongIndex = typename Layout::LongIndex;
+
+  using TensorRef = TensorRef<Element, Layout>;
+  using TensorView = TensorView<Element, Layout>;
+  using TensorCoord = typename Layout::TensorCoord;
+
+  using Pointer = Element *;
+  using NonConstPointer = typename platform::remove_const<Element>::type *;
+
+  using UnderlyingIterator = PredicatedTileIterator<
+      layout::PitchLinearShape<Shape::kColumn * kInterleavedK,
+                               Shape::kRow / kInterleavedK>,
+      Element, layout::PitchLinear, (kAdvanceRank == 0 ? 1 : 0), ThreadMap, AccessSize>;
+
+
+  using AccessType = typename UnderlyingIterator::AccessType;
+  
+  /// Fragment object to be loaded or stored
+  using Fragment = cutlass::Array<Element, ThreadMap::Iterations::kCount *
+                                               ThreadMap::kElementsPerAccess>;
+
+  /// Predicate vector stores mask to guard accesses
+  using Mask = typename UnderlyingIterator::Mask;
+
+  /// Parameters object is precomputed state and is host-constructible
+  class Params {
+   private:
+    friend PredicatedTileIterator;
+
+    /// Parameters object
+    typename UnderlyingIterator::Params params_;
+
+   public:
+    CUTLASS_HOST_DEVICE
+    Params() {}
+
+    /// Construct the Params object given a pitch-linear tensor's layout
+    CUTLASS_HOST_DEVICE
+    Params(Layout const &layout)
+        : params_(layout::PitchLinear(layout.stride(0))) {}
+  };
+
+ private:
+  //
+  // Data members
+  //
+
+  /// Underlying pitch-linear tile iterator
+  UnderlyingIterator iterator_;
+
+ public:
+  /// Constructs a TileIterator from its precomputed state, threadblock offset,
+  /// and thread ID
+  CUTLASS_HOST_DEVICE
+  PredicatedTileIterator(
+      /// Precomputed parameters object
+      Params const &params,
+      /// Pointer to start of tensor
+      Pointer pointer,
+      /// Extent of tensor
+      TensorCoord extent,
+      /// ID of each participating thread
+      int thread_id,
+      /// Initial offset of threadblock
+      TensorCoord const &threadblock_offset)
+      : iterator_(params.params_, pointer,
+                  layout::PitchLinearCoord(extent.column() * kInterleavedK,
+                                           extent.row() / kInterleavedK),
+                  thread_id,
+                  layout::PitchLinearCoord(
+                      threadblock_offset.column() * kInterleavedK,
+                      threadblock_offset.row() / kInterleavedK)) {}
+
+  /// Construct a PredicatedTileIterator with zero threadblock offset
+  CUTLASS_HOST_DEVICE
+  PredicatedTileIterator(
+      Params const &params,  ///< Precomputed parameters object
+      Pointer pointer,       ///< Pointer to start of tensor
+      TensorCoord extent,    ///< Extent of tensor
+      int thread_id          ///< ID of each participating thread
+      )
+      : PredicatedTileIterator(params, pointer, extent, thread_id,
+                               make_Coord(0, 0)) {}
+
+  /// Adds a pointer offset in units of Element
+  CUTLASS_HOST_DEVICE
+  void add_pointer_offset(LongIndex pointer_offset) {
+    iterator_.add_pointer_offset(pointer_offset);
+  }
+
+  /// Advances to the next tile in memory.
+  ///
+  /// The first time this method is called, predicates are updated, and the
+  /// iterator's internal pointer is reverted to the first "steady state" tile.
+  /// Subsequent calls are lightweight and must only update the internal
+  /// pointer.
+  CUTLASS_HOST_DEVICE
+  PredicatedTileIterator &operator++() {
+    ++iterator_;
+    return *this;
+  }
+
+  /// Advances to the next tile in memory.
+  ///
+  /// The first time this method is called, predicates are updated, and the
+  /// iterator's internal pointer is reverted to the first "steady state" tile.
+  /// Subsequent calls are lightweight and must only update the internal
+  /// pointer.
+  CUTLASS_HOST_DEVICE
+  PredicatedTileIterator operator++(int) {
+    PredicatedTileIterator self(*this);
+    operator++();
+    return self;
+  }
+
+  /// Clears the predicate set efficiently
+  CUTLASS_HOST_DEVICE
+  void clear_mask() { iterator_.clear_mask(); }
+
+  /// Clears the predicate set efficiently
+  CUTLASS_HOST_DEVICE
+  void enable_mask() { iterator_.enable_mask(); }
+
+  /// Sets the predicate mask, overriding value stored in predicate iterator
+  CUTLASS_HOST_DEVICE
+  void set_mask(Mask const &mask) { iterator_.set_mask(mask); }
+
+  /// Gets the mask
+  CUTLASS_HOST_DEVICE
+  void get_mask(Mask &mask) { iterator_.get_mask(mask); }
+
+  /// Loads a fragment from memory
+  CUTLASS_DEVICE
+  void load_with_pointer_offset(Fragment &frag, Index pointer_offset) {
+    iterator_.load_with_pointer_offset(frag, pointer_offset);
+  }
+
+  /// Loads a fragment from memory
+  CUTLASS_DEVICE
+  void load(Fragment &frag) { load_with_pointer_offset(frag, 0); }
+
+  /// Store a fragment to memory
+  CUTLASS_DEVICE
+  void store_with_pointer_offset(Fragment const &frag, Index pointer_offset) {
+    iterator_.store_with_pointer_offset(frag, pointer_offset);
+  }
+
+  /// Store a fragment to memory
+  CUTLASS_DEVICE
+  void store(Fragment const &frag) { store_with_pointer_offset(frag, 0); }
+};
+
+/// Specialization of PredicatedTileIterator for interleaved-32 data.  It is
+/// mapped to the congruous layout.
+///
+/// Satisfies: ForwardTileIteratorConcept |
+///            ReadableContiguousTileIteratorConcept |
+///            WriteableContiguousTileIteratorConcept |
+///            MaskedTileIteratorConcept
+///
+template <typename Shape_, typename Element_, int AdvanceRank,
+          typename ThreadMap_, int AccessSize, int InterleavedK>
+class PredicatedTileIterator<Shape_, Element_,
+                             layout::RowMajorInterleavedCol32x2R4R4<InterleavedK>,
+                             AdvanceRank, ThreadMap_, AccessSize> {
+ public:
+  static_assert(
+      AdvanceRank == 0 || AdvanceRank == 1,
+      "Specialization for pitch-linear iterator may along advance along the "
+      "contiguous(rank=0) or strided(rank=1) dimension.");
+
+  using Shape = Shape_;
+  using Element = Element_;
+  static int const kInterleavedK = InterleavedK;
+  using Layout = layout::RowMajorInterleavedCol32x2R4R4<kInterleavedK>;
   static int const kAdvanceRank = AdvanceRank;
   using ThreadMap = ThreadMap_;
 

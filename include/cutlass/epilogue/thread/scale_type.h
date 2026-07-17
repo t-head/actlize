@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Enum defines the behaviors of the epilogue.
 */
@@ -43,7 +45,9 @@ struct ScaleType {
   enum Kind {
     Default,         // alpha x C + beta x D
     NoBetaScaling,   // alpha x C + D
-    OnlyAlphaScaling // alpha x C
+    OnlyAlphaScaling, // alpha x C
+    OnlyAlphaPerChannelScaling, // alpha_vec x C
+    Nothing
   };
 };
 

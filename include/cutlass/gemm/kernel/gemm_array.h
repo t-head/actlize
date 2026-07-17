@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -56,6 +58,12 @@ struct GemmArray {
   /// Warp count (concept: GemmShape)
   using WarpCount = typename Mma::WarpCount;
   static int const kThreadCount = 32 * WarpCount::kCount;
+
+  // gemm array not support fusion now
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = 0;
+  static int const kExtraInputLoopNum = 0;
+  #endif
 
   /// Parameters structure
   struct Params {
@@ -144,7 +152,7 @@ struct GemmArray {
     }
 
 
-    // Each CTA handles multiple batch indices to accommodate limited range of CUDA grid's Z dimension
+    // Each CTA handles multiple batch indices to accommodate limited range of device grid's Z dimension
     for (int batch_idx = threadblock_swizzle.get_batch_idx(); 
       batch_idx < params.batch_count; 
       batch_idx += gridDim.z) {

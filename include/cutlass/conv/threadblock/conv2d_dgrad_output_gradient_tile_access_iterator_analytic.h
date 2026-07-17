@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM A (output gradient tile) 
     matrix from memory.
@@ -58,7 +60,9 @@ template <
   typename Shape_,
   typename Element_,
   typename ThreadMap_,
-  conv::StrideSupport StrideSupport_ = conv::StrideSupport::kStrided
+  conv::StrideSupport StrideSupport_ = conv::StrideSupport::kStrided,
+  int AccessSize = ThreadMap_::kElementsPerAccess,
+  conv::KernelType KernelType_ = conv::KernelType::kNormal
 >
 class Conv2dDgradOutputGradientTileAccessIteratorAnalytic;
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,13 +72,17 @@ class Conv2dDgradOutputGradientTileAccessIteratorAnalytic;
 template <
   typename Shape_,
   typename Element_,
-  typename ThreadMap_
+  typename ThreadMap_,
+  int AccessSize,
+  conv::KernelType KernelType_
 >
 class Conv2dDgradOutputGradientTileAccessIteratorAnalytic <
   Shape_,
   Element_,
   ThreadMap_,
-  conv::StrideSupport::kStrided
+  conv::StrideSupport::kStrided,
+  AccessSize,
+  KernelType_
 > {
 public:
 
@@ -85,7 +93,7 @@ public:
   using Element = Element_;
   using Layout = layout::TensorNHWC;
   using ThreadMap = ThreadMap_;
-  using AccessType = AlignedArray<Element, ThreadMap::kElementsPerAccess>;
+  using AccessType = AlignedArray<Element, AccessSize>;
   using TensorRef = cutlass::TensorRef<Element, Layout>;
   using TensorCoord = typename Layout::TensorCoord;
   using Index = typename Layout::Index;
@@ -111,17 +119,23 @@ public:
 
   using Params = Conv2dAnalyticParams<Layout>;
 
+  static conv::KernelType const kType = KernelType_;
+
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
+
 private:
 
   Params const &params_;
   Conv2dProblemSize const &problem_size_;
   LongIndex iteration_contiguous_;
   LongIndex iteration_strided_;
+  LongIndex iteration_vector_;
   char const *pointer_;
 
   int filter_k_;
   int filter_r_;
   int filter_s_;
+  int problem_k_;
 
   int offset_n_[ThreadMap::Iterations::kStrided];
   int offset_w_[ThreadMap::Iterations::kStrided];
@@ -173,6 +187,7 @@ public:
     layout::PitchLinearCoord thread_coord = ThreadMap::initial_offset(thread_idx);
 
     filter_k_ = threadblock_offset.column() + thread_coord.contiguous();
+    problem_k_ = kType == conv::KernelType::kMultipleGroup ? Shape::kColumn + filter_k_ : problem_size.C;
 
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
@@ -184,6 +199,10 @@ public:
       offset_h_[s] = residual / problem_size_.W;
       offset_w_[s] = residual % problem_size_.W;
     }
+
+#if SAIL_TMP_WORKAROUND
+    set_iteration_index(0);
+#endif
   }
 
   CUTLASS_HOST_DEVICE
@@ -194,8 +213,11 @@ public:
   /// Overrides the internal iteration index
   CUTLASS_HOST_DEVICE
   void set_iteration_index(Index index) {
-    iteration_contiguous_ = index % ThreadMap::Iterations::kContiguous;
-    iteration_strided_ = index / ThreadMap::Iterations::kContiguous;
+    iteration_vector_ = index % kAccessesPerVector;
+    int residual_access = index / kAccessesPerVector;
+
+    iteration_contiguous_ = residual_access % ThreadMap::Iterations::kContiguous;
+    iteration_strided_ = residual_access / ThreadMap::Iterations::kContiguous;
   }
 
   /// Adds a pointer offset in units of Element
@@ -230,8 +252,8 @@ public:
 
     return TensorCoord(
       coord.n(), 
-      coord.h() / problem_size_.stride_h, 
-      coord.w() / problem_size_.stride_w, 
+      coord.h() / problem_size_.stride_h,
+      coord.w() / problem_size_.stride_w,
       coord.c());
   }
 
@@ -248,7 +270,7 @@ public:
       coord.n() < problem_size_.N &&
       coord.h() >= 0 && coord.h() < problem_size_.P &&
       coord.w() >= 0 && coord.w() < problem_size_.Q &&
-      coord.c() < problem_size_.K;
+      coord.c() + iteration_vector_ * AccessSize < problem_size_.K;
   }
 
   /// Returns a pointer to the vector starting at the current coordinate
@@ -258,12 +280,19 @@ public:
     TensorCoord coord = at();
     LongIndex offset = params_.layout(coord);
 
-    return reinterpret_cast<AccessType const *>(pointer_ + offset * sizeof_bits<Element>::value / 8);
+    return reinterpret_cast<AccessType const *>(pointer_ + offset * sizeof_bits<Element>::value / 8) + iteration_vector_;
   }
 
   /// Increments to the next memory access
   CUTLASS_HOST_DEVICE
   Conv2dDgradOutputGradientTileAccessIteratorAnalytic &operator++() {
+    ++iteration_vector_;
+    if (iteration_vector_ < kAccessesPerVector) {
+      return *this;
+    }
+
+    iteration_vector_ = 0;
+
     ++iteration_contiguous_;
     if (iteration_contiguous_ < ThreadMap::Iterations::kContiguous) {
       return *this;
@@ -283,7 +312,7 @@ public:
   static Status can_implement(Conv2dProblemSize const &problem_size) {
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.K % (128/sizeof_bits<Element>::value)) {
+    if (problem_size.K % AccessSize) {
       return Status::kErrorInvalidProblem;
     }
 
@@ -298,13 +327,17 @@ public:
 template <
   typename Shape_,
   typename Element_,
-  typename ThreadMap_
+  typename ThreadMap_,
+  int AccessSize,
+  conv::KernelType KernelType_
 >
 class Conv2dDgradOutputGradientTileAccessIteratorAnalytic < 
   Shape_,
   Element_,
   ThreadMap_,
-  conv::StrideSupport::kUnity
+  conv::StrideSupport::kUnity,
+  AccessSize,
+  KernelType_
 > {
 public:
 
@@ -334,6 +367,10 @@ public:
 
   static_assert(ThreadMap::Iterations::kContiguous == 1,
     "Require Iterations::kContiguous == 1");
+    
+  static int const kAccessesPerVector = ThreadMap::kElementsPerAccess / AccessType::kElements;
+
+  static conv::KernelType const kType = KernelType_;
 
   //
   // Parameters structure
@@ -369,6 +406,7 @@ private:
   int filter_k_;
   int filter_r_;
   int filter_s_;
+  int problem_k_;
 
   int offset_n_[ThreadMap::Iterations::kStrided];
   int offset_w_[ThreadMap::Iterations::kStrided];
@@ -394,6 +432,7 @@ public:
     layout::PitchLinearCoord thread_coord = ThreadMap::initial_offset(thread_idx);
 
     filter_k_ = threadblock_offset.column() + thread_coord.contiguous();
+    problem_k_ = kType == conv::KernelType::kMultipleGroup ? Shape::kColumn + filter_k_ : problem_size.C;
 
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
@@ -476,7 +515,7 @@ public:
     return coord.n() < problem_size_.N &&
       coord.h() >= 0 && coord.h() < problem_size_.P &&
       coord.w() >= 0 && coord.w() < problem_size_.Q &&
-      coord.c() < problem_size_.K;
+      coord.c() < problem_k_;
   }
 
   /// Returns a pointer to the vector starting at the current coordinate
@@ -517,7 +556,7 @@ public:
     }
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.K % (128/sizeof_bits<Element>::value)) {
+    if (problem_size.K % AccessSize) {
       return Status::kErrorInvalidProblem;
     }
 

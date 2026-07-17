@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,13 +23,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear combination with a maximum operation used by epilogues.
 */
 
 #pragma once
 
-#include <cutlass/half.h>
+#include "cutlass/half.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/array.h"
@@ -72,6 +74,11 @@ public:
 
   static FloatRoundStyle const kRound = Round;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
+
   /// Host-constructable parameters structure
   struct Params {
 
@@ -106,8 +113,11 @@ public:
       ElementCompute const *alpha_ptr,
       ElementCompute const *beta_ptr = nullptr,
       ElementCompute threshold = ElementCompute(0)
+#if SAIL_TMP_WORKAROUND
+    ): alpha(alpha_ptr ? *alpha_ptr : 0), beta(beta_ptr ? *beta_ptr : 0), threshold(threshold), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
+#else
     ): alpha(0), beta(0), threshold(threshold), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
-
+#endif
     }
   };
 
@@ -126,9 +136,13 @@ public:
   /// Constructs the function object, possibly loading from pointers in host memory
   CUTLASS_HOST_DEVICE
   LinearCombinationRelu(Params const &params) {
-
+#if SAIL_TMP_WORKAROUND
+    alpha_ = params.alpha;
+    beta_ = params.beta;
+#else
     alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
     beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+#endif
     threshold_ = params.threshold;
   }
 
@@ -141,6 +155,12 @@ public:
 
     return beta_ != ElementCompute(0);
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  bool is_invariant() const { return false; }
+#endif
 
   /// Functionally required for serial reduction in the epilogue
   CUTLASS_HOST_DEVICE
@@ -223,7 +243,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Conditional guards to enable partial specialization for packed integers
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 720) && ((__CUDACC_VER_MAJOR__ > 10) || ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && ((__HGGCCC_VER_MAJOR__ > 10) || ((__HGGCCC_VER_MAJOR__ >= 10) && (__HGGCCC_VER_MINOR__ >= 2)))
 
 /// Applies a linear combination operator to an array of elements.
 ///
@@ -251,6 +271,11 @@ public:
   using ComputeFragment = Array<ElementCompute, kCount>;
 
   static FloatRoundStyle const kRound = Round;
+
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraEpilogueOpsNum = 0;
+  static int const kExtraEpilogueInputs = 0;
+  #endif
 
   /// Host-constructable parameters structure
   struct Params {
@@ -286,8 +311,11 @@ public:
       ElementCompute const *alpha_ptr,
       ElementCompute const *beta_ptr = nullptr,
       ElementCompute threshold = ElementCompute(0)
+#if SAIL_TMP_WORKAROUND
+    ): alpha(alpha_ptr ? *alpha_ptr : 0), beta(beta_ptr ? *beta_ptr : 0), threshold(threshold), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
+#else
     ): alpha(0), beta(0), threshold(threshold), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {
-
+#endif
     }
   };
 
@@ -306,9 +334,13 @@ public:
   /// Constructs the function object, possibly loading from pointers in host memory
   CUTLASS_HOST_DEVICE
   LinearCombinationRelu(Params const &params) {
-
+#if SAIL_TMP_WORKAROUND
+    alpha_ = params.alpha;
+    beta_ = params.beta;
+#else
     alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
     beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+#endif
     threshold_ = params.threshold;
   }
 
@@ -321,6 +353,12 @@ public:
 
     return beta_ != ElementCompute(0);
   }
+
+#if SAIL_EPILOGUE_OPT >= 1
+  /// Returns true if output op is invariant
+  CUTLASS_HOST_DEVICE
+  bool is_invariant() const { return false; }
+#endif
 
   /// Functionally required for serial reduction in the epilogue
   CUTLASS_HOST_DEVICE
@@ -357,9 +395,11 @@ public:
     ReLu<ComputeFragment> relu;
 
     if (Scale == ScaleType::NoBetaScaling)
-      intermediate = mul_add_source(beta_, converted_source);                             // X =  beta * C + uniform
+        intermediate = converted_source;
     else
-      intermediate = mul_add_accumulator(alpha_, converted_accumulator, intermediate);    // D = alpha * Accum + X
+        intermediate = mul_add_source(beta_, converted_source);                         // X =  beta * C + uniform
+
+    intermediate = mul_add_accumulator(alpha_, converted_accumulator, intermediate);    // D = alpha * Accum + X
 
     // Compute threshold optionally
     intermediate = relu(threshold_, intermediate);

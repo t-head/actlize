@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -34,6 +35,7 @@
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
 #include "cutlass/semaphore.h"
+#include "cutlass/utils.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,6 +59,10 @@ struct Gemm {
   using ThreadblockSwizzle = ThreadblockSwizzle_;
   static bool const kSplitKSerial = SplitKSerial;
 
+  #if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  #endif
   /// Warp count (concept: GemmShape)
   using WarpCount = typename Mma::WarpCount;
   static int const kThreadCount = 32 * WarpCount::kCount;
@@ -71,6 +77,10 @@ struct Gemm {
     typename Mma::IteratorB::TensorRef ref_B;
     typename Epilogue::OutputTileIterator::Params params_C;
     typename Epilogue::OutputTileIterator::TensorRef ref_C;
+    #if SAIL_FUSE_OP_EXT
+    typename Epilogue::OutputTileIterator::Params params_Extra[kExtraInputNum];
+    typename Epilogue::OutputTileIterator::TensorRef ref_Extra[kExtraInputNum];
+    #endif
     typename Epilogue::OutputTileIterator::Params params_D;
     typename Epilogue::OutputTileIterator::TensorRef ref_D;
     typename OutputOp::Params output_op;
@@ -92,6 +102,9 @@ struct Gemm {
       typename Mma::IteratorA::TensorRef ref_A,
       typename Mma::IteratorB::TensorRef ref_B,
       typename Epilogue::OutputTileIterator::TensorRef ref_C,
+      #if SAIL_FUSE_OP_EXT
+      typename Epilogue::OutputTileIterator::TensorRef (&ref_Extra_NC)[kExtraInputNum],
+      #endif
       typename Epilogue::OutputTileIterator::TensorRef ref_D,
       typename OutputOp::Params output_op = typename OutputOp::Params(),
       int *workspace = nullptr
@@ -113,7 +126,15 @@ struct Gemm {
       
       gemm_k_size = gemm_k_iterations * Mma::Shape::kK;
 
-    semaphore = workspace;
+      semaphore = workspace;
+
+      #if SAIL_FUSE_OP_EXT
+      CUTLASS_PRAGMA_UNROLL
+      for (int i =0; i < kExtraInputLoopNum; i++) {
+        params_Extra[i] = ref_Extra_NC[i].layout();
+        ref_Extra[i] = ref_Extra_NC[i];
+      }
+      #endif
     }
   };
 
@@ -131,11 +152,15 @@ struct Gemm {
   Gemm() { } 
 
   /// Determines whether kernel satisfies alignment
-    static Status can_implement(
+  CUTLASS_HOST_DEVICE
+  static Status can_implement(
       cutlass::gemm::GemmCoord const & problem_size,
       typename Mma::IteratorA::TensorRef ref_A,
       typename Mma::IteratorB::TensorRef ref_B,
       typename Epilogue::OutputTileIterator::TensorRef ref_C,
+      #if SAIL_FUSE_OP_EXT
+      typename Epilogue::OutputTileIterator::TensorRef (&ref_Extra_NC)[kExtraInputNum],
+      #endif
       typename Epilogue::OutputTileIterator::TensorRef ref_D) {
 
     static int const kAlignmentA = (platform::is_same<typename Mma::IteratorA::Layout,
@@ -146,7 +171,9 @@ struct Gemm {
                                      ? 64
                                      : Mma::IteratorA::AccessType::kElements;
     static int const kAlignmentB =  (platform::is_same<typename Mma::IteratorB::Layout,
-                                                       layout::RowMajorInterleaved<32>>::value)
+                                                       layout::RowMajorInterleaved<32>>::value || 
+                                     platform::is_same<typename Mma::IteratorB::Layout,
+                                                       layout::RowMajorInterleavedCol32x2R4R4<32>>::value)
                                    ? 32
                                    : (platform::is_same<typename Mma::IteratorB::Layout,
                                                         layout::RowMajorInterleaved<64>>::value)
@@ -166,18 +193,65 @@ struct Gemm {
       return Status::kErrorMisalignedOperand;
     }
 
+    #if SAIL_FUSE_OP_EXT
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      if (ref_Extra_NC[i].good() && !TensorRef_aligned(ref_Extra_NC[i], kAlignmentC)) {
+          return Status::kErrorMisalignedOperand;
+      } 
+    }
+    #endif
+
     if (!TensorRef_aligned(ref_D, kAlignmentC)) {
-      return Status::kErrorMisalignedOperand;
+      return Status::kErrorMisalignedOperand; 
     }
 
-    if ((problem_size.m() % kAlignmentA) || (problem_size.k() % kAlignmentA) ||
-      (problem_size.n() % kAlignmentB) || (problem_size.k() % kAlignmentB) ||
-      (problem_size.m() % kAlignmentC) || (problem_size.n() % kAlignmentC)) {
+    int len_A = platform::is_same<typename Mma::IteratorA::TensorRef::Layout, cutlass::layout::RowMajor>::value ? problem_size.k() : problem_size.m();
+    int len_B = platform::is_same<typename Mma::IteratorB::TensorRef::Layout, cutlass::layout::RowMajor>::value ? problem_size.n() : problem_size.k();
+    int len_C = platform::is_same<typename Epilogue::OutputTileIterator::TensorRef::Layout, cutlass::layout::RowMajor>::value ? problem_size.n() : problem_size.m();
 
-      return Status::kErrorMisalignedOperand;
+    if ((len_A % kAlignmentA) || (len_B % kAlignmentB) || (len_C % kAlignmentC)) {
+        return Status::kErrorMisalignedOperand;
     }
-
     return Status::kSuccess;
+  }
+
+  template <typename Params_ = Params,
+            typename MmaType = Mma>
+  CUTLASS_DEVICE
+  typename platform::enable_if<cutlass::gemm::kernel::has_PrefetchIterator<MmaType>::value, void>::type
+    runMma(MmaType& mma,
+           Params_ const &params,
+           int gemm_k_iterations,
+           typename MmaType::FragmentC& accumulators,
+           typename Mma::IteratorA& iterator_A,
+           typename Mma::IteratorB& iterator_B,
+           int thread_idx,
+           MatrixCoord const& threadblock_offset
+          ) {
+      typename MmaType::PrefetchIterator iterator_Prefetch(
+        params.ref_C.data(),
+        params.problem_size.mn(),
+        thread_idx,
+        threadblock_offset
+      );
+      return mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, iterator_Prefetch);
+  }
+
+  template <typename Params_ = Params,
+            typename MmaType = Mma>
+  CUTLASS_DEVICE
+  typename platform::enable_if<!cutlass::gemm::kernel::has_PrefetchIterator<MmaType>::value, void>::type
+    runMma(MmaType& mma,
+           Params_ const &params,
+           int gemm_k_iterations,
+           typename MmaType::FragmentC& accumulators,
+           typename Mma::IteratorA& iterator_A,
+           typename Mma::IteratorB& iterator_B,
+           int thread_idx,
+           MatrixCoord const& threadblock_offset
+          ) {
+      return mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, accumulators);
   }
 
   /// Executes one GEMM
@@ -250,21 +324,11 @@ struct Gemm {
 
     accumulators.clear();
 
-    if (!kSplitKSerial || gemm_k_iterations > 0) {
-      // Compute threadblock-scoped matrix multiply-add
-      mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, accumulators);
-    }
-
-    //
-    // Epilogue
-    //
-
     OutputOp output_op(params.output_op);
 
     //
     // Masked tile iterators constructed from members
     //
-
     threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.grid_tiled_shape);
 
@@ -274,6 +338,15 @@ struct Gemm {
       threadblock_tile_offset.n() * Mma::Shape::kN
     );
 
+
+    if (!kSplitKSerial || gemm_k_iterations > 0) {
+      // Compute threadblock-scoped matrix multiply-add
+      runMma(mma, params, gemm_k_iterations, accumulators, iterator_A, iterator_B, thread_idx, threadblock_offset);
+    }
+
+    //
+    // Epilogue
+    //
     int block_idx = threadblock_tile_offset.m() + threadblock_tile_offset.n() * params.grid_tiled_shape.m();
 
     // Construct the semaphore.
@@ -327,8 +400,26 @@ struct Gemm {
     }
 
     // Execute the epilogue operator to update the destination tensor.
-    epilogue(output_op, iterator_D, accumulators, iterator_C); 
-    
+    #if SAIL_FUSE_OP_EXT
+    typename Epilogue::OutputTileIterator iterator_Extra[kExtraInputNum];
+
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kExtraInputLoopNum; i++) {
+      iterator_Extra[i] = {params.params_Extra[i], params.ref_Extra[i].data(), params.problem_size.mn(), thread_idx, threadblock_offset};
+    }
+    if (kSplitKSerial && params.grid_tiled_shape.k() > 1) {
+      // only the last partition do extra op
+      if (threadblock_tile_offset.k() + 1 == params.grid_tiled_shape.k())
+        epilogue.runEpilogue(output_op, iterator_D, accumulators, iterator_C, iterator_Extra);
+      else
+        epilogue(output_op, iterator_D, accumulators, iterator_C);
+    } else {
+      epilogue.runEpilogue(output_op, iterator_D, accumulators, iterator_C, iterator_Extra);
+    }
+    #else
+    epilogue(output_op, iterator_D, accumulators, iterator_C);
+    #endif
+
     //
     // Release the semaphore
     //

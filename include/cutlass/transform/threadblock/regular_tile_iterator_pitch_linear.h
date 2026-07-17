@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of tiles from pitch-linear rank=2 tensors. 
 
@@ -39,7 +41,7 @@
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/pitch_linear.h"
 
-#include "regular_tile_iterator.h"
+#include "cutlass/transform/threadblock/regular_tile_iterator.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,7 +52,7 @@ namespace threadblock {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Regular tile iterator specialized for pitch-linear.  This one is used by 2-stage SIMT kernels
-/// and sparse tensor core meta data.
+/// and sparse tensor cell meta data.
 template <
   typename Shape_,
   typename Element_,
@@ -229,7 +231,7 @@ public:
 
   /// Adds a tile offset in the unit of tile.
   /// In GEMM/Conv implementation, this is used to move in the k dimension in the shared memory.
-  /// Below layouts are the shared memory layouts.  Current SM50 SIMT kernels only use col major A and row major B.
+  /// Below layouts are the shared memory layouts.  Current PPU SIMT kernels only use col major A and row major B.
   ///   For row major A operand, k dimension is contiguous dimension;
   ///   For col major A operand, k dimension is strided dimension;
   ///   For row major B operand, k dimension is strided dimension;

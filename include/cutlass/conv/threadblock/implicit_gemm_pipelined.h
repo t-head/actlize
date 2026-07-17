@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a double-buffered threadblock-scoped GEMM kernel.
 */
@@ -47,11 +49,11 @@ namespace threadblock {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
   /// Size of the Gemm problem - concept: gemm::GemmShape<>
   typename Shape_,
-  /// Iterates over tiles of A operand in global memory 
+  /// Iterates over tiles of A operand in global memory
   //  (concept: ReadableTileIterator | ForwardTileIterator | MaskedTileIterator)
   typename IteratorA_,
   /// Iterates over tiles of A operand in shared memory
@@ -71,14 +73,14 @@ template <
   typename Policy_,
   /// Transformation applied to A operand
   typename TransformA_ = NumericArrayConverter<
-    typename SmemIteratorA_::Element, 
-    typename IteratorA_::Element, 
+    typename SmemIteratorA_::Element,
+    typename IteratorA_::Element,
     IteratorA_::Fragment::kElements>,
   ///
   /// Transformation applied to A operand
   typename TransformB_ = NumericArrayConverter<
-    typename SmemIteratorB_::Element, 
-    typename IteratorB_::Element, 
+    typename SmemIteratorB_::Element,
+    typename IteratorB_::Element,
     IteratorB_::Fragment::kElements>,
   /// Used for partial specialization
   typename Enable = bool
@@ -230,7 +232,7 @@ public:
 
     int smem_write_stage_idx = 1;
 
-    // Issue loads during the first warp-level matrix multiply-add *AFTER* issuing 
+    // Issue loads during the first warp-level matrix multiply-add *AFTER* issuing
     // shared memory loads (which have the tighest latency requirement).
 
     //
@@ -239,7 +241,13 @@ public:
 
     // Note: The main loop does not support Base::kWarpGemmIterations == 2.
     CUTLASS_GEMM_LOOP
+// move last loop out to remove global load and smem store
+// cause stack in compiler, annotate now
+// #if SAIL_CUSTOMIZE_CUTLASS
+//     for (; gemm_k_iterations > 1; --gemm_k_iterations) {
+// #else
     for (; gemm_k_iterations > 0; --gemm_k_iterations) {
+// #endif
       //
       // Loop over GEMM K dimension
       //
@@ -258,7 +266,7 @@ public:
           this->smem_iterator_B_.store(transform_B(tb_frag_B));
 
           __syncthreads();
-          
+
           ++this->smem_iterator_A_;
           ++this->smem_iterator_B_;
 
@@ -280,7 +288,7 @@ public:
 
         this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
         this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
-        
+
         this->warp_tile_iterator_A_.load(warp_frag_A[(warp_mma_k + 1) % 2]);
         this->warp_tile_iterator_B_.load(warp_frag_B[(warp_mma_k + 1) % 2]);
 
@@ -291,15 +299,56 @@ public:
 
           iterator_A.load(tb_frag_A);
           iterator_B.load(tb_frag_B);
-    
+
           ++iterator_A;
           ++iterator_B;
         }
 
+
         warp_mma(accum, warp_frag_A[warp_mma_k % 2],
-                 warp_frag_B[warp_mma_k % 2], accum);
+                warp_frag_B[warp_mma_k % 2], accum);
       }
     }
+
+
+// cause stack in compiler, annotate now
+// #if SAIL_CUSTOMIZE_CUTLASS
+//     CUTLASS_PRAGMA_UNROLL
+//     for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations; ++warp_mma_k) {
+
+//       // Load warp-level tiles from shared memory, wrapping to k offset if this is the last group
+//       // as the case may be.
+
+//       if (warp_mma_k == Base::kWarpGemmIterations - 1) {
+//         // Add negative offsets to return iterators to the 'start' of the circular buffer in shared memory
+//         if (smem_write_stage_idx == 1) {
+//           this->smem_iterator_A_.add_tile_offset({0, -Base::kStages});
+//           this->smem_iterator_B_.add_tile_offset({-Base::kStages, 0});
+//         }
+//         else {
+//           this->warp_tile_iterator_A_.add_tile_offset(
+//               {0, -Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations});
+//           this->warp_tile_iterator_B_.add_tile_offset(
+//               {-Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations,
+//                 0});
+//         }
+
+//         smem_write_stage_idx ^= 1;
+//       }
+
+//       this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+//       this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+
+//       this->warp_tile_iterator_A_.load(warp_frag_A[(warp_mma_k + 1) % 2]);
+//       this->warp_tile_iterator_B_.load(warp_frag_B[(warp_mma_k + 1) % 2]);
+
+//       ++this->warp_tile_iterator_A_;
+//       ++this->warp_tile_iterator_B_;
+
+//       warp_mma(accum, warp_frag_A[warp_mma_k % 2],
+//               warp_frag_B[warp_mma_k % 2], accum);
+//     }
+// #endif
 
   }
 };

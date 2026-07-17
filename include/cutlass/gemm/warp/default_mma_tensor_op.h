@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Default warp-level GEMM operators selected by data type, size, and layouts of operands.
 */
@@ -60,7 +62,11 @@ template <
     int PartitionsK = 1,
     /// Store the accumulators in row major or column major.  Row major is used
     /// when output layout is interleaved.
-    bool AccumulatorsInRowMajor = false>
+    bool AccumulatorsInRowMajor = false,
+    // cube_ndhw size
+    int CubeA = 1,
+    int CubeB = 1
+>
 struct DefaultMmaTensorOp;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,7 +95,11 @@ template <
     int PartitionsK,
     /// Store the accumulators in row major or column major.  Row major is used
     /// when output layout is interleaved.
-    bool AccumulatorsInRowMajor>
+    bool AccumulatorsInRowMajor,
+    // cube_ndhw size
+    int CubeA,
+    int CubeB
+>
 struct DefaultMmaTensorOp {
   using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<
       cutlass::arch::Mma<InstructionShape_, 32, ElementA,
@@ -101,7 +111,8 @@ struct DefaultMmaTensorOp {
   // Define the warp-level tensor op
   using Type = cutlass::gemm::warp::MmaTensorOp<
       WarpShape_, ElementA, LayoutA, ElementB, LayoutB, ElementC, LayoutC,
-      Policy, PartitionsK, AccumulatorsInRowMajor>;
+      Policy, PartitionsK, AccumulatorsInRowMajor, bool, CubeA, CubeB
+      >;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,6 +123,6 @@ struct DefaultMmaTensorOp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "default_mma_tensor_op_sm80.h"
+#include "cutlass/gemm/warp/default_mma_tensor_op_ppu.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

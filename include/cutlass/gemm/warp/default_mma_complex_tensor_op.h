@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Default warp-level GEMM operators selected by data type, size, and layouts of operands.
 */
@@ -31,7 +33,7 @@
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/warp/mma_complex_tensor_op.h"
 #include "cutlass/gemm/warp/mma_gaussian_complex_tensor_op.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm80.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu.h"
 
 namespace cutlass {
 namespace gemm {

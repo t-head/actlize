@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted
@@ -22,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -118,6 +120,12 @@ class InterleavedEpilogue {
       gemm::GemmShape<Shape::kM / WarpMmaOperator::Shape::kM,
                       Shape::kN / WarpMmaOperator::Shape::kN, kPartitionsK>;
 
+#if SAIL_FUSE_OP_EXT
+  static int const kExtraInputNum = OutputOp::kExtraEpilogueInputs > 0 ? OutputOp::kExtraEpilogueInputs : 1;
+  static int const kExtraInputLoopNum = cutlass::epilogue::GetExtraEpilogueBinaryInputs<OutputOp>::value;
+  static bool const kSupportExtraInput = OutputOp::kExtraEpilogueOpsNum > 0;
+#endif
+
  public:
   static_assert(OutputTileIterator::kElementsPerAccess,
                 "This must not be zero.");
@@ -154,6 +162,17 @@ class InterleavedEpilogue {
       compute_source_needed_(output_op, destination_iterator, accumulators, source_iterator);
     }
   }
+
+#if SAIL_FUSE_OP_EXT
+  CUTLASS_DEVICE void runEpilogue(
+    OutputOp const &output_op,                    ///< Output operator
+    OutputTileIterator destination_iterator,      ///< Tile iterator for destination
+    AccumulatorTile const &accumulators,          ///< Complete warp-level accumulator tile
+    OutputTileIterator source_iterator,           ///< Threadblock tile coordinate in GEMM (in units of threadblock tiles)
+    OutputTileIterator (&extra_input_iters)[kExtraInputNum] ) {
+      operator()(output_op, destination_iterator, accumulators, source_iterator);
+  }
+#endif
    
   /// Streams the result to global memory
   CUTLASS_DEVICE
