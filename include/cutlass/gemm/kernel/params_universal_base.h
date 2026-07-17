@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -141,8 +142,8 @@ struct UniversalParamsBase
   /// Constructor
   UniversalParamsBase(
     UniversalArgumentsBase const &args, /// GEMM application arguments
-    int device_sms,                     /// Number of SMs on the device
-    int sm_occupancy)                   /// Kernel SM occupancy (in thread blocks)
+    int device_cus,                     /// Number of CUs on the device
+    int cu_occupancy)                   /// Kernel CU occupancy (in thread blocks)
   :
     problem_size(args.problem_size),
     mode(args.mode),
@@ -180,7 +181,7 @@ struct UniversalParamsBase
   /// the memory allocated to workspace is at least as large as get_workspace_size().
   Status init_workspace(
     void *workspace,
-    cudaStream_t stream = nullptr)
+    hggcStream_t stream = nullptr)
   {
     semaphore = static_cast<int *>(workspace);
     // Zero-initialize entire workspace
@@ -190,14 +191,14 @@ struct UniversalParamsBase
 
       CUTLASS_TRACE_HOST("  Initialize " << workspace_bytes << " workspace bytes");
 
-      cudaError_t result = cudaMemsetAsync(
+      hggcError_t result = hggcMemsetAsync(
         semaphore,
         0,
         workspace_bytes,
         stream);
 
-      if (result != cudaSuccess) {
-        CUTLASS_TRACE_HOST("  cudaMemsetAsync() returned error " << cudaGetErrorString(result));
+      if (result != hggcSuccess) {
+        CUTLASS_TRACE_HOST("  hggcMemsetAsync() returned error " << hggcGetErrorString(result));
         return Status::kErrorInternal;
       }
     }

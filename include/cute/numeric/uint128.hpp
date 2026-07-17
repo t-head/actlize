@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,10 +29,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cstdint>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cstdint>
 #else
 #include <cstdint>
 #include <cstdlib>
@@ -43,12 +45,9 @@
 #include <cute/config.hpp>
 
 /// Optionally enable GCC's built-in type
-#if defined(__x86_64) && !defined(__CUDA_ARCH__)
+#if defined(__x86_64) && !defined(__HGGC_ARCH__)
 #  if defined(__GNUC__) && 0
 #    define CUTE_UINT128_NATIVE
-#  elif defined(_MSC_VER)
-#    define CUTE_INT128_ARITHMETIC
-#    include <intrin.h>
 #  endif
 #endif
 
@@ -152,13 +151,6 @@ struct alignas(16) uint128_t
     uint128_t y;
 #if defined(CUTE_UINT128_NATIVE)
     y.native = native * rhs;
-#elif defined(CUTE_INT128_ARITHMETIC)
-    // Multiply by the low part
-    y.hilo_.lo = _umul128(hilo_.lo, rhs, &y.hilo_.hi);
-
-    // Add the high part and ignore the overflow
-    uint64_t overflow;
-    y.hilo_.hi += _umul128(hilo_.hi, rhs, &overflow);
 #else
     exception();
 #endif
@@ -172,10 +164,6 @@ struct alignas(16) uint128_t
     uint64_t quotient = 0;
 #if defined(CUTE_UINT128_NATIVE)
     quotient = uint64_t(native / divisor);
-#elif defined(CUTE_INT128_ARITHMETIC)
-    // implemented using MSVC's arithmetic intrinsics
-    uint64_t remainder = 0;
-    quotient = _udiv128(hilo_.hi, hilo_.lo, divisor, &remainder);
 #else
     exception();
 #endif
@@ -189,9 +177,6 @@ struct alignas(16) uint128_t
     uint64_t remainder = 0;
 #if defined(CUTE_UINT128_NATIVE)
     remainder = uint64_t(native % divisor);
-#elif defined(CUTE_INT128_ARITHMETIC)
-    // implemented using MSVC's arithmetic intrinsics
-    (void)_udiv128(hilo_.hi, hilo_.lo, divisor, &remainder);
 #else
     exception();
 #endif
@@ -206,9 +191,6 @@ struct alignas(16) uint128_t
 #if defined(CUTE_UINT128_NATIVE)
     quotient = uint64_t(native / divisor);
     remainder = uint64_t(native % divisor);
-#elif defined(CUTE_INT128_ARITHMETIC)
-    // implemented using MSVC's arithmetic intrinsics
-    quotient = _udiv128(hilo_.hi, hilo_.lo, divisor, &remainder);
 #else
     exception();
 #endif

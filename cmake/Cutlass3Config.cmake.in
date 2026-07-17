@@ -1,0 +1,9 @@
+get_filename_component(Cutlass3_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+include(CMakeFindDependencyMacro)
+
+if(TARGET cutlass3::CUTLASS)
+  return()
+endif()
+
+include("${Cutlass3_CMAKE_DIR}/Cutlass3Targets.cmake")

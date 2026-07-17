@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cutlass/detail/dependent_false.hpp>
@@ -52,11 +54,11 @@ class CollectiveEpilogue {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "detail.hpp"
-#include "default_epilogue.hpp"
-#include "default_epilogue_array.hpp"
-#include "epilogue_tensor_broadcast.hpp"
-#include "sm70_epilogue_vectorized.hpp"
-#include "sm90_epilogue_tma_warpspecialized.hpp"
-#include "sm90_epilogue_tma_warpspecialized_bias_elementwise.hpp"
+// cutlass3 change: original cutlass3 use relative path here, and some other place use absolute path
+#include "cutlass/epilogue/collective/detail.hpp"
+#include "cutlass/epilogue/collective/default_epilogue.hpp"
+#include "cutlass/epilogue/collective/default_epilogue_array.hpp"
+#include "cutlass/epilogue/collective/epilogue_tensor_broadcast.hpp"
+#include "cutlass/epilogue/collective/ppu_epilogue_vectorized.hpp"
+
 /////////////////////////////////////////////////////////////////////////////////////////////////

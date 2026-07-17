@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue visitor for threadblock scoped GEMMs that process softmax computations in epilogue.
 
@@ -43,7 +45,7 @@
 
 #include "cutlass/cutlass.h"
 #include "cutlass/arch/memory.h"
-#include "cutlass/arch/memory_sm75.h"
+#include "cutlass/arch/memory_ppu.h"
 #include "cutlass/numeric_conversion.h"
 #include "cutlass/fast_math.h"
 

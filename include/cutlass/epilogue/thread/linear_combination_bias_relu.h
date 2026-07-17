@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,13 +29,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear combination operations used by epilogues.
 */
 
 #pragma once
 
-#include <cuda_fp16.h>
+#include <hggc_fp16.h>
 
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
@@ -134,7 +136,7 @@ struct ArrayMaximum<half_t, ElementsPerAccess> {
 
     Array<half_t, ElementsPerAccess> result;
 
-    #if __CUDA_ARCH__ >= 800
+    #if __HGGC_ARCH__ >= 100
     int const kVectorCount = ElementsPerAccess / 2;
 
 
@@ -171,7 +173,7 @@ struct ArrayMaximum<half_t, ElementsPerAccess> {
 
     Array<half_t, ElementsPerAccess> result;
 
-    #if __CUDA_ARCH__ >= 800
+    #if __HGGC_ARCH__ >= 100
     int const kVectorCount = ElementsPerAccess / 2;
 
 
@@ -209,8 +211,8 @@ struct ArrayMaximum<half_t, ElementsPerAccess> {
 template <int ElementsPerAccess>
 struct ArrayMaximum<bfloat16_t, ElementsPerAccess> {
 
-  using NvType   = __nv_bfloat16;
-  using NvTypeV2 = __nv_bfloat162;
+  using NvType   = __ppu_bfloat16;
+  using NvTypeV2 = __ppu_bfloat162;
 
   CUTLASS_DEVICE
   Array<bfloat16_t, ElementsPerAccess> operator()(
@@ -219,7 +221,7 @@ struct ArrayMaximum<bfloat16_t, ElementsPerAccess> {
 
     Array<bfloat16_t, ElementsPerAccess> result;
 
-    #if __CUDA_ARCH__ >= 800
+    #if __HGGC_ARCH__ >= 100
     int const kVectorCount = ElementsPerAccess / 2;
 
 
@@ -254,7 +256,7 @@ struct ArrayMaximum<bfloat16_t, ElementsPerAccess> {
 
     Array<bfloat16_t, ElementsPerAccess> result;
 
-    #if __CUDA_ARCH__ >= 800
+    #if __HGGC_ARCH__ >= 100
     int const kVectorCount = ElementsPerAccess / 2;
 
 
@@ -335,8 +337,8 @@ struct ReluConditional<bfloat16_t, ElementsPerAccess> {
     Array<bfloat16_t, ElementsPerAccess> const &fragment,
     bfloat16_t threshold) const {
 
-    __nv_bfloat16 y = reinterpret_cast<__nv_bfloat16 const &>(threshold);
-    __nv_bfloat16 const *x = reinterpret_cast<__nv_bfloat16 const *>(fragment.raw_data());
+    __ppu_bfloat16 y = reinterpret_cast<__ppu_bfloat16 const &>(threshold);
+    __ppu_bfloat16 const *x = reinterpret_cast<__ppu_bfloat16 const *>(fragment.raw_data());
 
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < ElementsPerAccess; ++i) {

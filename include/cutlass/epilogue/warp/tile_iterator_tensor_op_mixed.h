@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief 
 */
@@ -38,13 +40,13 @@
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/pitch_linear.h"
 
-#include "cutlass/arch/memory_sm75.h"
+#include "cutlass/arch/memory_ppu.h"
 #include "cutlass/epilogue/warp/tensor_op_policy.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-// This is an optimization available on CUDA 11.2 and beyond that eliminates branches in the epilogue.
-#define CUTLASS_EPILOGUE_WARP_TILE_ITERATOR_TENSOR_OP_MIXED_OPTIMIZATION_ENABLED ((__CUDACC_VER_MAJOR__ * 10 + __CUDACC_VER_MINOR__) >= 112)
+// This is an optimization available on HGGC 11.2 and beyond that eliminates branches in the epilogue.
+#define CUTLASS_EPILOGUE_WARP_TILE_ITERATOR_TENSOR_OP_MIXED_OPTIMIZATION_ENABLED ((__HGGCCC_VER_MAJOR__ * 10 + __HGGCCC_VER_MINOR__) >= 112)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -500,7 +502,7 @@ public:
       uint32_t offset_in_bytes = offset * sizeof(AccessType) + uniform_offset_[offset_idx];
 
       asm volatile(
-        "{ .reg .u32 smem_ptr; add.u32 smem_ptr, %0, %1; st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
+        "{ .reg .u32 smem_ptr; ppu.add.u32 smem_ptr, %0, %1; ppu.st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
         : : "r"(smem_addr), "r"(offset_in_bytes), "r"(data[0]), "r"(data[1])
       );
 #endif
@@ -696,7 +698,7 @@ public:
       uint32_t offset_in_bytes = offset * sizeof(AccessType);
 
       asm volatile(
-        "{ .reg .u32 smem_ptr; add.u32 smem_ptr, %0, %1; st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
+        "{ .reg .u32 smem_ptr; ppu.add.u32 smem_ptr, %0, %1; ppu.st.shared.v2.u32 [smem_ptr], {%2, %3}; }\n"
         : : "r"(smem_addr), "r"(offset_in_bytes), "r"(data[0]), "r"(data[1])
       );
 #endif

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief 
 */
@@ -56,7 +58,7 @@ struct LinearCombinationParams {
   LinearCombinationParams(ElementCompute alpha, ElementCompute beta) 
   : alpha_data {0lu, 0lu}, beta_data {0lu, 0lu} 
   {
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
     reinterpret_cast<ElementCompute&>(alpha_data) = alpha;
     reinterpret_cast<ElementCompute&>(beta_data) = beta;
 #else

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*!
     \file
     \brief Defines a proxy class for storing non-standard 16-bit floating point values with
@@ -46,8 +48,8 @@
 
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include "cutlass/floating_point_nvrtc.h"
+#if defined(__HGGCCC_RTC__)
+#include "cutlass/floating_point_hgrtc.h"
 #else
 #include <cmath>
 #include <limits>
@@ -55,7 +57,7 @@
 #include <cstring>
 #endif
 
-#include <cuda_bf16.h>
+#include <hggc_bf16.h>
 #include "cutlass/cutlass.h"
 #include "cutlass/platform/platform.h"
 
@@ -97,7 +99,7 @@ private:
     float flt = static_cast<float>(x);
     uint32_t bits;
 
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
     bits = reinterpret_cast<uint32_t &>(flt);
     #else
     std::memcpy(&bits, &flt, sizeof(bits));
@@ -114,14 +116,14 @@ public:
   CUTLASS_HOST_DEVICE
   explicit bfloat16_t(float x) {
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDACC_VER_MAJOR__ >= 11)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
-    asm("cvt.rn.bf16.f32 %0, %1;\n" : "=h"(storage) : "f"(x));
+    asm("ppu.cvt.rtte.bf16.f32 %0, %1;\n" : "=h"(storage) : "f"(x));
 
     #else
     uint32_t bits;
 
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
     bits = reinterpret_cast<uint32_t &>(x);
     #else
     std::memcpy(&bits, &x, sizeof(bits));
@@ -162,7 +164,7 @@ public:
   CUTLASS_HOST_DEVICE
   operator float() const {
     unsigned bits = (unsigned(storage) << 16);
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
     return reinterpret_cast<float const &>(bits);
     #else
     float flt;
@@ -243,7 +245,6 @@ bool isfinite(cutlass::bfloat16_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::bfloat16_t nan_bf16(const char*) {
-  // NVIDIA canonical NaN
   return cutlass::bfloat16_t::bitcast(0x7fff);
 }
 
@@ -282,7 +283,7 @@ int fpclassify(cutlass::bfloat16_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::bfloat16_t sqrt(cutlass::bfloat16_t const& h) {
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
   return cutlass::bfloat16_t(sqrtf(float(h)));
 #else
   return cutlass::bfloat16_t(std::sqrt(float(h)));
@@ -295,7 +296,7 @@ bfloat16_t copysign(bfloat16_t const& a, bfloat16_t const& b) {
   uint16_t a_bits;
   uint16_t b_bits;
 
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   a_bits = reinterpret_cast<uint16_t const &>(a);
   b_bits = reinterpret_cast<uint16_t const &>(b);
   #else
@@ -322,7 +323,7 @@ bfloat16_t copysign(bfloat16_t const& a, bfloat16_t const& b) {
 
 namespace std {
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 /// Numeric limits
 template <>
 struct numeric_limits<cutlass::bfloat16_t> {

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include "cutlass/numeric_conversion.h"
@@ -134,7 +136,7 @@ template<
   int FragmentSize_,
   bool ReuseSmemC_
 >
-struct Sm90TmaWarpSpecialized {
+struct PPU0015TmaWarpSpecialized {
   constexpr static int StagesC = StagesC_;
   constexpr static int StagesD = StagesD_;
   constexpr static int FragmentSize = FragmentSize_;
@@ -148,7 +150,7 @@ template<
   int StagesD_,
   int FragmentSize_ = 2
 >
-struct Sm90TmaWarpSpecializedBiasElementwise {
+struct PPU0015TmaWarpSpecializedBiasElementwise {
   constexpr static int StagesC = StagesC_;
   constexpr static int StagesD = StagesD_;
   constexpr static int FragmentSize = FragmentSize_;

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -153,7 +155,7 @@ struct GemmArray {
     }
 
 
-    // Each CTA handles multiple batch indices to accommodate limited range of CUDA grid's Z dimension
+    // Each CTA handles multiple batch indices to accommodate limited range of HGGC grid's Z dimension
     for (int batch_idx = threadblock_swizzle.get_batch_idx(); 
       batch_idx < params.batch_count; 
       batch_idx += gridDim.z) {

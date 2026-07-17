@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 /*! \file
@@ -35,7 +37,7 @@
 
   HostTensor allocates host and device memory upon construction. Basic element-wise operations on
   host memory synchronize device memory automatically. Explicit copy operations provide abstractions
-  for CUDA memcpy operations.
+  for device memcpy operations.
 
   Call {host, device}_{data, ref, view}() for accessing host or device memory.
 
@@ -406,7 +408,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_to_host(
       host_data(), ptr_device, count);
@@ -421,7 +423,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_device_to_device(
       device_data(), ptr_device, count);
@@ -436,7 +438,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_to_device(
       device_data(), ptr_host, count);
@@ -451,7 +453,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_host_to_host(
       host_data(), ptr_host, count);
@@ -466,7 +468,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_to_host(
       ptr_host, device_data(), count);
@@ -481,7 +483,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_device_to_device(
       ptr_device, device_data(), count);
@@ -496,7 +498,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_to_device(
       ptr_device, host_data(), count);
@@ -511,7 +513,7 @@ public:
       count = capacity();
     }
     else {
-      count = __NV_STD_MIN(capacity(), count);
+      count = __HGGC_STD_MIN(capacity(), count);
     }
     device_memory::copy_host_to_host(
       ptr_host, host_data(), count);

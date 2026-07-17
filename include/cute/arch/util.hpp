@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,62 +29,43 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
 
 #include <cute/numeric/integer_sequence.hpp>
 
-#if defined(__clang__) && defined(__CUDA__)
+#if defined(__clang__) && defined(__HGGC__)
   //  __cvta_generic_to_shared was added in Clang 14: https://reviews.llvm.org/D111665
   #if __clang_major__ >= 14
     #define CUTE_CLANG_SUPPORTS_CVTA_GENERIC_TO_SHARED 1
   #endif
 
   // __nvvm_get_smem_pointer added in Clang 14: https://reviews.llvm.org/D111665
-  // ... but will not work on Windows until Clang 15: https://reviews.llvm.org/D122897
-  #if (!defined(_WIN32) && __clang_major__ >= 14) || __clang_major__ >= 15
-    #define CUTE_CLANG_SUPPORTS_NVVM_GET_SMEM_POINTER 1
+  #if __clang_major__ >= 14
+    #define CUTE_CLANG_SUPPORTS_GET_SMEM_POINTER 1
   #endif
 #endif
 
-#if defined(__NVCC__) || defined(__CUDACC_RTC__)
-  // __cvta_generic_to_shared added in CUDA 11+
-  #if __CUDACC_VER_MAJOR__ >= 11
-    #define CUTE_NVCC_SUPPORTS_CVTA_GENERIC_TO_SHARED 1
-  #endif
+#define CUTE_PPU_SUPPORTS_CVTA_GENERIC_TO_SHARED 1
 
-  // __nvvm_get_smem_pointer added in CUDA 10.2
-  #if __CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 2
-    #define CUTE_NVCC_SUPPORTS_NVVM_GET_SMEM_POINTER 1
-  #endif
-#endif
-
-#if CUTE_NVCC_SUPPORTS_CVTA_GENERIC_TO_SHARED || CUTE_CLANG_SUPPORTS_CVTA_GENERIC_TO_SHARED
+#if CUTE_PPU_SUPPORTS_CVTA_GENERIC_TO_SHARED || CUTE_CLANG_SUPPORTS_CVTA_GENERIC_TO_SHARED
   #define CUTE_CVTA_GENERIC_TO_SHARED_SUPPORTED 1
 #endif
 
-#if !defined(CUTE_CVTA_GENERIC_TO_SHARED_ACTIVATED) && CUTE_CVTA_GENERIC_TO_SHARED_SUPPORTED && defined(__CUDA_ARCH__)
+#if !defined(CUTE_CVTA_GENERIC_TO_SHARED_ACTIVATED) && CUTE_CVTA_GENERIC_TO_SHARED_SUPPORTED && defined(__HGGC_ARCH__)
   #define CUTE_CVTA_GENERIC_TO_SHARED_ACTIVATED 1
 #endif
 
-#if CUTE_NVCC_SUPPORTS_NVVM_GET_SMEM_POINTER || CUTE_CLANG_SUPPORTS_NVVM_GET_SMEM_POINTER
-  #define CUTE_NVVM_GET_SMEM_POINTER_SUPPORTED 1
+#if CUTE_CLANG_SUPPORTS_GET_SMEM_POINTER
+  #define CUTE_GET_SMEM_POINTER_SUPPORTED 1
 #endif
 
-#if !defined(CUTE_NVVM_GET_SMEM_POINTER_ACTIVATED) && CUTE_NVVM_GET_SMEM_POINTER_SUPPORTED && defined(__CUDA_ARCH__)
-  #define CUTE_NVVM_GET_SMEM_POINTER_ACTIVATED 1
+#if !defined(CUTE_GET_SMEM_POINTER_ACTIVATED) && CUTE_GET_SMEM_POINTER_SUPPORTED && defined(__HGGC_ARCH__)
+  #define CUTE_GET_SMEM_POINTER_ACTIVATED 1
 #endif
 
-// Clang 14+ provides a declaration of __nvvm_get_smem_pointer, so we only need
-// to provide one for NVCC
-#if CUTE_NVCC_SUPPORTS_NVVM_GET_SMEM_POINTER
-  extern "C" {
-  // This NVVM intrinsic is subject to change in future versions of CUDA.
-  // Clients should not call it directly.
-  CUTE_DEVICE uint32_t __nvvm_get_smem_pointer(void*);
-  }
-#endif
 
 namespace cute
 {
@@ -101,23 +83,23 @@ cast_smem_ptr_to_uint(void const* const ptr)
   // unsigned integer. This is necessary to pass to shared memory instructions
   // in inline PTX.
   //
-  // In CUDA 11 and beyond, this replaces __nvvm_get_smem_pointer()  [only available in 10.2].
+  // In HGGC 11 and beyond, this replaces __nvvm_get_smem_pointer()  [only available in 10.2].
   //
   //__device__ size_t __cvta_generic_to_shared(void* ptr);
 
   /// CUTE helper to get SMEM pointer
   return static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
 
-#elif CUTE_NVVM_GET_SMEM_POINTER_ACTIVATED
+#elif CUTE_GET_SMEM_POINTER_ACTIVATED
 
   return __nvvm_get_smem_pointer(ptr);
 
-#elif defined(__CUDA_ARCH__)
+#elif defined(__HGGC_ARCH__)
 
   uint32_t smem_ptr;
 
   asm(
-  "{ .reg .u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; cvt.u32.u64 %0, smem_ptr; }\n" 
+  "{ .reg .u64 smem_ptr; ppu.cvta.to.shared.u64 smem_ptr, %1; ppu.cvt.u32.u64 %0, smem_ptr; }\n" 
     : "=r"(smem_ptr) : "l"(ptr));
 
   return smem_ptr;

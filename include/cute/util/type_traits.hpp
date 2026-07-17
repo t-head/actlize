@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,14 +29,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/type_traits>
-#include <cuda/std/utility>
-#include <cuda/std/cstddef>
-#include <cuda/std/cstdint>
-#include <cuda/std/limits>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/type_traits>
+#include <hggc/std/utility>
+#include <hggc/std/cstddef>
+#include <hggc/std/cstdint>
+#include <hggc/std/limits>
 #else
 #include <type_traits>
 #include <utility>      // tuple_size, tuple_element

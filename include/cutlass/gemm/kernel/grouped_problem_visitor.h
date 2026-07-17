@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -417,7 +418,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int32_t entries_per_block = ((total_tiles - 1 + block_count) / block_count);
     return sizeof(ProblemInfo) * entries_per_block * block_count;
   }
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
   static void host_precompute(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
                               int32_t problem_count,
                               int32_t block_count,

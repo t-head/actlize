@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Provides a mechanism for packing and unpacking elements smaller than one byte
 */
@@ -300,8 +302,8 @@ template <
   typename Storage_ =             /// Underlying storage type. Must be able to hold an integer
                                   ///   number of objects of type Element.
 
-#if defined(__CUDA_ARCH__)        /// Default size depends on width of atomicCas() overloads.
-  #if (__CUDA_ARCH__ >= 700)      ///
+#if defined(__HGGC_ARCH__)        /// Default size depends on width of atomicCas() overloads.
+  #if (__HGGC_ARCH__ >= 100)      ///
   uint16_t
   #else
   uint32_t
@@ -412,7 +414,7 @@ public:
     Storage kUpdateMask = Storage(~(kMask << (offset_ * cutlass::sizeof_bits<Element>::value)));
     Storage new_bits    = Storage(item << (offset_ * cutlass::sizeof_bits<Element>::value));
 
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
 
     //
     // Homebrew read-modify-write
@@ -633,7 +635,7 @@ public:
   using StorageVec = StorageUnit[kNumStorageUnitPerStoredVec];
   using StorageVecPointer = StorageVec *;
   
-  using CudaAtomicType = typename platform::conditional<
+  using HggcAtomicType = typename platform::conditional<
       sizeof_bits<StorageUnit>::value == 16,
       uint32_t,
       uint64_t
@@ -764,7 +766,7 @@ public:
     StorageUnit const kLowUpdateMask  = StorageUnit((~full_element_mask_) & (~StorageUnit(0)));
     StorageUnit const kHighUpdateMask = StorageUnit(((~full_element_mask_) >> sizeof_bits<StorageUnit>::value) & (~StorageUnit(0)));
 
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
     //
     // Homebrew read-modify-write
     //
@@ -1006,7 +1008,7 @@ public:
   using StorageVec = StorageUnit[kNumStorageUnitPerStoredVec];
   using StorageVecPointer = StorageVec const *;
   
-  using CudaAtomicType = typename platform::conditional<
+  using HggcAtomicType = typename platform::conditional<
       sizeof_bits<StorageUnit>::value == 16,
       uint32_t,
       uint64_t

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -102,7 +103,7 @@ public:
 
   /// Workspace bytes per thread block
   static size_t const kWorkspaceBytesPerBlock =
-    __NV_STD_MAX(
+    __HGGC_STD_MAX(
       kThreadCount * sizeof(AccumulatorTile),
       Epilogue::kWorkspaceBytesPerBlock);
 
@@ -148,7 +149,7 @@ public:
     typename LayoutC::Stride::LongIndex ldc;
     typename LayoutC::Stride::LongIndex ldd;
 
-    int avail_sms;          /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+    int avail_cus;          /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
 
 
     //
@@ -163,7 +164,7 @@ public:
       ptr_B(nullptr),
       ptr_C(nullptr),
       ptr_D(nullptr),
-      avail_sms(-1)
+      avail_cus(-1)
     {}
 
     /// Constructor
@@ -184,7 +185,7 @@ public:
       typename LayoutB::Stride stride_b,
       typename LayoutC::Stride stride_c,
       typename LayoutC::Stride stride_d,
-      int avail_sms = -1                            /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+      int avail_cus = -1                            /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
     ):
       mode(mode),
       problem_size(problem_size),
@@ -192,7 +193,7 @@ public:
       epilogue(epilogue),
       ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D),
       batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C), batch_stride_D(batch_stride_D),
-      stride_a(stride_a), stride_b(stride_b), stride_c(stride_c), stride_d(stride_d), avail_sms(avail_sms)
+      stride_a(stride_a), stride_b(stride_b), stride_c(stride_c), stride_d(stride_d), avail_cus(avail_cus)
     {
       CUTLASS_TRACE_HOST("GemmUniversalStreamk::Arguments::Arguments() - problem_size: " << problem_size);
     }
@@ -215,7 +216,7 @@ public:
       typename LayoutB::Stride::LongIndex ldb,
       typename LayoutC::Stride::LongIndex ldc,
       typename LayoutC::Stride::LongIndex ldd,
-      int avail_sms = -1                            /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+      int avail_cus = -1                            /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
     ):
       mode(mode),
       problem_size(problem_size),
@@ -223,7 +224,7 @@ public:
       epilogue(epilogue),
       ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D),
       batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C), batch_stride_D(batch_stride_D),
-      lda(lda), ldb(ldb), ldc(ldc), ldd(ldd), avail_sms(avail_sms)
+      lda(lda), ldb(ldb), ldc(ldc), ldd(ldd), avail_cus(avail_cus)
     {
       stride_a = make_Coord(lda);
       stride_b = make_Coord(ldb);
@@ -330,8 +331,8 @@ public:
     /// Constructor
     Params(
       Arguments const &args,  /// GEMM application arguments
-      int device_sms,         /// Number of SMs on the device
-      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+      int device_cus,         /// Number of CUs on the device
+      int cu_occupancy)       /// Kernel CU occupancy (in thread blocks)
     :
       params_A(args.lda ? make_Coord_with_padding<LayoutA::kStrideRank>(args.lda) : args.stride_a),
       params_B(args.ldb ? make_Coord_with_padding<LayoutB::kStrideRank>(args.ldb) : args.stride_b),
@@ -350,10 +351,10 @@ public:
       barrier_workspace(nullptr),
       partials_workspace(nullptr)
     {
-      // Number of SMs to make available for StreamK decomposition
-      int avail_sms = (args.avail_sms == -1) ?
-                        device_sms :
-                        fast_min(args.avail_sms, device_sms);
+      // Number of CUs to make available for StreamK decomposition
+      int avail_cus = (args.avail_cus == -1) ?
+                        device_cus :
+                        fast_min(args.avail_cus, device_cus);
 
       // Initialize the block mapping structure
       block_mapping = ThreadblockSwizzle(
@@ -361,9 +362,9 @@ public:
         args.problem_size,
         {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
         args.batch_count,
-        sm_occupancy,
-        device_sms,
-        avail_sms,
+        cu_occupancy,
+        device_cus,
+        avail_cus,
         sizeof(ElementA),
         sizeof(ElementB),
         sizeof(ElementC),
@@ -384,7 +385,7 @@ public:
     /// the memory allocated to workspace is at least as large as get_workspace_size().
     Status init_workspace(
       void *workspace,
-      cudaStream_t stream = nullptr)
+      hggcStream_t stream = nullptr)
     {
       uint8_t *ptr = static_cast<uint8_t*>(workspace);
 
@@ -419,14 +420,14 @@ public:
 
         CUTLASS_TRACE_HOST("  Initialize " << barrier_workspace_bytes << " barrier bytes");
 
-        cudaError_t result = cudaMemsetAsync(
+        hggcError_t result = hggcMemsetAsync(
           barrier_workspace,
           0,
           barrier_workspace_bytes,
           stream);
 
-        if (result != cudaSuccess) {
-          CUTLASS_TRACE_HOST("  cudaMemsetAsync() returned error " << cudaGetErrorString(result));
+        if (result != hggcSuccess) {
+          CUTLASS_TRACE_HOST("  hggcMemsetAsync() returned error " << hggcGetErrorString(result));
           return Status::kErrorInternal;
         }
       }
@@ -1021,7 +1022,7 @@ protected:
     int block_idx = params.block_mapping.get_block_idx();
 
     int sk_padding_start_block_idx =  params.block_mapping.sk_regions() * params.block_mapping.sk_blocks_per_region();
-    int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_sms;
+    int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_cus;
     int reduce_start_block_idx = dp_start_block_idx + params.block_mapping.dp_blocks;
     int grid_padding_start_block_idx = reduce_start_block_idx + params.block_mapping.reduction_blocks;
 
@@ -1045,9 +1046,9 @@ protected:
       int tile_allottment = params.block_mapping.dp_first_wave_tiles;
 
       // Blocks in subsequent DP waves get 1 tile
-      if (dp_block_idx >= params.block_mapping.avail_sms) {
+      if (dp_block_idx >= params.block_mapping.avail_cus) {
           tile_allottment = 1;
-          tile_idx += (params.block_mapping.dp_first_wave_tiles - 1) * params.block_mapping.avail_sms;
+          tile_idx += (params.block_mapping.dp_first_wave_tiles - 1) * params.block_mapping.avail_cus;
       }
 
       block_iters_remaining = params.block_mapping.iters_per_tile() * tile_allottment;
@@ -1108,7 +1109,7 @@ protected:
       if (block_idx >= dp_start_block_idx)
       {
         // DP block consume their tiles at stride
-        tile_idx += params.block_mapping.avail_sms;
+        tile_idx += params.block_mapping.avail_cus;
         init_dp_tile_work(tile_work, tile_idx);
       }
       else

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -36,9 +37,9 @@
 */
 
 #include "cutlass/detail/dependent_false.hpp"
-#include "cutlass/gemm/kernel/sm90_tile_scheduler.hpp"
-#include "cutlass/gemm/kernel/sm90_tile_scheduler_stream_k.hpp"
-#include "cutlass/gemm/kernel/sm90_tile_scheduler_group.hpp"
+#include "cutlass/gemm/kernel/persistent_tile_scheduler.hpp"
+#include "cutlass/gemm/kernel/tile_scheduler_stream_k.hpp"
+#include "cutlass/gemm/kernel/tile_scheduler_group.hpp"
 ////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass::gemm {
@@ -90,10 +91,10 @@ struct TileSchedulerSelector<
   TileShape,
   ClusterShape
   > {
-  using Scheduler = PersistentTileSchedulerSm90;
+  using Scheduler = PersistentTileScheduler;
 };
 
-// Default (void) for Sm90 maps to PersistentTileSchedulerSm90
+// Default (void) for PPU0015 maps to PersistentTileScheduler
 template <
   class ArchTag,
   class TileShape,
@@ -114,31 +115,33 @@ struct TileSchedulerSelector<
 };
 
 template <
+  typename Arch,
   class TileShape,
   class ClusterShape
 >
 struct TileSchedulerSelector<
   StreamKScheduler,
-  arch::Sm90,
+  Arch,
   TileShape,
   ClusterShape
   > {
-  using Scheduler = PersistentTileSchedulerSm90StreamK<TileShape, ClusterShape>;
+  using Scheduler = PersistentTileSchedulerPPUStreamK<TileShape, ClusterShape>;
 };
 
 template <
+  typename Arch,
   class TileShape,
   class ClusterShape
   , class GroupProblemShape
 >
 struct TileSchedulerSelector<
   GroupScheduler,
-  arch::Sm90,
+  Arch,
   TileShape,
   ClusterShape
   , GroupProblemShape
   > {
-  using Scheduler = PersistentTileSchedulerSm90Group<GroupProblemShape>;
+  using Scheduler = PersistentTileSchedulerPPUGroup<GroupProblemShape>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

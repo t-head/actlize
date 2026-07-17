@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,9 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level per channel scale+bias+relu before
-   matrix multiply-accumulate operations targeting Tensor Cores.
+   matrix multiply-accumulate operations targeting Tensor cells.
 */
 
 #pragma once
@@ -43,9 +45,8 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h" 
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu0010.h" 
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -53,7 +54,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op_policy.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu0010.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,7 +83,7 @@ struct FpropScaleBiasReluTransform {
   CUTLASS_DEVICE
   void transform(MmaOperand &activations, ScaleBiasOperand const &scale_bias) {
 
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800))
+#if (defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100))
     uint32_t *ptr_activations = reinterpret_cast<uint32_t *>(&activations);
     uint32_t const *ptr_scale_bias = reinterpret_cast<uint32_t const *>(&scale_bias);
 
@@ -95,9 +96,9 @@ struct FpropScaleBiasReluTransform {
         "{\n\t"
         " .reg .pred %%p;\n\t"
         " .reg .b32 t1;\n\t"
-        " setp.eq.u32 %%p, %2, %4;\n\t"
-        " fma.rn.f16x2.relu t1, %1, %2, %3;\n"
-        " selp.u32 %0, 0, t1, %%p;\n\t"
+        " ppu.cmpp.eq.u32 %%p, %2, %4;\n\t"
+        " ppu.fma.rtte.f16x2.relu t1, %1, %2, %3;\n"
+        " ppu.selp.u32 %0, 0, t1, %%p;\n\t"
         "}\n"
         : "=r"(ptr_activations[0])
         : "r"(ptr_scale_bias[0]), "r"(ptr_activations[0]),
@@ -142,13 +143,13 @@ struct WgradScaleBiasReluTransform {
   CUTLASS_DEVICE
   void transform(MmaOperand &activations, ScaleBiasOperand const &scale_bias) {
 
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800))
+#if (defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100))
 
     __half2 *ptr_activations = reinterpret_cast<__half2 *>(&activations);
     uint32_t const *ptr_scale_bias = reinterpret_cast<uint32_t const *>(&scale_bias);
 
 #if 1 
-    // CUDA + PTX version
+    // HGGC + PTX version
 
     bool h1_oob = (reinterpret_cast<uint16_t &>(ptr_activations[0].x) == cutlass::arch::OOB_NAN_F16);
     bool h2_oob = (reinterpret_cast<uint16_t &>(ptr_activations[0].y) == cutlass::arch::OOB_NAN_F16);
@@ -160,7 +161,7 @@ struct WgradScaleBiasReluTransform {
     // out-of-bound because C x R x S can be an odd number.
     asm volatile(
         "{\n\t"
-        " fma.rn.f16x2.relu %0, %1, %2, %3;\n"
+        " ppu.fma.rtte.f16x2.relu %0, %1, %2, %3;\n"
         "}"
         : "=r"(reinterpret_cast<uint32_t &>(ptr_activations[0]))
         : "r"(ptr_scale_bias[0]), "r"(reinterpret_cast<uint32_t &>(ptr_activations[0])),
@@ -183,14 +184,14 @@ struct WgradScaleBiasReluTransform {
         " .reg .b16 t1, t2;\n"
         " .reg .b32 t3, t4, t5, t6;\n"
         " .reg .pred p1, p2;\n"
-        " mov.b32 {t1, t2}, %2;\n"
-        " setp.eq.s16 p1, t1, %4;\n"
-        " setp.eq.s16 p2, t2, %4;\n"
-        " fma.rn.f16x2.relu t3, %1, %2, %3;\n"
-        " and.b32 t4, t3, %5;\n"
-        " selp.b32 t5, t4, t3, p1;\n"
-        " and.b32 t6, t5, %6;\n"
-        " selp.b32 %0, t6, t5, p2;\n"
+        " ppu.mov.b32 {t1, t2}, %2;\n"
+        " ppu.cmpp.eq.s16 p1, t1, %4;\n"
+        " ppu.cmpp.eq.s16 p2, t2, %4;\n"
+        " ppu.fma.rtte.f16x2.relu t3, %1, %2, %3;\n"
+        " ppu.and.b32 t4, t3, %5;\n"
+        " ppu.selp.b32 t5, t4, t3, p1;\n"
+        " ppu.and.b32 t6, t5, %6;\n"
+        " ppu.selp.b32 %0, t6, t5, p2;\n"
         "}\n"
         : "=r"(reinterpret_cast<uint32_t &>(ptr_activations[0]))
         : "r"(ptr_scale_bias[0]), "r"(reinterpret_cast<uint32_t &>(ptr_activations[0])),

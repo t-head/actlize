@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,9 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines a matrix object intended for storing data in registers and operations within
-      a CUDA thread.
+      a device thread.
 */
 #pragma once
 
@@ -104,7 +106,7 @@ public:
   using ConstTensorView = typename TensorView::ConstTensorView;
 
   /// Diagonal vector
-  using Diagonal = Vector<Element, __NV_STD_MIN(kRows, kColumns)>;
+  using Diagonal = Vector<Element, __HGGC_STD_MIN(kRows, kColumns)>;
 
 private:
 

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -45,7 +46,6 @@
 #include "cutlass/gemm/kernel/gemm_grouped_softmax_mainloop_fusion.h"
 #include "cutlass/gemm/kernel/gemm_transpose_operands.h"
 #include "cutlass/gemm/kernel/default_gemm.h"
-#include "cutlass/gemm/kernel/default_gemm_complex.h"
 #include "cutlass/gemm/device/default_gemm_configuration.h"
 #include "cutlass/gemm/threadblock/default_mma_softmax_mainloop_fusion.h"
 

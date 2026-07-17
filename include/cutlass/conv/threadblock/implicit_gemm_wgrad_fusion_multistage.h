@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,13 +29,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a multistage threadblock-scoped fused activation's scale+bias+relu and
    Implicit GEMM Convolution kernel.
 
    The original implicit gemm will store out-of-bound data as zeroes in the
-   shared memory because zeros into the tensor core, zeroes out of the tensor
-   cores.  The result is remained the same.   When fusing scale+bias+relu
+   shared memory because zeros into the tensor cell, zeroes out of the tensor
+   cells.  The result is remained the same.   When fusing scale+bias+relu
    into the mainloop, it is no longer true because
 
      0 x scale + bias = bias
@@ -53,7 +55,7 @@
   be loaded once before the mainloop.
 
   See include/cutlass/conv/warp/scale_bias_relu_transformation.h for the 
-  elementwise computation.  See include/cutlass/arch/memory_sm80.h for nan fill.
+  elementwise computation.  See include/cutlass/arch/memory_ppu.h for nan fill.
 
 
 */
@@ -79,7 +81,7 @@ namespace cutlass {
 namespace conv {
 namespace threadblock {
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math
+/// Structure to compute the matrix product targeting alu cores and SIMT math
 /// instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>
@@ -240,7 +242,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math
+/// Structure to compute the matrix product targeting alu cores and SIMT math
 /// instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>

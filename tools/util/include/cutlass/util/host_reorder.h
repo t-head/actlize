@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -43,7 +44,7 @@
 
 namespace cutlass {
 
-/// This is needed for the interleaved integer tensor core kernels.  The purpose
+/// This is needed for the interleaved integer tensor cell kernels.  The purpose
 /// is to use skip the shared memory part in the epilogue.
 template <int Interleaved, typename Element, typename Layout>
 void reorder_column(TensorRef<Element, Layout> dest,
@@ -80,7 +81,7 @@ void reorder_convK(TensorRef<Element, Layout> dest,
         mappedDest, mappedSrc, problem_size);
 }
 
-/// This is needed for the sparse tensor core kernels.  The purpose
+/// This is needed for the sparse tensor cell kernels.  The purpose
 /// is to use ldmatrix to load from shared memory to the register file.
 template <typename Element, typename LayoutDest, typename LayoutSrc>
 void reorder_meta(TensorRef<Element, LayoutDest> dest,

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -122,7 +123,7 @@ public:
   }
 
   /// Initializes Gemv state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
     params_ = Params(args);
     return Status::kSuccess;
   }
@@ -133,7 +134,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     dim3 block = get_block_shape();
     dim3 grid = get_grid_shape(params_, block);
@@ -146,13 +147,13 @@ public:
     //
     // Query for errors
     //
-    cudaError_t result = cudaGetLastError();
+    hggcError_t result = hggcGetLastError();
 
-    return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -160,7 +161,7 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
     Status status = initialize(args, workspace, stream);
     

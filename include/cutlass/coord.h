@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief A Coord is a coordinate of arbitrary rank into a tensor or matrix
 */
@@ -44,8 +46,8 @@
 
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cstdint>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cstdint>
 #else
 #include <stdint.h>
 #endif
@@ -311,7 +313,7 @@ public:
   CUTLASS_HOST_DEVICE
   Coord& clamp(Coord const& max, Coord const& min = Coord()) {
     for (int i = 0; i < kRank; ++i) {
-      idx[i] = __NV_STD_MAX(__NV_STD_MIN(idx[i], max.idx[i]), min.idx[i]);
+      idx[i] = __HGGC_STD_MAX(__HGGC_STD_MIN(idx[i], max.idx[i]), min.idx[i]);
     }
     return *this;
   }

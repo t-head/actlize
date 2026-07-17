@@ -1,4 +1,5 @@
-/******************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -27,13 +28,13 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- ******************************************************************************/
+ **************************************************************************************************/
 
 #pragma once
 
 /**
  * \file
- * \brief cuda kernels to do avg/max pooling on a device memory tensor with NHWC layout.
+ * \brief hggc kernels to do avg/max pooling on a device memory tensor with NHWC layout.
  */
 
 #include "cutlass/cutlass.h"
@@ -58,7 +59,7 @@ void pooling_nhwc(cutlass::Tensor4DCoord input_tensor_size,
                   TensorRef<T, layout::TensorNHWC> ref_input,
                   TensorRef<T, layout::TensorNHWC> ref_output,
                   int poolingType, //0 for avg pooling ; 1 for max pooling
-                  cudaStream_t stream);
+                  hggcStream_t stream);
 
 /** get the output size of pooling
  */
@@ -356,7 +357,7 @@ void pooling_nhwc(cutlass::Tensor4DCoord input_tensor_size,
                   TensorRef<T, layout::TensorNHWC> ref_input,
                   TensorRef<T, layout::TensorNHWC> ref_output,
                   int poolingType, //0 for avg pooling ; 1 for max pooling
-                  cudaStream_t stream) {
+                  hggcStream_t stream) {
 
   assert(input_tensor_size.n() == output_tensor_size.n() &&
          input_tensor_size.c() == output_tensor_size.c());

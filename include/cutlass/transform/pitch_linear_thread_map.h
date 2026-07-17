@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing how threads are mapped to a given tile.
 
@@ -211,7 +213,7 @@ struct PitchLinearTilePolicyStripminedThreadStrided
 /// Policy defining a warp-raked arrangement in which a shape is partitioned into contiguous
 /// elements.
 ///
-/// This ThreadMap is used by tensor core kernels.
+/// This ThreadMap is used by tensor cell kernels.
 template <
   typename Shape_,
   int Threads,
@@ -352,7 +354,7 @@ struct PitchLinearWarpRakedThreadMap {
 /// Policy defining a warp-raked arrangement in which a shape is partitioned into contiguous
 /// elements. Warps are arranged based on a stride.
 ///
-/// This ThreadMap is used by tensor core kernels for NCxHWx layout.
+/// This ThreadMap is used by tensor cell kernels for NCxHWx layout.
 template <
   typename Shape_,
   int Threads,

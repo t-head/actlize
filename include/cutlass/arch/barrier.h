@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,18 +29,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-    \brief Barrier Operations on SM90+
+    \brief Barrier Operations on PPU0015+
 */
 
 #pragma once
 
-#include <cutlass/arch/memory_sm75.h>
-#include <cute/arch/cluster_sm90.hpp>
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900 && (__CUDACC_VER_MAJOR__ >= 12)
-#define CUDA_BARRIER_ENABLED 1
+#include <cutlass/arch/memory_ppu.h>
+#if (defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 100 && (__HGGCCC_VER_MAJOR__ >= 12)) || defined(__HGGCCC__)
+#define HGGC_BARRIER_ENABLED 1
 #else
-#define CUDA_BARRIER_ENABLED 0
+#define HGGC_BARRIER_ENABLED 0
 #endif
 
 namespace cutlass {
@@ -148,19 +149,15 @@ class NamedBarrier {
  private:
   CUTLASS_DEVICE
   static void arrive_and_wait_internal(uint32_t num_threads, uint32_t barrier_id) {
-#if CUDA_BARRIER_ENABLED
-    asm volatile("bar.sync %0, %1;" : : "r"(barrier_id), "r"(num_threads));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
+#if HGGC_BARRIER_ENABLED
+    asm volatile("ppu.bar.sync %0, %1;" : : "r"(barrier_id), "r"(num_threads));
 #endif
   }
 
   CUTLASS_DEVICE
   static void arrive_internal(uint32_t num_threads, uint32_t barrier_id) {
-#if CUDA_BARRIER_ENABLED
-    asm volatile("bar.arrive %0, %1;" : : "r"(barrier_id), "r"(num_threads));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
+#if HGGC_BARRIER_ENABLED
+    asm volatile("ppu.bar.arrive %0, %1;" : : "r"(barrier_id), "r"(num_threads));
 #endif
   }
 
@@ -179,9 +176,6 @@ class NamedBarrier {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Hopper introduces a new cluster-wide barrier which handle with Cluster-wide arrive-wait behaviour.
-// This is an extension to the Ampere arrive-wait barriers
-// Note : Ampere arrive-wait Barriers have a larger max-arrive count (2^30) than Hopper arrive-wait Barriers (2^20).
 struct ClusterBarrier {
 
   using ValueType = uint64_t;
@@ -226,29 +220,26 @@ public:
   void arrive(uint32_t cta_id, uint32_t pred = true ) const {
     ClusterBarrier::arrive(&this->barrier_, cta_id, pred);
   }
-
   //
   //  Static Versions
   //
   CUTLASS_DEVICE
   static void init(ValueType const* smem_ptr, uint32_t arrive_count) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
-        "mbarrier.init.shared::cta.b64 [%1], %0; \n"
+        "ppu.awbar.init.shared::cta.b64 [%1], %0; \n"
         "}"
         :
         : "r"(arrive_count), "r"(smem_addr));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 
   // Static version of wait - in case we don't want to burn a register
   CUTLASS_DEVICE
   static void wait(ValueType const* smem_ptr, uint32_t phase) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     // Arbitrarily large timer value after which try-wait expires and re-tries.
     uint32_t ticks = 0x989680;
@@ -256,22 +247,20 @@ public:
         "{\n\t"
         ".reg .pred       P1; \n\t"
         "LAB_WAIT: \n\t"
-        "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1, %2; \n\t"
-        "@P1 bra.uni DONE; \n\t"
-        "bra.uni     LAB_WAIT; \n\t"
+        "ppu.awbar.try_wait.parity.shared::cta.b64 P1, [%0], %1, %2; \n\t"
+        "@P1 ppu.bra DONE; \n\t"
+        "ppu.bra     LAB_WAIT; \n\t"
         "DONE: \n\t"
         "}"
         :
         : "r"(smem_addr), "r"(phase), "r"(ticks));
 
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 
   CUTLASS_DEVICE
   static uint32_t test_wait(ValueType const* smem_ptr, uint32_t phase, uint32_t pred) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     uint32_t waitComplete;
 
@@ -279,38 +268,34 @@ public:
         "{\n\t"
         ".reg .pred P1; \n\t"
         ".reg .pred P2; \n\t"
-        "setp.eq.u32 P2, %3, 1;\n\t"
-        "@P2 mbarrier.test_wait.parity.shared::cta.b64 P1, [%1], %2; \n\t"
-        "selp.b32 %0, 1, 0, P1; \n\t"
+        "ppu.cmpp.eq.u32 P2, %3, 1;\n\t"
+        "@P2 ppu.awbar.test_wait.parity.shared::cta.b64 P1, [%1], %2; \n\t"
+        "ppu.selp.b32 %0, 1, 0, P1; \n\t"
         "}"
         : "=r"(waitComplete)
         : "r"(smem_addr), "r"(phase), "r"(pred));
 
     return waitComplete;
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
     return 0;
   }
 
   CUTLASS_DEVICE
   static uint32_t try_wait(ValueType const* smem_ptr, uint32_t phase) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     uint32_t waitComplete;
 
     asm volatile(
         "{\n\t"
         ".reg .pred P1; \n\t"
-        "mbarrier.try_wait.parity.shared::cta.b64 P1, [%1], %2; \n\t"
-        "selp.b32 %0, 1, 0, P1; \n\t"
+        "ppu.awbar.try_wait.parity.shared::cta.b64 P1, [%1], %2; \n\t"
+        "ppu.selp.b32 %0, 1, 0, P1; \n\t"
         "}"
         : "=r"(waitComplete)
         : "r"(smem_addr), "r"(phase));
 
     return waitComplete;
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
     return 0;
   }
@@ -318,19 +303,18 @@ public:
   // Static Predicated version of the above - in case we know the address.
   CUTLASS_DEVICE
   static void arrive(ValueType const* smem_ptr, uint32_t cta_id, uint32_t pred) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
         ".reg .pred p;\n\t"
         ".reg .b32 remAddr32;\n\t"
-        "setp.eq.u32 p, %2, 1;\n\t"
-        "@p mapa.shared::cluster.u32  remAddr32, %0, %1;\n\t"
-        "@p mbarrier.arrive.shared::cluster.b64  _, [remAddr32];\n\t"
+        "ppu.cmpp.eq.u32 p, %2, 1;\n\t"
+        "@p ppu.awbar.arrive.shared::cluster.b64  _, [remAddr32];\n\t"
         "}"
         :
         : "r"(smem_addr), "r"(cta_id), "r"(pred));
-#elif defined(__CUDA_ARCH__)
+#elif defined(__HGGC_ARCH__)
     asm volatile ("brkpt;\n" ::);
 #endif
   }
@@ -338,38 +322,34 @@ public:
   // Barrier arrive on local smem
   CUTLASS_DEVICE
   static void arrive(ValueType const* smem_ptr) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
-        "mbarrier.arrive.shared::cta.b64 _, [%0];\n\t"
+        "ppu.awbar.arrive.shared::cta.b64 _, [%0];\n\t"
         "}"
         :
         : "r"(smem_addr));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 
   CUTLASS_DEVICE
   static void invalidate(ValueType const* smem_ptr) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
-        "mbarrier.ival.shared::cta.b64 [%0]; \n\t"
+        "ppu.awbar.ival.shared::cta.b64 [%0]; \n\t"
         "}"
         :
         : "r"(smem_addr));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// SM90 also introduces a new type of cluster-barrier which supports sync.
+// PPU0015 also introduces a new type of cluster-barrier which supports sync.
 // not just based on Arrive Count, but also transaction count (in bytes)
 struct ClusterTransactionBarrier : public ClusterBarrier {
 
@@ -397,7 +377,7 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   // Performs an expected transaction bytes decrement without doing an arrive operation
   CUTLASS_DEVICE
   void complete_transaction(uint32_t transaction_bytes, uint32_t pred = 1) const {
-    uint32_t cta_rank = cute::block_rank_in_cluster();
+    uint32_t cta_rank = 0;  // cute::block_rank_in_cluster();
     ClusterTransactionBarrier::complete_transaction(&this->barrier_, cta_rank, transaction_bytes, pred);
   }
 
@@ -414,16 +394,14 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   // Performs an arrive operation + expected transaction bytes increment
   CUTLASS_DEVICE
   static void arrive_and_expect_tx(ValueType const* smem_ptr, uint32_t transaction_bytes) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
-        "mbarrier.arrive.expect_tx.shared::cta.b64 _, [%1], %0; \n\t"
+        "ppu.awbar.arrive.expect_tx.shared::cta.b64 _, [%1], %0; \n\t"
         "}"
         :
         : "r"(transaction_bytes), "r"(smem_addr));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 
@@ -431,19 +409,18 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   CUTLASS_DEVICE
   static void arrive_and_expect_tx(
       ValueType const* smem_ptr, uint32_t transaction_bytes, uint32_t cta_id, uint32_t pred) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
         ".reg .pred p;\n\t"
         ".reg .b32 remAddr32;\n\t"
-        "setp.eq.u32 p, %2, 1;\n\t"
-        "@p mapa.shared::cluster.u32  remAddr32, %0, %1;\n\t"
-        "@p mbarrier.arrive.expect_tx.shared::cluster.b64  _, [remAddr32], %3;\n\t"
+        "ppu.cmpp.eq.u32 p, %2, 1;\n\t"
+        "@p ppu.awbar.arrive.expect_tx.shared::cluster.b64  _, [remAddr32], %3;\n\t"
         "}"
         :
         : "r"(smem_addr), "r"(cta_id), "r"(pred), "r"(transaction_bytes));
-#elif defined(__CUDA_ARCH__)
+#elif defined(__HGGC_ARCH__)
     asm volatile ("brkpt;\n" ::);
 #endif
   }
@@ -451,16 +428,14 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   // Performs an expected transaction bytes increment without doing an arrive operation
   CUTLASS_DEVICE
   static void expect_transaction(ValueType const* smem_ptr, uint32_t transaction_bytes) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
         "{\n\t"
-        "mbarrier.expect_tx.shared::cta.b64 [%1], %0; \n\t"
+        "ppu.awbar.expect_tx.shared::cta.b64 [%1], %0; \n\t"
         "}"
         :
         : "r"(transaction_bytes), "r"(smem_addr));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 
@@ -468,19 +443,17 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   CUTLASS_DEVICE
   static void complete_transaction(
       ValueType const* smem_ptr, uint32_t dst_cta_id, uint32_t transaction_bytes, uint32_t pred = 1) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
-    smem_addr = cute::set_block_rank(smem_addr, dst_cta_id);
+    // smem_addr = cute::set_block_rank(smem_addr, dst_cta_id);
     asm volatile(
         "{\n\t"
         ".reg .pred p;\n\t"
-        "setp.eq.u32 p, %2, 1;\n\t"
-        "@p mbarrier.complete_tx.shared::cluster.relaxed.cluster.b64   [%1], %0;"
+        "ppu.cmpp.eq.u32 p, %2, 1;\n\t"
+        "@p ppu.awbar.complete_tx.shared::cluster.relaxed.cluster.b64   [%1], %0;"
         "}"
         :
         : "r"(transaction_bytes), "r"(smem_addr), "r"(pred));
-#elif defined(__CUDA_ARCH__)
-    asm volatile ("brkpt;\n" ::);
 #endif
   }
 
@@ -531,47 +504,77 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
 // to ensure visibility eg. __syncthreads() or a cluster_arrive() + cluster_wait()
 CUTLASS_DEVICE
 void fence_barrier_init() {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
   asm volatile(
       "{\n\t"
-      "fence.mbarrier_init.release.cluster; \n"
+      "ppu.fence.mbarrier_init.release.cluster; \n"
       "}"
       ::);
-#elif defined(__CUDA_ARCH__)
-  asm volatile ("brkpt;\n" ::);
 #endif
 }
 
 // Issue a shared memory fence for async operations
 CUTLASS_DEVICE
 void fence_view_async_shared() {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
     asm volatile (
         "{\n\t"
-        "fence.proxy.async.shared::cta; \n"
+        "ppu.fence.proxy.async.shared::cta; \n"
         "}"
         ::);
-#elif defined(__CUDA_ARCH__)
-  asm volatile ("brkpt;\n" ::);
 #endif
 }
 
-// Arrive on completion of in-flight cp.async operations issued by the calling thread 
+// Arrive on completion of in-flight cp.async operations issued by the calling thread
 CUTLASS_DEVICE
 void cpasync_barrier_arrive(uint64_t const* smem_ptr) {
-#if CUDA_BARRIER_ENABLED
+#if HGGC_BARRIER_ENABLED
   uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
   asm volatile(
     "{\n\t"
-    "cp.async.mbarrier.arrive.shared::cta.b64 [%0];\n\t"
+    "ppu.cp.async.awbar.arrive.shared::cta.b64 [%0];\n\t"
     "}"
     :
     : "r"(smem_addr));
-#elif defined(__CUDA_ARCH__)
-  asm volatile ("brkpt;\n" ::);
 #endif
 }
 
+// Arrive on completion of in-flight cp.async operations issued by the calling thread
+CUTLASS_DEVICE
+void cpasync_barrier_arrive_noinc(uint64_t const* smem_ptr) {
+#if HGGC_BARRIER_ENABLED
+  uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
+  asm volatile(
+    "{\n\t"
+    "ppu.cp.async.awbar.arrive.noinc.shared::cta.b64 [%0];\n\t"
+    "}"
+    :
+    : "r"(smem_addr));
+#endif
+}
+
+
+CUTLASS_DEVICE
+static uint32_t test_wait(uint64_t const* smem_ptr, uint32_t phase, uint32_t pred) {
+#if HGGC_BARRIER_ENABLED
+    uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
+    uint32_t waitComplete;
+
+    asm volatile(
+        "{\n\t"
+        ".reg .pred P1; \n\t"
+        ".reg .pred P2; \n\t"
+        "ppu.cmpp.eq.u32 P2, %3, 1;\n\t"
+        "@P2 ppu.awbar.test_wait.parity.shared::cta.b64 P1, [%1], %2; \n\t"
+        "ppu.selp.b32 %0, 1, 0, P1; \n\t"
+        "}"
+        : "=r"(waitComplete)
+        : "r"(smem_addr), "r"(phase), "r"(pred));
+
+    return waitComplete;
+#endif
+    return 0;
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

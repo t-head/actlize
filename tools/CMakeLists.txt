@@ -1,3 +1,4 @@
+# Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
 # Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -29,18 +30,4 @@
 cmake_policy(SET CMP0112 NEW)
 
 add_subdirectory(util)
-
-if (CUTLASS_ENABLE_LIBRARY)
-  add_subdirectory(library)
-endif()
-
-if (CUTLASS_ENABLE_PROFILER)
-  if (NOT CUTLASS_ENABLE_LIBRARY)
-    message(SEND_ERROR "Build conflict: The CUTLASS profiler requires the CUTLASS library.")
-    message(SEND_ERROR "  CUTLASS_ENABLE_PROFILER = ${CUTLASS_ENABLE_PROFILER}")
-    message(SEND_ERROR "  CUTLASS_ENABLE_LIBRARY = ${CUTLASS_ENABLE_LIBRARY}")
-  else()
-    add_subdirectory(profiler)
-  endif()
-endif()
 

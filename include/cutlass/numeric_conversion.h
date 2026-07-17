@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*!
     \file
     \brief Boost-like numeric conversion operator for CUTLASS numeric types
@@ -45,7 +47,7 @@
 
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <cfenv>
 #endif
 
@@ -104,7 +106,7 @@ struct NumericConverter {
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
 template <>
 struct NumericConverter<int32_t, float, FloatRoundStyle::round_to_nearest> {
 
@@ -143,7 +145,7 @@ struct NumericConverter<int32_t, float, FloatRoundStyle::round_toward_zero> {
   }
 };
 
-#elif !defined(__CUDACC_RTC__)
+#elif !defined(__HGGCCC_RTC__)
 
 template <>
 struct NumericConverter<int32_t, float, FloatRoundStyle::round_to_nearest> {
@@ -186,7 +188,7 @@ struct NumericConverter<int32_t, float, FloatRoundStyle::round_toward_zero> {
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
 template <>
 struct NumericConverter<int8_t, float, FloatRoundStyle::round_to_nearest> {
 
@@ -198,7 +200,7 @@ struct NumericConverter<int8_t, float, FloatRoundStyle::round_to_nearest> {
   static result_type convert(source_type const & s) {
 
     int32_t intermediate;
-    asm volatile("cvt.rni.sat.s8.f32 %0, %1;" : "=r"(intermediate) : "f"(s));
+    asm volatile("ppu.cvt.irtte.sat.s8.f32 %0, %1;" : "=r"(intermediate) : "f"(s));
 
     return static_cast<result_type>(intermediate);
   }
@@ -220,7 +222,7 @@ struct NumericConverter<int8_t, float, FloatRoundStyle::round_toward_zero> {
   static result_type convert(source_type const & s) {
 
     int32_t intermediate;
-    asm volatile("cvt.rzi.sat.s8.f32 %0, %1;" : "=r"(intermediate) : "f"(s));
+    asm volatile("ppu.cvt.irtz.sat.s8.f32 %0, %1;" : "=r"(intermediate) : "f"(s));
 
     return static_cast<result_type>(intermediate);
   }
@@ -231,7 +233,7 @@ struct NumericConverter<int8_t, float, FloatRoundStyle::round_toward_zero> {
   }
 };
 
-#elif !defined(__CUDACC_RTC__)
+#elif !defined(__HGGCCC_RTC__)
 
 template <>
 struct NumericConverter<int8_t, float, FloatRoundStyle::round_to_nearest> {
@@ -369,7 +371,7 @@ struct NumericConverter<half_t, float, FloatRoundStyle::round_toward_zero> {
   CUTLASS_HOST_DEVICE
   static result_type convert(source_type const & flt) {
 
-  #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
     return half_t(__float2half_rz(flt));
   #else
     // software implementation rounds toward nearest even
@@ -416,7 +418,7 @@ struct NumericConverter<half_t, float, FloatRoundStyle::round_toward_zero> {
 
     return half_t::bitcast(u);
 
-  #endif // defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+  #endif // defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   }
 
   CUTLASS_HOST_DEVICE
@@ -478,7 +480,7 @@ struct NumericConverter<bfloat16_t, float, FloatRoundStyle::round_half_ulp_trunc
   static result_type convert(source_type const & s) {
     uint32_t x32 = reinterpret_cast<uint32_t const &>(s);
 
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
     if (::isfinite(s)) {
       x32 += 0x8000;
     }
@@ -556,8 +558,8 @@ struct NumericConverter<tfloat32_t, float, FloatRoundStyle::round_to_nearest> {
 
     unsigned storage = reinterpret_cast<unsigned const &>(s);
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900
-    asm volatile("cvt.rn.tf32.f32 %0, %1;" : "=r"(storage) : "r"(storage));
+#if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 150
+    asm volatile("ppu.cvt.rtte.tf32.f32 %0, %1;" : "=r"(storage) : "r"(storage));
 #else
     if ((storage & 0x7f800000) != 0x7f800000) {
 
@@ -851,7 +853,7 @@ struct NumericArrayConverter<half_t, float, 2, FloatRoundStyle::round_to_nearest
 
     Array<half_t, 2> result;
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       reinterpret_cast<__half2 &>(result) = __float22half2_rn(reinterpret_cast<float2 const &>(source));
     #else
       NumericConverter<half_t, float, round_style> convert_;
@@ -881,7 +883,7 @@ struct NumericArrayConverter<float, half_t, 2, Round> {
 
     Array<float, 2> result;
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       reinterpret_cast<float2 &>(result) = __half22float2(reinterpret_cast<__half2 const &>(source));
     #else
       NumericConverter<float, half_t, round_style> convert_;
@@ -983,7 +985,7 @@ struct NumericArrayConverter<float, half_t, N, Round> {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Array<bfloat16_t, 2> <= Array<float, 2>, round to nearest
@@ -999,7 +1001,7 @@ struct NumericArrayConverter<bfloat16_t, float, 2, FloatRoundStyle::round_to_nea
 
     unsigned d;
 
-    asm("cvt.rn.bf16x2.f32 %0, %1, %2;\n" : "=r"(d) : "f"(source[1]), "f"(source[0]) );
+    asm("ppu.cvt.rtte.bf16x2.f32 %0, %1, %2;\n" : "=r"(d) : "f"(source[1]), "f"(source[0]) );
 
     return reinterpret_cast<result_type const &>(d);
   }
@@ -1050,14 +1052,12 @@ struct NumericArrayConverter<bfloat16_t, float, N, Round> {
   }
 };
 
-#endif // if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+#endif // if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Conditional guards to enable partial specialization for packed integers
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 720) && \
-    ((__CUDACC_VER_MAJOR__ > 10) ||                     \
-     ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
 /// Partial specialization for Array<int8_t, 1> <= Array<int, 1>
 template <
@@ -1102,7 +1102,7 @@ struct NumericArrayConverter<int8_t, int, 2, Round> {
     uint32_t tmp;
 
     asm volatile(
-      "cvt.pack.sat.s8.s32.b32   %0, %2, %1, 0;\n"
+      "ppu.cvt.pack.sat.s8.s32.b32   %0, %2, %1, 0;\n"
       : "=r"(tmp) : "r"(source[0]), "r"(source[1]));
 
     uint16_t out = (tmp & 0xffff);
@@ -1132,8 +1132,8 @@ struct NumericArrayConverter<int8_t, int, 4, Round> {
 
     asm volatile(
       "{ .reg .u32 r4;"
-      "cvt.pack.sat.s8.s32.b32   r4, %4, %3, 0;"
-      "cvt.pack.sat.s8.s32.b32   %0, %2, %1, r4;"
+      "ppu.cvt.pack.sat.s8.s32.b32   r4, %4, %3, 0;"
+      "ppu.cvt.pack.sat.s8.s32.b32   %0, %2, %1, r4;"
       "}"
       : "=r"(out) : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]));
 
@@ -1225,7 +1225,7 @@ struct NumericArrayConverter<uint8_t, int, 2, Round> {
     uint32_t tmp;
 
     asm volatile(
-      "cvt.pack.sat.u8.s32.b32   %0, %2, %1, 0;\n"
+      "ppu.cvt.pack.sat.u8.s32.b32   %0, %2, %1, 0;\n"
       : "=r"(tmp) : "r"(source[0]), "r"(source[1]));
 
     uint16_t out = (tmp & 0xffff);
@@ -1255,8 +1255,8 @@ struct NumericArrayConverter<uint8_t, int, 4, Round> {
 
     asm volatile(
       "{ .reg .u32 r4;"
-      "cvt.pack.sat.u8.s32.b32   r4, %4, %3, 0;"
-      "cvt.pack.sat.u8.s32.b32   %0, %2, %1, r4;"
+      "ppu.cvt.pack.sat.u8.s32.b32   r4, %4, %3, 0;"
+      "ppu.cvt.pack.sat.u8.s32.b32   %0, %2, %1, r4;"
       "}"
       : "=r"(out) : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]));
 
@@ -1328,13 +1328,13 @@ struct NumericArrayConverter<float, float_e4m3_t, 2, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out_fp16;
     uint16_t const& src_packed = reinterpret_cast<uint16_t const&>(source);
 
     asm volatile( \
         "{\n" \
-        "cvt.rn.f16x2.e4m3x2 %0, %1;\n" \
+        "ppu.cvt.rtte.f16x2.e4m3x2 %0, %1;\n" \
         "}\n" : "=r"(out_fp16): "h"(src_packed));
 
     float2 res0 = __half22float2(reinterpret_cast<__half2 &>(out_fp16));
@@ -1377,12 +1377,12 @@ struct NumericArrayConverter<float_e4m3_t, float, 2, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint16_t out;
 
     asm volatile( \
         "{\n" \
-        "cvt.rn.satfinite.e4m3x2.f32   %0, %2, %1;\n" \
+        "ppu.cvt.rtte.satfinite.e4m3x2.f32   %0, %2, %1;\n" \
         "}" \
         : "=h"(out) : "f"(source[0]), "f"(source[1]));
 
@@ -1421,13 +1421,13 @@ struct NumericArrayConverter<float, float_e5m2_t, 2, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out_fp16;
     uint16_t const& src_packed = reinterpret_cast<uint16_t const&>(source);
 
     asm volatile( \
         "{\n" \
-        "cvt.rn.f16x2.e5m2x2 %0, %1;\n" \
+        "ppu.cvt.rtte.f16x2.e5m2x2 %0, %1;\n" \
         "}\n" : "=r"(out_fp16): "h"(src_packed));
 
     float2 res0 = __half22float2(reinterpret_cast<__half2 &>(out_fp16));
@@ -1512,16 +1512,16 @@ struct NumericArrayConverterPacked4Element<float, float_e4m3_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out_fp16[2];
     uint32_t const& src_packed = reinterpret_cast<uint32_t const&>(source);
 
     asm volatile( \
         "{\n" \
         ".reg .b16 lo, hi;\n" \
-        "mov.b32 {lo, hi}, %2;\n" \
-        "cvt.rn.f16x2.e4m3x2 %0, lo;\n" \
-        "cvt.rn.f16x2.e4m3x2 %1, hi;\n" \
+        "ppu.mov.b32 {lo, hi}, %2;\n" \
+        "ppu.cvt.rtte.f16x2.e4m3x2 %0, lo;\n" \
+        "ppu.cvt.rtte.f16x2.e4m3x2 %1, hi;\n" \
         "}\n" : "=r"(out_fp16[0]), "=r"(out_fp16[1]) : "r"(src_packed));
 
     float2 res0 = __half22float2(reinterpret_cast<__half2 &>(out_fp16[0]));
@@ -1567,16 +1567,16 @@ struct NumericArrayConverterPacked4Element<float_e4m3_t, float, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out;
 
     asm volatile( \
         "{\n" \
         ".reg .b16 lo;\n" \
         ".reg .b16 hi;\n" \
-        "cvt.rn.satfinite.e4m3x2.f32   lo, %2, %1;\n" \
-        "cvt.rn.satfinite.e4m3x2.f32   hi, %4, %3;\n" \
-        "mov.b32 %0, {lo, hi};\n" \
+        "ppu.cvt.rtte.satfinite.e4m3x2.f32   lo, %2, %1;\n" \
+        "ppu.cvt.rtte.satfinite.e4m3x2.f32   hi, %4, %3;\n" \
+        "ppu.mov.b32 %0, {lo, hi};\n" \
         "}" \
         : "=r"(out) : "f"(source[0]), "f"(source[1]), "f"(source[2]), "f"(source[3]));
 
@@ -1621,16 +1621,16 @@ struct NumericArrayConverterPacked4Element<float, float_e5m2_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out_fp16[2];
     uint32_t const& src_packed = reinterpret_cast<uint32_t const&>(source);
 
     asm volatile( \
         "{\n" \
         ".reg .b16 lo, hi;\n" \
-        "mov.b32 {lo, hi}, %2;\n" \
-        "cvt.rn.f16x2.e5m2x2 %0, lo;\n" \
-        "cvt.rn.f16x2.e5m2x2 %1, hi;\n" \
+        "ppu.mov.b32 {lo, hi}, %2;\n" \
+        "ppu.cvt.rtte.f16x2.e5m2x2 %0, lo;\n" \
+        "ppu.cvt.rtte.f16x2.e5m2x2 %1, hi;\n" \
         "}\n" : "=r"(out_fp16[0]), "=r"(out_fp16[1]) : "r"(src_packed));
 
     float2 res0 = __half22float2(reinterpret_cast<__half2 &>(out_fp16[0]));
@@ -1676,16 +1676,16 @@ struct NumericArrayConverterPacked4Element<float_e5m2_t, float, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out;
 
     asm volatile( \
         "{\n" \
         ".reg .b16 lo;\n" \
         ".reg .b16 hi;\n" \
-        "cvt.rn.satfinite.e5m2x2.f32   lo, %2, %1;\n" \
-        "cvt.rn.satfinite.e5m2x2.f32   hi, %4, %3;\n" \
-        "mov.b32 %0, {lo, hi};\n" \
+        "ppu.cvt.rtte.satfinite.e5m2x2.f32   lo, %2, %1;\n" \
+        "ppu.cvt.rtte.satfinite.e5m2x2.f32   hi, %4, %3;\n" \
+        "ppu.mov.b32 %0, {lo, hi};\n" \
         "}" \
         : "=r"(out) : "f"(source[0]), "f"(source[1]), "f"(source[2]), "f"(source[3]));
 
@@ -1730,15 +1730,15 @@ struct NumericArrayConverterPacked4Element<half_t, float_e4m3_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out[2];
     uint32_t const& src_packed = reinterpret_cast<uint32_t const&>(source);
     asm volatile( \
         "{\n" \
         ".reg .b16 lo, hi;\n" \
-        "mov.b32 {lo, hi}, %2;\n" \
-        "cvt.rn.f16x2.e4m3x2 %0, lo;\n" \
-        "cvt.rn.f16x2.e4m3x2 %1, hi;\n" \
+        "ppu.mov.b32 {lo, hi}, %2;\n" \
+        "ppu.cvt.rtte.f16x2.e4m3x2 %0, lo;\n" \
+        "ppu.cvt.rtte.f16x2.e4m3x2 %1, hi;\n" \
         "}\n" : "=r"(out[0]), "=r"(out[1]) : "r"(src_packed));
     return reinterpret_cast<result_type const &>(out);
   #else
@@ -1775,7 +1775,7 @@ struct NumericArrayConverterPacked4Element<float_e4m3_t, half_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out;
     uint32_t const* src_packed = reinterpret_cast<uint32_t const*>(&source);
 
@@ -1783,9 +1783,9 @@ struct NumericArrayConverterPacked4Element<float_e4m3_t, half_t, Round> {
         "{\n" \
         ".reg .b16 lo;\n" \
         ".reg .b16 hi;\n" \
-        "cvt.rn.satfinite.e4m3x2.f16x2   lo, %1;\n" \
-        "cvt.rn.satfinite.e4m3x2.f16x2   hi, %2;\n" \
-        "mov.b32 %0, {lo, hi};\n" \
+        "ppu.cvt.rtte.satfinite.e4m3x2.f16x2   lo, %1;\n" \
+        "ppu.cvt.rtte.satfinite.e4m3x2.f16x2   hi, %2;\n" \
+        "ppu.mov.b32 %0, {lo, hi};\n" \
         "}" \
         : "=r"(out) : "r"(src_packed[0]), "r"(src_packed[1]));
 
@@ -1830,15 +1830,15 @@ struct NumericArrayConverterPacked4Element<half_t, float_e5m2_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out[2];
     uint32_t const& src_packed = reinterpret_cast<uint32_t const&>(source);
     asm volatile( \
         "{\n" \
         ".reg .b16 lo, hi;\n" \
-        "mov.b32 {lo, hi}, %2;\n" \
-        "cvt.rn.f16x2.e5m2x2 %0, lo;\n" \
-        "cvt.rn.f16x2.e5m2x2 %1, hi;\n" \
+        "ppu.mov.b32 {lo, hi}, %2;\n" \
+        "ppu.cvt.rtte.f16x2.e5m2x2 %0, lo;\n" \
+        "ppu.cvt.rtte.f16x2.e5m2x2 %1, hi;\n" \
         "}\n" : "=r"(out[0]), "=r"(out[1]) : "r"(src_packed));
     return reinterpret_cast<result_type const &>(out);
   #else
@@ -1875,7 +1875,7 @@ struct NumericArrayConverterPacked4Element<float_e5m2_t, half_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     uint32_t out;
     uint32_t const* src_packed = reinterpret_cast<uint32_t const*>(&source);
 
@@ -1883,9 +1883,9 @@ struct NumericArrayConverterPacked4Element<float_e5m2_t, half_t, Round> {
         "{\n" \
         ".reg .b16 lo;\n" \
         ".reg .b16 hi;\n" \
-        "cvt.rn.satfinite.e5m2x2.f16x2   lo, %1;\n" \
-        "cvt.rn.satfinite.e5m2x2.f16x2   hi, %2;\n" \
-        "mov.b32 %0, {lo, hi};\n" \
+        "ppu.cvt.rtte.satfinite.e5m2x2.f16x2   lo, %1;\n" \
+        "ppu.cvt.rtte.satfinite.e5m2x2.f16x2   hi, %2;\n" \
+        "ppu.mov.b32 %0, {lo, hi};\n" \
         "}" \
         : "=r"(out) : "r"(src_packed[0]), "r"(src_packed[1]));
 
@@ -1930,7 +1930,7 @@ struct NumericArrayConverterPacked4Element<bfloat16_t, float_e4m3_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     // Convert f8 to float
     NumericArrayConverterPacked4Element<float, source_element, Round> src2float;
     Array<float, 4> tmp_floats = src2float(source);
@@ -1978,7 +1978,7 @@ struct NumericArrayConverterPacked4Element<float_e4m3_t, bfloat16_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     // Convert bf16 to float
     Array<float, 4> tmp;
     Array<float, 2>* packed_tmp = reinterpret_cast<Array<float, 2>*>(&tmp);
@@ -2030,7 +2030,7 @@ struct NumericArrayConverterPacked4Element<bfloat16_t, float_e5m2_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     // Convert f8 to float
     NumericArrayConverterPacked4Element<float, source_element, Round> src2float;
     Array<float, 4> tmp_floats = src2float(source);
@@ -2078,7 +2078,7 @@ struct NumericArrayConverterPacked4Element<float_e5m2_t, bfloat16_t, Round> {
   CUTLASS_DEVICE
   static result_type convert(source_type const & source) {
 
-  #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+  #if defined(HGGC_PTX_FP8_CVT_ENABLED)
     // Convert bf16 to float
     Array<float, 4> tmp;
     Array<float, 2>* packed_tmp = reinterpret_cast<Array<float, 2>*>(&tmp);
@@ -2345,9 +2345,7 @@ struct NumericArrayConverter<int8_t, float, N, Round> {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 750) && \
-    ((__CUDACC_VER_MAJOR__ > 10) ||                     \
-     ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
 /// Partial specialization for Array<int4b_t, 8> <= Array<int, 8>
 template <
@@ -2366,10 +2364,10 @@ struct NumericArrayConverter<int4b_t, int, 8, Round> {
 
     asm volatile(
         "{ .reg .u32 r4;"
-        "cvt.pack.sat.s4.s32.b32   r4, %8, %7, 0;"
-        "cvt.pack.sat.s4.s32.b32   r4, %6, %5, r4;"
-        "cvt.pack.sat.s4.s32.b32   r4, %4, %3, r4;"
-        "cvt.pack.sat.s4.s32.b32   %0, %2, %1, r4;"
+        "ppu.cvt.pack.sat.s4.s32.b32   r4, %8, %7, 0;"
+        "ppu.cvt.pack.sat.s4.s32.b32   r4, %6, %5, r4;"
+        "ppu.cvt.pack.sat.s4.s32.b32   r4, %4, %3, r4;"
+        "ppu.cvt.pack.sat.s4.s32.b32   %0, %2, %1, r4;"
         "}"
         : "=r"(out)
         : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]),
@@ -2437,10 +2435,10 @@ struct NumericArrayConverter<uint4b_t, int, 8, Round> {
 
     asm volatile(
         "{ .reg .u32 r4;"
-        "cvt.pack.sat.u4.s32.b32   r4, %8, %7, 0;"
-        "cvt.pack.sat.u4.s32.b32   r4, %6, %5, r4;"
-        "cvt.pack.sat.u4.s32.b32   r4, %4, %3, r4;"
-        "cvt.pack.sat.u4.s32.b32   %0, %2, %1, r4;"
+        "ppu.cvt.pack.sat.u4.s32.b32   r4, %8, %7, 0;"
+        "ppu.cvt.pack.sat.u4.s32.b32   r4, %6, %5, r4;"
+        "ppu.cvt.pack.sat.u4.s32.b32   r4, %4, %3, r4;"
+        "ppu.cvt.pack.sat.u4.s32.b32   %0, %2, %1, r4;"
         "}"
         : "=r"(out)
         : "r"(source[0]), "r"(source[1]), "r"(source[2]), "r"(source[3]),
@@ -2657,9 +2655,9 @@ private:
       asm volatile(
           "{\n"
           "  .reg .b32 pos_f8s, neg_f8s;\n"
-          "  prmt.b32 pos_f8s, %1, %2, %5;\n"
-          "  prmt.b32 neg_f8s, %3, %4, %5;\n"
-          "  prmt.b32 %0, pos_f8s, neg_f8s, %6;\n"
+          "  ppu.prmt.b32 pos_f8s, %1, %2, %5;\n"
+          "  ppu.prmt.b32 neg_f8s, %3, %4, %5;\n"
+          "  ppu.prmt.b32 %0, pos_f8s, neg_f8s, %6;\n"
           "}\n"
           : "=r"(r[ii])
           : "n"(POS_E4M3s_REG1), "n"(POS_E4M3s_REG2), "n"(NEG_E4M3s_REG1), "n"(NEG_E4M3s_REG2),
@@ -2749,7 +2747,7 @@ private:
     for (int ii = 0; ii < elements_to_convert; ++ii) {
       asm volatile(
           "{\n"
-          "  lop3.b32 %0, %1, %2, %3, %4;\n"
+          "  ppu.lop3.b32 %0, %1, %2, %3, %4;\n"
           "}\n"
           : "=r"(result_as_int[offset + ii])
           : "r"(src_reg), "r"(and_masks[ii]), "r"(xor_masks[ii]), "n"(immLut));
@@ -2854,7 +2852,7 @@ private:
     int* result_as_int = reinterpret_cast<int*>(&r);
     CUTLASS_PRAGMA_UNROLL
     for (int ii = 0; ii < PackedResultType::kElements; ++ii) {
-      asm volatile("prmt.b32 %0,%1,%1,%2;\n" : "=r"(result_as_int[ii]) : "r"(src_reg), "r"(prmt_indices[ii]));
+      asm volatile("ppu.prmt.b32 %0,%1,%1,%2;\n" : "=r"(result_as_int[ii]) : "r"(src_reg), "r"(prmt_indices[ii]));
     }
 
     CUTLASS_PRAGMA_UNROLL
@@ -3023,7 +3021,7 @@ private:
     // fp16s_23 = {0x00, i4_23, 0x00, i4_23}
     // fp16s_45 = {0x00, i4_45, 0x00, i4_45}
     // fp16s_67 = {0x00, i4_67, 0x00, i4_67}
-    // We use inline asm instead of __byte_perm intrinsic since we don't want the documented (& 0x7) on the index. NVCC
+    // We use inline asm instead of __byte_perm intrinsic since we don't want the documented (& 0x7) on the index. HGCC
     // might be able to optimize it out since the index is a constexpr, but we choose to be safe about it here.
     uint32_t prmt_indices[4] = {0x4040, 0x4141, 0x4242, 0x4343};
     static_assert(RegArray::kElements <= 4, "Too many inputs for F16 -> I4 vector converter");
@@ -3031,7 +3029,7 @@ private:
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
       asm volatile(
           "{\n"
-          "  prmt.b32 %0, %1, %2, %3;\n"
+          "  ppu.prmt.b32 %0, %1, %2, %3;\n"
           "}\n"
           : "=r"(r[ii])
           : "r"(src_reg), "n"(0), "r"(prmt_indices[ii]));     
@@ -3054,7 +3052,7 @@ private:
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
       asm volatile(
           "{\n"
-          "  lop3.b32 %0, %0, %1, %2, %3;\n"
+          "  ppu.lop3.b32 %0, %0, %1, %2, %3;\n"
           "}\n"
           : "+r"(r[ii])
           : "n"(and_mask), "n"(xor_mask), "n"(immLut));     
@@ -3164,18 +3162,16 @@ private:
     uint32_t const prmt_indices[2] = {0x9180, 0xB3A2};
 
     // Pack s8x2 (s8[1], s8[0]) -> s16x2 (sext.s8[1], sext.s8[0])
-    // (See https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt)
     // The inline ptx below uses `msb=0` and `msb=1` from the above link to sign-extend the sign bit in 0, 1, 2, 3 bytes of s8x4
     // into result_ptr[0] and result_ptr[1]'s 08-15 and 24-31 bits, respectively.
     // Note that `__byte_perm(source_ptr[0], source_ptr[0], 0x9180);` won't achieve the same result and doesn't sign-extend the sign bit.
     // Thus, we use inline ptx `prmt.b32` instruction for the desired sign extend from s8x2 to s16x2.
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
-      asm volatile("prmt.b32 %0,%1,%1,%2;\n" : "=r"(r[ii]) : "r"(src_reg), "r"(prmt_indices[ii]));
+      asm volatile("ppu.prmt.b32 %0,%1,%1,%2;\n" : "=r"(r[ii]) : "r"(src_reg), "r"(prmt_indices[ii]));
     }
 
     // In the absense of add.s16x2 instruction, use bit-wise operation to execute signed addition with magic numbers to achieve
     // the same result as add.s16x2 instruction.
-    // (See https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-lop3)
     // For a logical operation F(a, b, c) the value of kImmLut can be computed by applying the same operation to 
     // three predefined constant values as follows:
     //                                        ta = 0xF0;
@@ -3187,7 +3183,7 @@ private:
 
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
       // The bit-wise operation executed below is `r[ii] = (r[ii] & 0x03FF03FF) ^ 0x66006600;`
-      asm volatile("lop3.b32 %0, %1, %2, %3, %4;\n" : 
+      asm volatile("ppu.lop3.b32 %0, %1, %2, %3, %4;\n" : 
                                 "=r"(r[ii]) : "r"(r[ii]), "n"(0x03FF03FF), "n"(0x66006600), "n"(kImmLut));
     }
 
@@ -3267,7 +3263,7 @@ private:
     static constexpr uint32_t start_byte_for_fp16 = 0x64646464;
 
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
-      asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(r[ii]) : "r"(src_reg), "n"(start_byte_for_fp16), "r"(prmt_indices[ii]));
+      asm volatile("ppu.prmt.b32 %0,%1,%2,%3;\n" : "=r"(r[ii]) : "r"(src_reg), "n"(start_byte_for_fp16), "r"(prmt_indices[ii]));
     }
 
     static constexpr uint32_t bias_rep = 0x64006400;
@@ -3302,7 +3298,7 @@ public:
   }
 };
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /// Partial specialization for Array<cutlass::bfloat16_t, N> <= Array<cutlass::int4b_t, N>
 template <FloatRoundStyle Round, int N>
@@ -3368,7 +3364,7 @@ private:
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
       asm volatile(
           "{\n"
-          "  prmt.b32 %0, %1, %2, %3;\n"
+          "  ppu.prmt.b32 %0, %1, %2, %3;\n"
           "}\n"
           : "=r"(r[ii])
           : "r"(src_reg), "r"(src_reg_shifted), "r"(prmt_indices[ii]));     
@@ -3387,7 +3383,7 @@ private:
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
       asm volatile(
           "{\n"
-          "  lop3.b32 %0, %0, %1, %2, %3;\n"
+          "  ppu.lop3.b32 %0, %0, %1, %2, %3;\n"
           "}\n"
           : "+r"(r[ii])
           : "n"(and_mask), "n"(xor_mask), "n"(immLut));     
@@ -3399,11 +3395,11 @@ private:
 
     // This is the BF16 {136, 136} represented as an integer.
     static constexpr uint32_t bias_rep = 0x43084308;
-    const __nv_bfloat162& bias = reinterpret_cast<const __nv_bfloat162&>(bias_rep);
+    const __ppu_bfloat162& bias = reinterpret_cast<const __ppu_bfloat162&>(bias_rep);
     
     CUTLASS_PRAGMA_UNROLL
     for (int ii = 0; ii < RegArray::kElements; ++ii) {
-      __nv_bfloat162& bf16x2_val = reinterpret_cast<__nv_bfloat162&>(r[ii]);
+      __ppu_bfloat162& bf16x2_val = reinterpret_cast<__ppu_bfloat162&>(r[ii]);
       bf16x2_val = __hsub2(bf16x2_val, bias);
     }
 
@@ -3556,7 +3552,7 @@ public:
   }
 };
 
-#endif // defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+#endif // defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -3674,7 +3670,7 @@ struct PreferredRoundingMode {
   static FloatRoundStyle const kRound = FloatRoundStyle::round_to_nearest;
 };
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 900
+#if defined(__HGGC_ARCH__) && __HGGC_ARCH__ < 150
 /// Defines preferred rounding mode for a pair of types
 template <>
 struct PreferredRoundingMode<tfloat32_t, float> {

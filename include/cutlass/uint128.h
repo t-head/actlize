@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! 
   \file
   \brief Defines an unsigned 128b integer with several operators to support 64-bit integer division.
@@ -43,8 +45,8 @@
 */
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cstdint>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cstdint>
 #else
 #include <cstdint>
 #include <cstdlib>
@@ -56,15 +58,8 @@
 #include "cutlass/cutlass.h"
 
 /// Optionally enable GCC's built-in type
-#if (defined(__x86_64) || defined (__aarch64__)) && !(defined(__CUDA_ARCH__) && ((__CUDACC_VER_MAJOR__ <= 10) || ((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ <= 4)))) && defined(__GNUC__)
+#if (defined(__x86_64) || defined (__aarch64__)) && !(defined(__HGGC_ARCH__) && ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ <= 4))) && defined(__GNUC__)
 #define CUTLASS_UINT128_NATIVE
-#elif defined(_MSC_VER) && defined(_M_AMD64) && !(defined(__CUDA_ARCH__) && ((__CUDACC_VER_MAJOR__ <= 10) || ((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ <= 4))))
-#define CUTLASS_INT128_ARITHMETIC
-#include <intrin.h>
-#if _MSC_VER >= 1920
-#define CUTLASS_INT128_ARITHMETIC_DIV
-#include <immintrin.h>
-#endif
 #endif
 
 namespace cutlass {
@@ -123,12 +118,8 @@ struct uint128_t {
 
   CUTLASS_HOST_DEVICE
   static void exception() {
-#if defined(__CUDA_ARCH__)
-  asm volatile ("  brkpt;\n");
-#else
   // throw std::runtime_error("Not yet implemented.");
   abort();
-#endif
   }
 
   /// Add
@@ -163,13 +154,6 @@ struct uint128_t {
     uint128_t y{};
 #if defined(CUTLASS_UINT128_NATIVE)
     y.native = native * rhs;
-#elif defined(CUTLASS_INT128_ARITHMETIC)
-    // Multiply by the low part
-    y.hilo_.lo = _umul128(hilo_.lo, rhs, &y.hilo_.hi);
-
-    // Add the high part and ignore the overflow
-    uint64_t overflow;
-    y.hilo_.hi += _umul128(hilo_.hi, rhs, &overflow);
 #else
     CUTLASS_UNUSED(rhs);
     exception();
@@ -183,10 +167,6 @@ struct uint128_t {
     uint64_t quotient = 0;
 #if defined(CUTLASS_UINT128_NATIVE)
     quotient = uint64_t(native / divisor);
-#elif defined(CUTLASS_INT128_ARITHMETIC_DIV)
-    // implemented using MSVC's arithmetic intrinsics
-    uint64_t remainder = 0;
-    quotient = _udiv128(hilo_.hi, hilo_.lo, divisor, &remainder);
 #else
     CUTLASS_UNUSED(divisor);
     exception();
@@ -200,9 +180,6 @@ struct uint128_t {
     uint64_t remainder = 0;
 #if defined(CUTLASS_UINT128_NATIVE)
     remainder = uint64_t(native % divisor);
-#elif defined(CUTLASS_INT128_ARITHMETIC_DIV)
-    // implemented using MSVC's arithmetic intrinsics
-    (void)_udiv128(hilo_.hi, hilo_.lo, divisor, &remainder);
 #else
     CUTLASS_UNUSED(divisor);
     exception();
@@ -217,9 +194,6 @@ struct uint128_t {
 #if defined(CUTLASS_UINT128_NATIVE)
     quotient = uint64_t(native / divisor);
     remainder = uint64_t(native % divisor);
-#elif defined(CUTLASS_INT128_ARITHMETIC_DIV)
-    // implemented using MSVC's arithmetic intrinsics
-    quotient = _udiv128(hilo_.hi, hilo_.lo, divisor, &remainder);
 #else
     CUTLASS_UNUSED(remainder);
     CUTLASS_UNUSED(divisor);

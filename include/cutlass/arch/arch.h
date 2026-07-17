@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines tags for architecture-specific configurations.
 */
@@ -41,62 +43,35 @@
 namespace cutlass {
 namespace arch {
 
-#if defined(__NVCC__) || defined(__CUDACC_RTC__) || (defined(__clang__) && defined(__CUDA__))
+#if defined(__HGGCCC__) || defined(__HGGCCC_RTC__) || (defined(__clang__) && defined(__HGGC__))
 
 /// Computes laneId within a warp
 CUTLASS_DEVICE
 int LaneId() {
   int ret;
-  asm ("mov.u32 %0, %%laneid;" : "=r"(ret) : );
+  asm ("ppu.mov.u32 %0, %%laneid;" : "=r"(ret) : );
   return ret;
 }
 
-/// Computes SM number the thread is running on
+/// Computes CU number the thread is running on
 CUTLASS_DEVICE
-int SmId() {
+int CuId() {
   int ret;
-  asm ("mov.u32 %0, %%smid;" : "=r"(ret) : );
+  asm ("ppu.mov.u32 %0, %%cuid;" : "=r"(ret) : );
   return ret;
 }
 
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-struct Sm50 {
-  static int const kMinComputeCapability = 50;
-}; 
-struct Sm60 {
-  static int const kMinComputeCapability = 60;
-}; 
-struct Sm61 {
-  static int const kMinComputeCapability = 61;
+struct PPU0010 {
+  static int const kMinComputeCapability = 80;
 };
-struct Sm70 {
-  static int const kMinComputeCapability = 70;
-};
-struct Sm72 {
-  static int const kMinComputeCapability = 72;
-};
-struct Sm75 {
-  static int const kMinComputeCapability = 75;
-};
-struct Sm80 {
-  static int const kMinComputeCapability = 80; 
-};
-struct Sm86 {
-  static int const kMinComputeCapability = 86;
-};
-struct Sm90 {
-  static int const kMinComputeCapability = 90; 
+struct PPU0015 {
+  static int const kMinComputeCapability = 89;
 };
 
-/// Triggers a breakpoint on the device
-CUTLASS_DEVICE
-void device_breakpoint() {
-#if defined(__CUDA_ARCH__)
-  asm volatile ("  brkpt;\n");
-#endif
-}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -104,3 +79,4 @@ void device_breakpoint() {
 } // namespace cutlass
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+

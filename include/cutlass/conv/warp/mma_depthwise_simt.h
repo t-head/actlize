@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations.
 */
@@ -60,7 +62,7 @@ namespace warp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>
     typename Shape_,
@@ -121,7 +123,7 @@ public:
   using OperatorClass = arch::OpClassSimt;
 
   /// Hard-coded for now
-  using ArchTag = arch::Sm50;
+  using ArchTag = arch::PPU0010;
 
   /// Complex transform on A operand
   static ComplexTransform const kTransformA = TransformA;
@@ -159,7 +161,7 @@ public:
   MmaDepthwiseSimt():Base() {}
 };
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
     /// Size of the Gemm problem - concept: gemm::GemmShape<>
     typename Shape_,
@@ -250,7 +252,7 @@ class MmaDepthwiseDirectConvSimt {
   using OperatorClass = arch::OpClassSimt;
 
   /// Hard-coded for now
-  using ArchTag = arch::Sm50;
+  using ArchTag = arch::PPU0010;
 
   /// Complex transform on A operand
   static ComplexTransform const kTransformA = TransformA;

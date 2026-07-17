@@ -1,4 +1,5 @@
-/******************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -27,13 +28,13 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- ******************************************************************************/
+ **************************************************************************************************/
 
 #pragma once
 
 /**
  * \file
- * \brief cuda kernels to do layernorm on a device memory tensor with RowMajor layout.
+ * \brief hggc kernels to do layernorm on a device memory tensor with RowMajor layout.
  */
 
 #include "cutlass/cutlass.h"
@@ -55,7 +56,7 @@ void layernorm(cutlass::MatrixCoord tensor_size,
                TensorRef<T, layout::RowMajor> ref_input,
                TensorRef<T, layout::RowMajor> ref_gamma,
                TensorRef<T, layout::RowMajor> ref_beta,
-               cudaStream_t stream);
+               hggcStream_t stream);
 
 /**
  * output [m, n] row-major
@@ -443,7 +444,7 @@ void layernorm(cutlass::MatrixCoord tensor_size,
                TensorRef<T, layout::RowMajor> ref_input,
                TensorRef<T, layout::RowMajor> ref_gamma,
                TensorRef<T, layout::RowMajor> ref_beta,
-               cudaStream_t stream){
+               hggcStream_t stream){
   const int m = tensor_size.row();
   const int n = tensor_size.column();
   T* output = ref_output.data();

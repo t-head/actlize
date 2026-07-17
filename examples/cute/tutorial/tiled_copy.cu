@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
@@ -35,7 +37,7 @@
 
 #include "cutlass/util/print_error.hpp"
 #include "cutlass/util/GPU_Clock.hpp"
-#include "cutlass/util/helper_cuda.hpp"
+#include "cutlass/util/helper_hggc.hpp"
 
 // This is a simple tutorial showing several ways to partition a tensor into tiles then
 // perform efficient, coalesced copies. This example also shows how to vectorize accesses
@@ -48,7 +50,7 @@
 // (M, N) denotes a statically sized tile, and m' and n' denote the number of such tiles
 // within the tensor.
 //
-// Each statically sized tile is mapped to a CUDA threadblock which performs efficient
+// Each statically sized tile is mapped to a device threadblock which performs efficient
 // loads and stores to Global Memory.
 //
 // `copy_kernel()` uses `cute::local_partition()` to partition the tensor and map
@@ -201,7 +203,7 @@ int main(int argc, char** argv)
   // Tile the tensor (m, m) ==> ((M, N), m', n') where (M, N) is the static tile
   // shape, and modes (m', n') correspond to the number of tiles.
   // 
-  // These will be used to determine the CUDA kernel grid dimensinos.
+  // These will be used to determine the device kernel grid dimensinos.
   Tensor tiled_tensor_S = tiled_divide(tensor_S, block_shape);
   Tensor tiled_tensor_D = tiled_divide(tensor_D, block_shape);
 
@@ -227,9 +229,9 @@ int main(int argc, char** argv)
     thr_layout, 
     vec_layout);
 
-  cudaError result = cudaDeviceSynchronize();
-  if (result != cudaSuccess) {
-    std::cerr << "CUDA Runtime error: " << cudaGetErrorString(result) << std::endl;
+  hggcError result = hggcDeviceSynchronize();
+  if (result != hggcSuccess) {
+    std::cerr << "device Runtime error: " << hggcGetErrorString(result) << std::endl;
     return -1;
   }
 

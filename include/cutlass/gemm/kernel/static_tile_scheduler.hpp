@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include "cutlass/fast_math.h"
@@ -36,7 +38,6 @@
 #include "cutlass/gemm/kernel/tile_scheduler_params.h"
 #include "cute/layout.hpp"
 #include "cute/tensor.hpp"
-#include "cute/arch/cluster_sm90.hpp"
 #include "cutlass/pipeline/pipeline.hpp"
 namespace cutlass::gemm::kernel::detail {
 
@@ -86,7 +87,7 @@ public:
     }
   };
 
-  using Params = PersistentTileSchedulerSm90Params;
+  using Params = PersistentTileSchedulerParams;
   using RasterOrder = typename Params::RasterOrder;
   using RasterOrderOptions = typename Params::RasterOrderOptions;
 public:
@@ -134,9 +135,7 @@ public:
   StaticPersistentTileScheduler() { }
 
   CUTLASS_DEVICE explicit StaticPersistentTileScheduler(Params const& params_) : scheduler_params(params_) {
-    // MSVC requires protecting use of CUDA-specific nonstandard syntax,
-    // like blockIdx and gridDim, with __CUDA_ARCH__.
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
     if (params_.raster_order_ == RasterOrder::AlongN) {
       current_work_linear_idx_ = uint64_t(blockIdx.x) + uint64_t(blockIdx.y) * uint64_t(gridDim.x);
     }
@@ -206,7 +205,8 @@ public:
     int32_t log_swizzle_size,
     RasterOrder raster_order) {
 
-    auto [cta_m_in_cluster, cta_n_in_cluster, _] = cute::block_id_in_cluster();
+    uint64_t cta_m_in_cluster = 0;
+    uint64_t cta_n_in_cluster = 0;
 
     uint64_t minor_work_idx, major_work_idx, cluster_minor_offset;
     if (raster_order == RasterOrder::AlongN) {
@@ -267,13 +267,11 @@ public:
   CUTLASS_DEVICE
   static auto
   work_tile_to_cta_coord(WorkTileInfo work_tile_info) {
-    // Get every cta coord in three dimensions of the cluster
-    auto [cta_m_in_cluster, cta_n_in_cluster, cta_l_in_cluster] = cute::block_id_in_cluster();
     return make_coord(
-      work_tile_info.M_idx + static_cast<int32_t>(cta_m_in_cluster),
-      work_tile_info.N_idx + static_cast<int32_t>(cta_n_in_cluster),
+      work_tile_info.M_idx + static_cast<int32_t>(0),
+      work_tile_info.N_idx + static_cast<int32_t>(0),
       _,
-      work_tile_info.L_idx + static_cast<int32_t>(cta_l_in_cluster)
+      work_tile_info.L_idx + static_cast<int32_t>(0)
     );
   }
 

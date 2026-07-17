@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -45,7 +46,6 @@
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/numeric_types.h"
-#include "cutlass/arch/wmma.h"
 
 #include "cutlass/epilogue/threadblock/epilogue.h"
 #include "cutlass/epilogue/thread/linear_combination.h"
@@ -120,7 +120,7 @@ struct DefaultGemmWithKReduction {
   /// Define the threadblock-scoped matrix multiply-accumulate
   using Mma = typename cutlass::gemm::threadblock::DefaultMmaWithReduction<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
-      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, kReduceKForA, arch::Sm80,
+      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, kReduceKForA, arch::PPU0010,
       ThreadblockShape, WarpShape, InstructionShape, Stages,
       Operator, false, SharedMemoryClear>::ThreadblockMma;
 

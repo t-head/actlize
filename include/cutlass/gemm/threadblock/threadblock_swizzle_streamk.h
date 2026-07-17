@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Implements streamk threadblock mapping blockIdx to GEMM problems.
 */
@@ -53,7 +55,7 @@
 #include "cutlass/conv/conv3d_problem_size.h"
 #include "cutlass/gemm/threadblock/index_remat.h"
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <iostream>
 #include "cutlass/core_io.h"
 #include "cutlass/trace.h"
@@ -116,7 +118,7 @@ struct ThreadblockSwizzleStreamK {
   /// Number of CTAs per cohort
   static int const kCtasPerCohort = kCohortCtasN * kCohortCtasM;
 
-  /// Cost-equivalent number of SM-iterations for fixup I/O
+  /// Cost-equivalent number of CU-iterations for fixup I/O
   static int const kFixupStartupIterEquiv = 10;
   static int const kFixupPeerIterEquiv = 3;
 
@@ -141,11 +143,11 @@ struct ThreadblockSwizzleStreamK {
   // Whether to pad and remap block indices
   bool remap_block_indices;
 
-  /// CTA occupancy per SM
-  int sm_occupancy;
+  /// CTA occupancy per CU
+  int cu_occupancy;
 
-  /// Number of SMs for dispatch heuristics to load-balance using Stream-K CTAs (wave size)
-  int avail_sms;
+  /// Number of CUs for dispatch heuristics to load-balance using Stream-K CTAs (wave size)
+  int avail_cus;
 
   int dp_blocks;                            /// Number of data-parallel thread blocks in the grid
   int dp_first_wave_tiles;                  /// Number of output tiles each CTA in the first DP wave will produce
@@ -223,7 +225,7 @@ struct ThreadblockSwizzleStreamK {
   /// Debug print
   void Print()
   {
-#ifndef __CUDA_ARCH__
+#ifndef __HGGC_ARCH__
     auto tiles = tiled_shape().mn().product();
     std::cout <<
         "problem_size: (" << problem_size.m() << "," << problem_size.n() << ")" <<
@@ -234,7 +236,7 @@ struct ThreadblockSwizzleStreamK {
         ", iters_per_tile: " << iters_per_tile() <<
         ", reduction_blocks: " << reduction_blocks <<
         ", dp_blocks: " << dp_blocks <<
-        ", dp_waves: " << dp_blocks / avail_sms <<
+        ", dp_waves: " << dp_blocks / avail_cus <<
         ", dp_first_wave_tiles: " << dp_first_wave_tiles <<
         ", sk_blocks_per_region: " << sk_blocks_per_region() <<
         ", sk_regions: " << sk_regions() <<
@@ -243,8 +245,8 @@ struct ThreadblockSwizzleStreamK {
         ", sk_big_blocks_per_region: " << sk_big_blocks_per_region <<
         ", remap_block_indices: " << remap_block_indices <<
         ", cohort_raster: " << cohort_raster <<
-        ", sm_occupancy: " << sm_occupancy <<
-        ", avail_sms: " << avail_sms <<
+        ", cu_occupancy: " << cu_occupancy <<
+        ", avail_cus: " << avail_cus <<
         ", num_blocks: " << get_num_blocks() <<
         "\n\n";
 #endif
@@ -257,7 +259,7 @@ struct ThreadblockSwizzleStreamK {
     int &savings_iters, /// [out]
     int sk_tiles,
     int iters_per_tile,
-    int avail_sms,
+    int avail_cus,
     int max_sk_occupancy,
     bool allow_partial_wave)
   {
@@ -270,15 +272,15 @@ struct ThreadblockSwizzleStreamK {
 
     int sk_iters = sk_tiles * iters_per_tile;
 
-    int dp_equiv_waves = (sk_tiles + avail_sms - 1) / avail_sms;
+    int dp_equiv_waves = (sk_tiles + avail_cus - 1) / avail_cus;
     int dp_equiv_iters = iters_per_tile * dp_equiv_waves;
 
-    int min_sk_blocks = (allow_partial_wave) ? fast_min(avail_sms, sk_tiles + 1) : avail_sms;
-    int max_sk_blocks = fast_min(avail_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
+    int min_sk_blocks = (allow_partial_wave) ? fast_min(avail_cus, sk_tiles + 1) : avail_cus;
+    int max_sk_blocks = fast_min(avail_cus * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
 
     for (int trial_sk_blocks = min_sk_blocks; trial_sk_blocks <= max_sk_blocks; ++trial_sk_blocks)
     {
-      int sk_waves = (trial_sk_blocks + avail_sms - 1) / avail_sms;
+      int sk_waves = (trial_sk_blocks + avail_cus - 1) / avail_cus;
       int max_sk_iters_per_block = (sk_iters + trial_sk_blocks - 1) / trial_sk_blocks;
       int sk_iter_equiv = max_sk_iters_per_block * sk_waves;
 
@@ -316,11 +318,11 @@ struct ThreadblockSwizzleStreamK {
     int &sk_blocks,     /// [out]
     int output_tiles,
     int iters_per_tile,
-    int avail_sms,
-    int sm_occupancy)
+    int avail_cus,
+    int cu_occupancy)
   {
-    int full_waves = output_tiles / avail_sms;
-    int full_wave_tiles = full_waves * avail_sms;
+    int full_waves = output_tiles / avail_cus;
+    int full_wave_tiles = full_waves * avail_cus;
     int partial_wave_tiles = output_tiles - full_wave_tiles;
 
     int score = -1;
@@ -333,12 +335,12 @@ struct ThreadblockSwizzleStreamK {
       return;
     }
 
-    if (full_waves < sm_occupancy)
+    if (full_waves < cu_occupancy)
     {
-        // We're less than full GPU occupancy
+        // We're less than full PPU occupancy
 
-        // Form the SK wave from the partial wave to get us up to full GPU occupancy
-        int max_sk_occupancy = sm_occupancy - full_waves;
+        // Form the SK wave from the partial wave to get us up to full PPU occupancy
+        int max_sk_occupancy = cu_occupancy - full_waves;
 
         dp_tiles = full_wave_tiles;
 
@@ -347,7 +349,7 @@ struct ThreadblockSwizzleStreamK {
           score,
           partial_wave_tiles,
           iters_per_tile,
-          avail_sms,
+          avail_cus,
           max_sk_occupancy,
           true);                 // we can run with less than a full wave of SK-blocks
 
@@ -360,12 +362,12 @@ struct ThreadblockSwizzleStreamK {
         return;
     }
 
-    // We're at (or greater) than GPU occupancy
+    // We're at (or greater) than PPU occupancy
 
-    if ((sm_occupancy > 1 ) && (full_waves % sm_occupancy == sm_occupancy - 1))
+    if ((cu_occupancy > 1 ) && (full_waves % cu_occupancy == cu_occupancy - 1))
     {
-        // If occupancy is more than one CTA per SM, form the SK wave from the partial
-        // wave to get us to full GPU occupancy
+        // If occupancy is more than one CTA per CU, form the SK wave from the partial
+        // wave to get us to full PPU occupancy
         int max_sk_occupancy = 1;
 
         dp_tiles = full_wave_tiles;
@@ -375,7 +377,7 @@ struct ThreadblockSwizzleStreamK {
           score,
           partial_wave_tiles,
           iters_per_tile,
-          avail_sms,
+          avail_cus,
           max_sk_occupancy,
           true);                 // we can run with less than a full wave of SK-blocks
 
@@ -385,17 +387,17 @@ struct ThreadblockSwizzleStreamK {
     }
 
     // Form the SK wave by combining the last full wave and the partial wave
-    // We're less than full GPU occupancy
-    dp_tiles = full_wave_tiles - avail_sms;
+    // We're less than full PPU occupancy
+    dp_tiles = full_wave_tiles - avail_cus;
 
-    int max_sk_occupancy = sm_occupancy - ((full_waves - 1) % sm_occupancy);
+    int max_sk_occupancy = cu_occupancy - ((full_waves - 1) % cu_occupancy);
 
     get_sk_blocks(
       sk_blocks,
       score,
-      partial_wave_tiles + avail_sms,
+      partial_wave_tiles + avail_cus,
       iters_per_tile,
-      avail_sms,
+      avail_cus,
       max_sk_occupancy,
       false);                 // we cannot run with less than a full wave of SK-blocks
 
@@ -413,9 +415,9 @@ struct ThreadblockSwizzleStreamK {
     GemmCoord const problem_size_,
     GemmCoord const tile_size_,
     int const batch_split_,                        /// Either (mode == GemmUniversalMode::kBatched) the batch count, or (mode == GemmUniversalMode::kGemm) the tile-splitting factor (1 defaults to StreamK, >1 emulates Split-K)
-    int const sm_occupancy_,
-    int const device_sms_,
-    int const avail_sms_,                          /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+    int const cu_occupancy_,
+    int const device_cus_,
+    int const avail_cus_,                          /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
     size_t const element_A_bytes_,
     size_t const element_B_bytes_,
     size_t const element_C_bytes_,
@@ -430,12 +432,12 @@ struct ThreadblockSwizzleStreamK {
     sk_big_blocks_per_region(0),
     sk_iters_per_region(0),
     sk_waves(0),
-    sm_occupancy(sm_occupancy_),
+    cu_occupancy(cu_occupancy_),
     remap_block_indices(false),
-    avail_sms(fast_max(1, avail_sms_)),
+    avail_cus(fast_max(1, avail_cus_)),
     cohort_raster(false)
   {
-    int gpu_occupancy = device_sms_ * sm_occupancy;
+    int gpu_occupancy = device_cus_ * cu_occupancy;
     int iters_per_tile = (problem_size.k() + tile_size_.k() - 1) / tile_size_.k();
     int sk_iters_per_normal_block = 0;
 
@@ -457,8 +459,8 @@ struct ThreadblockSwizzleStreamK {
     [[maybe_unused]] float flops_per_byte = float(problem_flops) / float(problem_bytes);
 
     int output_tiles = tiled_shape.m() * tiled_shape.n();
-    int waves = (output_tiles + avail_sms - 1) / avail_sms;
-    [[maybe_unused]] float dp_efficiency = float(output_tiles) / float(waves * avail_sms);
+    int waves = (output_tiles + avail_cus - 1) / avail_cus;
+    [[maybe_unused]] float dp_efficiency = float(output_tiles) / float(waves * avail_cus);
 
     //
     // Determine dispatch composition of DP-tiles and SK-blocks
@@ -479,7 +481,7 @@ struct ThreadblockSwizzleStreamK {
         sk_blocks = output_tiles * split_factor;
       }
       else if ((kReductionStrategy != kNone) &&   // Load-balancing strategy statically enabled
-        (avail_sms > 1))                         // Plurality of SMs to load balance across
+        (avail_cus > 1))                         // Plurality of CUs to load balance across
       {
         // Use heuristics
         get_blocks(
@@ -487,8 +489,8 @@ struct ThreadblockSwizzleStreamK {
           sk_blocks,     /// [out]
           output_tiles,
           iters_per_tile,
-          avail_sms,
-          sm_occupancy);
+          avail_cus,
+          cu_occupancy);
       }
     }
 
@@ -498,7 +500,7 @@ struct ThreadblockSwizzleStreamK {
     // Compute SK block iteration details
     if (sk_blocks > 0)
     {
-      sk_waves = (sk_blocks + avail_sms - 1) / avail_sms;
+      sk_waves = (sk_blocks + avail_cus - 1) / avail_cus;
 
       int sk_iters = sk_tiles * iters_per_tile;
       sk_blocks = fast_min(sk_blocks, sk_iters);
@@ -519,14 +521,14 @@ struct ThreadblockSwizzleStreamK {
 
       // Use a separate reduction wave when all of:
       // - Non-atomic reduction stratgy
-      // - The number of SK waves won't fully occupy the GPU (Otherwise we don't have
+      // - The number of SK waves won't fully occupy the PPU (Otherwise we don't have
       //   a strong-scaling case for more parallel reduction)
       // - More than three peers working on an SK tile.  (This occurs when the ratio of
       //   SK-blocks to SK-tiles > 2, as a single tile may be covered by four SK-blocks,
       //   e.g.:[partial-block | block | block | partial-block] ).  With three or
       //   less peers, the two non-finishing SK-blocks are not expexted to contend.
       if ((kReductionStrategy == kMixed) &&
-          (sk_waves < sm_occupancy) &&
+          (sk_waves < cu_occupancy) &&
           (sk_blocks > 2 * sk_tiles))
       {
         // Launch a reduction block for every accumulator fragment in each SK-tile
@@ -537,11 +539,11 @@ struct ThreadblockSwizzleStreamK {
       // When we have a multi-occupancy kernel and at least two waves of active blocks (where
       // at least one wave is SK blocks), we need to (1) dispatch at least four waves, and (2)
       // remap the block indices so that we can reliably spread the SK blocks evenly across the
-      // device's first SM occupancy valence. Also see get_num_blocks() and get_block_idx().
+      // device's first CU occupancy valence. Also see get_num_blocks() and get_block_idx().
       remap_block_indices = (
-          (sm_occupancy > 1) &&
-          (device_sms_ == avail_sms) &&
-          (get_num_active_blocks() > avail_sms * 2));
+          (cu_occupancy > 1) &&
+          (device_cus_ == avail_cus) &&
+          (get_num_active_blocks() > avail_cus * 2));
 
       // Initialize fast div/mod members related to SK
       div_mod_sk_iters_per_normal_block = FastDivmod(sk_iters_per_normal_block);
@@ -595,14 +597,14 @@ struct ThreadblockSwizzleStreamK {
     {
       // Update semi-persistence of first DP wave to ensure full grid wavesets
       // (Only applies when there's an SK component and we're not doing blocked cohort rasterization)
-      int dp_tile_waves = (dp_tiles + avail_sms - 1) / avail_sms;
-      int full_dp_tile_waves = dp_tiles / avail_sms;
-      int waveset_excess = (sk_waves + dp_tile_waves) % sm_occupancy;
+      int dp_tile_waves = (dp_tiles + avail_cus - 1) / avail_cus;
+      int full_dp_tile_waves = dp_tiles / avail_cus;
+      int waveset_excess = (sk_waves + dp_tile_waves) % cu_occupancy;
 
       if (dp_first_wave_tiles + waveset_excess <= full_dp_tile_waves)
       {
         dp_first_wave_tiles += waveset_excess;
-        dp_blocks -= (waveset_excess * avail_sms);
+        dp_blocks -= (waveset_excess * avail_cus);
       }
     }
 
@@ -617,7 +619,7 @@ struct ThreadblockSwizzleStreamK {
   /// Number of blocks performing useful work
   int get_num_active_blocks() const
   {
-    return (sk_waves * avail_sms) + dp_blocks + reduction_blocks;
+    return (sk_waves * avail_cus) + dp_blocks + reduction_blocks;
   }
 
   /// Obtains number of threadblocks per GEMM
@@ -627,7 +629,7 @@ struct ThreadblockSwizzleStreamK {
     if (remap_block_indices)
     {
       // Add padding blocks if we are performing remapping in order to dispatch a grid of at least four waves
-      return fast_max(active_blocks, avail_sms * 4);
+      return fast_max(active_blocks, avail_cus * 4);
     }
 
     return active_blocks;
@@ -718,11 +720,11 @@ struct ThreadblockSwizzleStreamK {
 
     // Remap the block indices for the first two waves of thread blocks if
     // we have multi-occupancy and the grid constitutes four or more waves
-    if (remap_block_indices && (block_idx < avail_sms * 2))
+    if (remap_block_indices && (block_idx < avail_cus * 2))
     {
-      int dest_sm = block_idx / 2;
+      int dest_cu = block_idx / 2;
       int dest_wave = block_idx % 2;
-      int remapped_block_idx = dest_sm + (dest_wave * avail_sms);
+      int remapped_block_idx = dest_cu + (dest_wave * avail_cus);
       block_idx = remapped_block_idx;
     }
 

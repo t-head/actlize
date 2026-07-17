@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,13 +29,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/tensor.h"
 
 #include "cute/layout.hpp"
-#include "cute/arch/copy_sm90_tma.hpp"
+#include "ppu/cute/arch/copy_aiu_base.hpp"
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass::detail {
@@ -209,26 +211,6 @@ using StrideToLayoutTagC_t = typename StrideToLayoutTagC<S>::type;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Inspects a tiled copy and whether its copy engine is TMA or not
-template<class GmemTiledCopy>
-constexpr bool is_tma_copy_engine() {
-  if constexpr (cute::is_void_v<GmemTiledCopy>) {
-    return false;
-  }
-  else {
-   if constexpr (   cute::is_base_of_v<cute::SM90_TMA_LOAD,                         GmemTiledCopy>
-                  || cute::is_base_of_v<cute::SM90_TMA_LOAD_MULTICAST,              GmemTiledCopy>
-                  || cute::is_base_of_v<cute::SM90_TMA_LOAD_IM2COL,                 GmemTiledCopy>
-                  || cute::is_base_of_v<cute::SM90_TMA_LOAD_IM2COL_MULTICAST,       GmemTiledCopy>
-                  || cute::is_base_of_v<cute::SM90_TMA_STORE,                       GmemTiledCopy>
-                  || cute::is_base_of_v<cute::SM90_TMA_STORE_IM2COL,                GmemTiledCopy>
-                  ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Inspects a TiledCopy and returns its alignment in terms of element count
 template <class GmemTiledCopy, class Element>
 constexpr int
@@ -245,7 +227,7 @@ get_alignment_count_from_gmem_tiled_copy() {
 
   else {
     // For TMA tiled copies, we know the alignment has to be 128 bits
-    if constexpr (is_tma_copy_engine<GmemTiledCopy>()) {
+    if constexpr (cute::is_aiu_copy_engine(GmemTiledCopy{})) {
       return 128 / sizeof_bits<Element>::value;
     }
     else {

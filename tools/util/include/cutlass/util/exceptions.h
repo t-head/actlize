@@ -1,4 +1,5 @@
-/******************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -27,16 +28,16 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- ******************************************************************************/
+ **************************************************************************************************/
 
 #pragma once
 
 /**
  * \file
- * \brief C++ exception semantics for CUDA error codes
+ * \brief C++ exception semantics for device error codes
  */
 
-#include <cuda_runtime.h>
+#include <hggc_runtime.h>
 #include <iosfwd>
 #include <stdexcept>
 
@@ -44,26 +45,26 @@
 
 namespace cutlass {
 
-/// C++ exception wrapper for CUDA \p cudaError_t
-class cuda_exception : public std::exception {
+/// C++ exception wrapper for device \p hggcError_t
+class device_exception : public std::exception {
  public:
   /// Constructor
-  cuda_exception(const char* msg = "", cudaError_t err = cudaErrorUnknown) : msg(msg), err(err) {}
+  device_exception(const char* msg = "", hggcError_t err = hggcErrorUnknown) : msg(msg), err(err) {}
 
-  /// Returns the underlying CUDA \p cudaError_t
-  cudaError_t cudaError() const { return err; }
+  /// Returns the underlying device \p hggcError_t
+  hggcError_t hggcError() const { return err; }
 
  protected:
   /// Explanatory string
   const char* msg;
 
-  /// Underlying CUDA \p cudaError_t
-  cudaError_t err;
+  /// Underlying device \p hggcError_t
+  hggcError_t err;
 };
 
-/// Writes a cuda_exception instance to an output stream
-inline std::ostream& operator<<(std::ostream& out, cuda_exception const& e) {
-  return out << e.what() << ": " << cudaGetErrorString(e.cudaError());
+/// Writes a device_exception instance to an output stream
+inline std::ostream& operator<<(std::ostream& out, device_exception const& e) {
+  return out << e.what() << ": " << hggcGetErrorString(e.hggcError());
 }
 
 }  // namespace cutlass

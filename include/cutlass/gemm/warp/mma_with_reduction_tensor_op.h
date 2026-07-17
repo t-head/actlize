@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,9 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations targeting
-      Tensor Cores.
+      Tensor cells.
 */
 
 #pragma once
@@ -43,9 +45,8 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h"
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu0010.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -53,7 +54,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op_policy.h"
 #include "cutlass/gemm/warp/mma_tensor_op.h"
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu0010.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,7 +64,7 @@ namespace warp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
   /// Size of the Gemm problem - concept: gemm::GemmShape<>
   typename Shape_,
@@ -156,10 +157,10 @@ public:
 
   static_assert(platform::is_same<InstructionShape,
                                   cutlass::gemm::GemmShape<16, 8, 16>>::value,
-                "Only supports 16x8x16 tensor core instruction.");
+                "Only supports 16x8x16 tensor cell instruction.");
 
   static_assert(!AccumulatorsInRowMajor,
-                "Only calls tensor core instructions in column major.");
+                "Only calls tensor cell instructions in column major.");
 
 public:
 
@@ -240,9 +241,9 @@ public:
     [[maybe_unused]] MmaOperandB const *ptr_B = reinterpret_cast<MmaOperandB const *>(&B);
     [[maybe_unused]] MmaOperandC *ptr_D = reinterpret_cast<MmaOperandC *>(&D);
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ < 100)
       assert(0);
-    #elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #elif defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       // Serpentine visitation order maximizing reuse of Ra
       CUTLASS_PRAGMA_UNROLL
       for (int m = 0; m < MmaIterations::kRow; ++m) {
@@ -271,16 +272,16 @@ public:
                 "{\n\t"
                 " .reg .f16 low, high;\n\t"
                 " .reg .f32 tmp;\n\t"
-                " mov.b32 {low, high}, %1;\n\t"
-                " cvt.f32.f16 tmp, low;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " cvt.f32.f16 tmp, high;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " mov.b32 {low, high}, %2;\n\t"
-                " cvt.f32.f16 tmp, low;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " cvt.f32.f16 tmp, high;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
+                " ppu.mov.b32 {low, high}, %1;\n\t"
+                " ppu.cvt.f32.f16 tmp, low;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.cvt.f32.f16 tmp, high;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.mov.b32 {low, high}, %2;\n\t"
+                " ppu.cvt.f32.f16 tmp, low;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.cvt.f32.f16 tmp, high;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
                 "}\n\t"
                 : "+f"(gemm_k_reduction[n_serpentine])
                 : "r"(tmp[n_serpentine * 2]), "r"(tmp[n_serpentine * 2 + 1]));
@@ -288,14 +289,14 @@ public:
               asm volatile(
                 "{\n\t"
                 " .reg .f32 tmp;\n\t"
-                " shl.b32 tmp, %1, 16;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " and.b32 tmp, %1, 0xffff0000;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " shl.b32 tmp, %2, 16;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " and.b32 tmp, %2, 0xffff0000;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
+                " ppu.shl.b32 tmp, %1, 16;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.and.b32 tmp, %1, 0xffff0000;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.shl.b32 tmp, %2, 16;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.and.b32 tmp, %2, 0xffff0000;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
                 "}\n\t"
                 : "+f"(gemm_k_reduction[n_serpentine])
               : "r"(tmp[n_serpentine * 2]), "r"(tmp[n_serpentine * 2 + 1]));
@@ -324,26 +325,26 @@ public:
                 "{\n\t"
                 " .reg .f16 low, high;\n\t"
                 " .reg .f32 tmp;\n\t"
-                " mov.b32 {low, high}, %2;\n\t"
-                " cvt.f32.f16 tmp, low;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " cvt.f32.f16 tmp, high;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " mov.b32 {low, high}, %3;\n\t"
-                " cvt.f32.f16 tmp, low;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
-                " cvt.f32.f16 tmp, high;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
-                " mov.b32 {low, high}, %4;\n\t"
-                " cvt.f32.f16 tmp, low;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " cvt.f32.f16 tmp, high;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " mov.b32 {low, high}, %5;\n\t"
-                " cvt.f32.f16 tmp, low;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
-                " cvt.f32.f16 tmp, high;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
+                " ppu.mov.b32 {low, high}, %2;\n\t"
+                " ppu.cvt.f32.f16 tmp, low;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.cvt.f32.f16 tmp, high;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.mov.b32 {low, high}, %3;\n\t"
+                " ppu.cvt.f32.f16 tmp, low;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
+                " ppu.cvt.f32.f16 tmp, high;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
+                " ppu.mov.b32 {low, high}, %4;\n\t"
+                " ppu.cvt.f32.f16 tmp, low;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.cvt.f32.f16 tmp, high;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.mov.b32 {low, high}, %5;\n\t"
+                " ppu.cvt.f32.f16 tmp, low;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
+                " ppu.cvt.f32.f16 tmp, high;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
                 "}\n\t"
                 : "+f"(gemm_k_reduction[m * 2]), "+f"(gemm_k_reduction[m * 2 + 1])
                 : "r"(tmp[m * 4]), "r"(tmp[m * 4 + 1]),"r"(tmp[m * 4 + 2]), "r"(tmp[m * 4 + 3]));
@@ -353,22 +354,22 @@ public:
               asm volatile(
                 "{\n\t"
                 " .reg .f32 tmp;\n\t"
-                " shl.b32 tmp, %2, 16;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " and.b32 tmp, %2, 0xffff0000;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " shl.b32 tmp, %3, 16;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
-                " and.b32 tmp, %3, 0xffff0000;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
-                " shl.b32 tmp, %4, 16;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " and.b32 tmp, %4, 0xffff0000;\n\t"
-                " add.f32 %0, tmp, %0;\n\t"
-                " shl.b32 tmp, %5, 16;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
-                " and.b32 tmp, %5, 0xffff0000;\n\t"
-                " add.f32 %1, tmp, %1;\n\t"
+                " ppu.shl.b32 tmp, %2, 16;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.and.b32 tmp, %2, 0xffff0000;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.shl.b32 tmp, %3, 16;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
+                " ppu.and.b32 tmp, %3, 0xffff0000;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
+                " ppu.shl.b32 tmp, %4, 16;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.and.b32 tmp, %4, 0xffff0000;\n\t"
+                " ppu.add.f32 %0, tmp, %0;\n\t"
+                " ppu.shl.b32 tmp, %5, 16;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
+                " ppu.and.b32 tmp, %5, 0xffff0000;\n\t"
+                " ppu.add.f32 %1, tmp, %1;\n\t"
                 "}\n\t"
                 : "+f"(gemm_k_reduction[m * 2]), "+f"(gemm_k_reduction[m * 2 + 1])
                 : "r"(tmp[m * 4]), "r"(tmp[m * 4 + 1]),"r"(tmp[m * 4 + 2]), "r"(tmp[m * 4 + 3]));
@@ -399,7 +400,7 @@ public:
     FloatRoundStyle const kRoundB =
         PreferredRoundingMode<typename ArchMmaOperator::ElementB,
                               ElementB>::kRound;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ < 100)
       detail::ConvertAndPack<typename ArchMmaOperator::ElementA, ElementA,
                             FragmentA::kElements, kRoundA>
           convert_A;
@@ -417,7 +418,7 @@ public:
       ptr_dst_B[0] = convert_B(ptr_B[0]);
       ptr_dst_B[1] = convert_B(ptr_B[1]);
 
-    #elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #elif defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       detail::ConvertAndPack<typename ArchMmaOperator::ElementA, ElementA,
                             FragmentA::kElements / 2, kRoundA>
           convert_A;

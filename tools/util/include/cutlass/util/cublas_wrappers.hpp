@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -31,8 +32,8 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
-#include <cublas_v2.h>
+#include <hggc_runtime.h>
+#include <acblas_v2.h>
 
 //-- BLAM_DEBUG_OUT ---------------------------------------------------------
 #ifdef BLAM_DEBUG
@@ -51,12 +52,12 @@
 // User could potentially define ComplexFloat/ComplexDouble instead of std::
 #ifndef BLAM_COMPLEX_TYPES
 #define BLAM_COMPLEX_TYPES 1
-#include <cuda/std/complex>
+#include <hggc/std/complex>
 namespace blam {
 template <typename T>
-using Complex       = cuda::std::complex<T>;
-using ComplexFloat  = cuda::std::complex<float>;
-using ComplexDouble = cuda::std::complex<double>;
+using Complex       = hggc::std::complex<T>;
+using ComplexFloat  = hggc::std::complex<float>;
+using ComplexDouble = hggc::std::complex<double>;
 }
 #endif // BLAM_COMPLEX_TYPES
 
@@ -71,49 +72,49 @@ using Half = cute::half_t;
 
 namespace blam
 {
-namespace cublas
+namespace acblas
 {
 
 inline const char*
-cublas_get_error(cublasStatus_t status)
+acblas_get_error(acblasStatus_t status)
 {
   switch (status) {
-    case CUBLAS_STATUS_SUCCESS:
-      return "CUBLAS_STATUS_SUCCESS";
-    case CUBLAS_STATUS_NOT_INITIALIZED:
-      return "CUBLAS_STATUS_NOT_INITIALIZED -- The cuBLAS library was not initialized.";
-    case CUBLAS_STATUS_ALLOC_FAILED:
-      return "CUBLAS_STATUS_ALLOC_FAILED -- Resource allocation failed inside the cuBLAS library.";
-    case CUBLAS_STATUS_INVALID_VALUE:
-      return "CUBLAS_STATUS_INVALID_VALUE -- An unsupported value or parameter was passed to the function.";
-    case CUBLAS_STATUS_ARCH_MISMATCH:
-      return "CUBLAS_STATUS_ARCH_MISMATCH -- The function requires a feature absent from the device architecture.";
-    case CUBLAS_STATUS_MAPPING_ERROR:
-      return "CUBLAS_STATUS_MAPPING_ERROR -- An access to GPU memory space failed.";
-    case CUBLAS_STATUS_EXECUTION_FAILED:
-      return "CUBLAS_STATUS_EXECUTION_FAILED -- The GPU program failed to execute.";
-    case CUBLAS_STATUS_INTERNAL_ERROR:
-      return "CUBLAS_STATUS_INTERNAL_ERROR -- An internal cuBLAS operation failed.";
-    case CUBLAS_STATUS_NOT_SUPPORTED:
-      return "CUBLAS_STATUS_NOT_SUPPORTED -- The functionality requested is not supported.";
-    case CUBLAS_STATUS_LICENSE_ERROR:
-      return "CUBLAS_STATUS_LICENSE_ERROR -- An error was detected when checking the current licensing.";
+    case ACBLAS_STATUS_SUCCESS:
+      return "ACBLAS_STATUS_SUCCESS";
+    case ACBLAS_STATUS_NOT_INITIALIZED:
+      return "ACBLAS_STATUS_NOT_INITIALIZED -- The acBLAS library was not initialized.";
+    case ACBLAS_STATUS_ALLOC_FAILED:
+      return "ACBLAS_STATUS_ALLOC_FAILED -- Resource allocation failed inside the acBLAS library.";
+    case ACBLAS_STATUS_INVALID_VALUE:
+      return "ACBLAS_STATUS_INVALID_VALUE -- An unsupported value or parameter was passed to the function.";
+    case ACBLAS_STATUS_ARCH_MISMATCH:
+      return "ACBLAS_STATUS_ARCH_MISMATCH -- The function requires a feature absent from the device architecture.";
+    case ACBLAS_STATUS_MAPPING_ERROR:
+      return "ACBLAS_STATUS_MAPPING_ERROR -- An access to GPU memory space failed.";
+    case ACBLAS_STATUS_EXECUTION_FAILED:
+      return "ACBLAS_STATUS_EXECUTION_FAILED -- The GPU program failed to execute.";
+    case ACBLAS_STATUS_INTERNAL_ERROR:
+      return "ACBLAS_STATUS_INTERNAL_ERROR -- An internal acBLAS operation failed.";
+    case ACBLAS_STATUS_NOT_SUPPORTED:
+      return "ACBLAS_STATUS_NOT_SUPPORTED -- The functionality requested is not supported.";
+    case ACBLAS_STATUS_LICENSE_ERROR:
+      return "ACBLAS_STATUS_LICENSE_ERROR -- An error was detected when checking the current licensing.";
     default:
-      return "CUBLAS_ERROR -- <unknown>";
+      return "ACBLAS_ERROR -- <unknown>";
   }
 }
 
 inline bool
-cublas_is_error(cublasStatus_t status)
+acblas_is_error(acblasStatus_t status)
 {
-  return status != CUBLAS_STATUS_SUCCESS;
+  return status != ACBLAS_STATUS_SUCCESS;
 }
 
 
 // hgemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const Half* alpha,
      const Half* A, int ldA,
@@ -121,22 +122,22 @@ gemm(cublasHandle_t handle,
      const Half* beta,
      Half* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasHgemm");
+  BLAM_DEBUG_OUT("acblasHgemm");
 
-  return cublasGemmEx(handle, transA, transB,
+  return acblasGemmEx(handle, transA, transB,
                       m, n, k,
                       reinterpret_cast<const __half*>(alpha),
-                      reinterpret_cast<const __half*>(A), CUDA_R_16F, ldA,
-                      reinterpret_cast<const __half*>(B), CUDA_R_16F, ldB,
+                      reinterpret_cast<const __half*>(A), HGGC_R_16F, ldA,
+                      reinterpret_cast<const __half*>(B), HGGC_R_16F, ldB,
                       reinterpret_cast<const __half*>(beta),
-                      reinterpret_cast<      __half*>(C), CUDA_R_16F, ldC,
-                      CUDA_R_16F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+                      reinterpret_cast<      __half*>(C), HGGC_R_16F, ldC,
+                      HGGC_R_16F, ACBLAS_GEMM_DEFAULT_TENSOR_OP);
 }
 
 // mixed hf gemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const float* alpha,
      const Half* A, int ldA,
@@ -144,22 +145,22 @@ gemm(cublasHandle_t handle,
      const float* beta,
      float* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasGemmEx mixed half-float");
+  BLAM_DEBUG_OUT("acblasGemmEx mixed half-float");
 
-  return cublasGemmEx(handle, transA, transB,
+  return acblasGemmEx(handle, transA, transB,
                       m, n, k,
                       alpha,
-                      reinterpret_cast<const __half*>(A), CUDA_R_16F, ldA,
-                      reinterpret_cast<const __half*>(B), CUDA_R_16F, ldB,
+                      reinterpret_cast<const __half*>(A), HGGC_R_16F, ldA,
+                      reinterpret_cast<const __half*>(B), HGGC_R_16F, ldB,
                       beta,
-                      C, CUDA_R_32F, ldC,
-                      CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+                      C, HGGC_R_32F, ldC,
+                      HGGC_R_32F, ACBLAS_GEMM_DEFAULT_TENSOR_OP);
 }
 
 // igemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const int32_t* alpha,
      const int8_t* A, int ldA,
@@ -167,22 +168,22 @@ gemm(cublasHandle_t handle,
      const int32_t* beta,
      int32_t* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasIgemm");
+  BLAM_DEBUG_OUT("acblasIgemm");
 
-  return cublasGemmEx(handle, transA, transB,
+  return acblasGemmEx(handle, transA, transB,
                       m, n, k,
                       alpha,
-                      A, CUDA_R_8I, ldA,
-                      B, CUDA_R_8I, ldB,
+                      A, HGGC_R_8I, ldA,
+                      B, HGGC_R_8I, ldB,
                       beta,
-                      C, CUDA_R_32I, ldC,
-                      CUDA_R_32I, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+                      C, HGGC_R_32I, ldC,
+                      HGGC_R_32I, ACBLAS_GEMM_DEFAULT_TENSOR_OP);
 }
 
 // sgemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const float* alpha,
      const float* A, int ldA,
@@ -190,9 +191,9 @@ gemm(cublasHandle_t handle,
      const float* beta,
      float* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasSgemm");
+  BLAM_DEBUG_OUT("acblasSgemm");
 
-  return cublasSgemm(handle, transA, transB,
+  return acblasSgemm(handle, transA, transB,
                      m, n, k,
                      alpha,
                      A, ldA,
@@ -202,9 +203,9 @@ gemm(cublasHandle_t handle,
 }
 
 // dgemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const double* alpha,
      const double* A, int ldA,
@@ -212,9 +213,9 @@ gemm(cublasHandle_t handle,
      const double* beta,
      double* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasDgemm");
+  BLAM_DEBUG_OUT("acblasDgemm");
 
-  return cublasDgemm(handle, transA, transB,
+  return acblasDgemm(handle, transA, transB,
                      m, n, k,
                      alpha,
                      A, ldA,
@@ -224,9 +225,9 @@ gemm(cublasHandle_t handle,
 }
 
 // cgemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const ComplexFloat* alpha,
      const ComplexFloat* A, int ldA,
@@ -234,21 +235,21 @@ gemm(cublasHandle_t handle,
      const ComplexFloat* beta,
      ComplexFloat* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasCgemm");
+  BLAM_DEBUG_OUT("acblasCgemm");
 
-  return cublasCgemm(handle, transA, transB,
+  return acblasCgemm(handle, transA, transB,
                      m, n, k,
-                     reinterpret_cast<const cuFloatComplex*>(alpha),
-                     reinterpret_cast<const cuFloatComplex*>(A), ldA,
-                     reinterpret_cast<const cuFloatComplex*>(B), ldB,
-                     reinterpret_cast<const cuFloatComplex*>(beta),
-                     reinterpret_cast<cuFloatComplex*>(C), ldC);
+                     reinterpret_cast<const acFloatComplex*>(alpha),
+                     reinterpret_cast<const acFloatComplex*>(A), ldA,
+                     reinterpret_cast<const acFloatComplex*>(B), ldB,
+                     reinterpret_cast<const acFloatComplex*>(beta),
+                     reinterpret_cast<acFloatComplex*>(C), ldC);
 }
 
 // zgemm
-inline cublasStatus_t
-gemm(cublasHandle_t handle,
-     cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm(acblasHandle_t handle,
+     acblasOperation_t transA, acblasOperation_t transB,
      int m, int n, int k,
      const ComplexDouble* alpha,
      const ComplexDouble* A, int ldA,
@@ -256,21 +257,21 @@ gemm(cublasHandle_t handle,
      const ComplexDouble* beta,
      ComplexDouble* C, int ldC)
 {
-  BLAM_DEBUG_OUT("cublasZgemm");
+  BLAM_DEBUG_OUT("acblasZgemm");
 
-  return cublasZgemm(handle, transA, transB,
+  return acblasZgemm(handle, transA, transB,
                      m, n, k,
-                     reinterpret_cast<const cuDoubleComplex*>(alpha),
-                     reinterpret_cast<const cuDoubleComplex*>(A), ldA,
-                     reinterpret_cast<const cuDoubleComplex*>(B), ldB,
-                     reinterpret_cast<const cuDoubleComplex*>(beta),
-                     reinterpret_cast<cuDoubleComplex*>(C), ldC);
+                     reinterpret_cast<const acDoubleComplex*>(alpha),
+                     reinterpret_cast<const acDoubleComplex*>(A), ldA,
+                     reinterpret_cast<const acDoubleComplex*>(B), ldB,
+                     reinterpret_cast<const acDoubleComplex*>(beta),
+                     reinterpret_cast<acDoubleComplex*>(C), ldC);
 }
 
 // hgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const Half* alpha,
            const Half* A, int ldA, int loA,
@@ -279,9 +280,9 @@ gemm_batch(cublasHandle_t handle,
            Half* C, int ldC, int loC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasHgemmStridedBatched");
+  BLAM_DEBUG_OUT("acblasHgemmStridedBatched");
 
-  return cublasHgemmStridedBatched(handle, transA, transB,
+  return acblasHgemmStridedBatched(handle, transA, transB,
                                    m, n, k,
                                    reinterpret_cast<const __half*>(alpha),
                                    reinterpret_cast<const __half*>(A), ldA, loA,
@@ -292,9 +293,9 @@ gemm_batch(cublasHandle_t handle,
 }
 
 // sgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const float* alpha,
            const float* A, int ldA, int loA,
@@ -303,9 +304,9 @@ gemm_batch(cublasHandle_t handle,
            float* C, int ldC, int loC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasSgemmStridedBatched");
+  BLAM_DEBUG_OUT("acblasSgemmStridedBatched");
 
-  return cublasSgemmStridedBatched(handle, transA, transB,
+  return acblasSgemmStridedBatched(handle, transA, transB,
                                    m, n, k,
                                    alpha,
                                    A, ldA, loA,
@@ -316,9 +317,9 @@ gemm_batch(cublasHandle_t handle,
 }
 
 // dgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const double* alpha,
            const double* A, int ldA, int loA,
@@ -327,9 +328,9 @@ gemm_batch(cublasHandle_t handle,
            double* C, int ldC, int loC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasDgemmStridedBatched");
+  BLAM_DEBUG_OUT("acblasDgemmStridedBatched");
 
-  return cublasDgemmStridedBatched(handle, transA, transB,
+  return acblasDgemmStridedBatched(handle, transA, transB,
                                    m, n, k,
                                    alpha,
                                    A, ldA, loA,
@@ -340,9 +341,9 @@ gemm_batch(cublasHandle_t handle,
 }
 
 // cgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const ComplexFloat* alpha,
            const ComplexFloat* A, int ldA, int loA,
@@ -351,22 +352,22 @@ gemm_batch(cublasHandle_t handle,
            ComplexFloat* C, int ldC, int loC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasCgemmStridedBatched");
+  BLAM_DEBUG_OUT("acblasCgemmStridedBatched");
 
-  return cublasCgemmStridedBatched(handle, transA, transB,
+  return acblasCgemmStridedBatched(handle, transA, transB,
                                    m, n, k,
-                                   reinterpret_cast<const cuFloatComplex*>(alpha),
-                                   reinterpret_cast<const cuFloatComplex*>(A), ldA, loA,
-                                   reinterpret_cast<const cuFloatComplex*>(B), ldB, loB,
-                                   reinterpret_cast<const cuFloatComplex*>(beta),
-                                   reinterpret_cast<cuFloatComplex*>(C), ldC, loC,
+                                   reinterpret_cast<const acFloatComplex*>(alpha),
+                                   reinterpret_cast<const acFloatComplex*>(A), ldA, loA,
+                                   reinterpret_cast<const acFloatComplex*>(B), ldB, loB,
+                                   reinterpret_cast<const acFloatComplex*>(beta),
+                                   reinterpret_cast<acFloatComplex*>(C), ldC, loC,
                                    batch_size);
 }
 
 // zgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const ComplexDouble* alpha,
            const ComplexDouble* A, int ldA, int loA,
@@ -375,22 +376,22 @@ gemm_batch(cublasHandle_t handle,
            ComplexDouble* C, int ldC, int loC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasZgemmStridedBatched");
+  BLAM_DEBUG_OUT("acblasZgemmStridedBatched");
 
-  return cublasZgemmStridedBatched(handle, transA, transB,
+  return acblasZgemmStridedBatched(handle, transA, transB,
                                    m, n, k,
-                                   reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                   reinterpret_cast<const cuDoubleComplex*>(A), ldA, loA,
-                                   reinterpret_cast<const cuDoubleComplex*>(B), ldB, loB,
-                                   reinterpret_cast<const cuDoubleComplex*>(beta),
-                                   reinterpret_cast<cuDoubleComplex*>(C), ldC, loC,
+                                   reinterpret_cast<const acDoubleComplex*>(alpha),
+                                   reinterpret_cast<const acDoubleComplex*>(A), ldA, loA,
+                                   reinterpret_cast<const acDoubleComplex*>(B), ldB, loB,
+                                   reinterpret_cast<const acDoubleComplex*>(beta),
+                                   reinterpret_cast<acDoubleComplex*>(C), ldC, loC,
                                    batch_size);
 }
 
 // hgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const Half* alpha,
            const Half* const A[], int ldA,
@@ -399,25 +400,25 @@ gemm_batch(cublasHandle_t handle,
            Half* const C[], int ldC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasHgemmBatched");
+  BLAM_DEBUG_OUT("acblasHgemmBatched");
 
-  return cublasHgemmBatched(handle, transA, transB,
+  return acblasHgemmBatched(handle, transA, transB,
                             m, n, k,
                             reinterpret_cast<const __half*>(alpha),
                             reinterpret_cast<const __half**>(const_cast<const Half**>(A)), ldA,
-                            // A, ldA,   // cuBLAS 9.2
+                            // A, ldA,   // acBLAS 9.2
                             reinterpret_cast<const __half**>(const_cast<const Half**>(B)), ldB,
-                            // B, ldB,   // cuBLAS 9.2
+                            // B, ldB,   // acBLAS 9.2
                             reinterpret_cast<const __half*>(beta),
                             reinterpret_cast<__half**>(const_cast<Half**>(C)), ldC,
-                            // C, ldC,   // cuBLAS 9.2
+                            // C, ldC,   // acBLAS 9.2
                             batch_size);
 }
 
 // sgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const float* alpha,
            const float* const A[], int ldA,
@@ -426,25 +427,25 @@ gemm_batch(cublasHandle_t handle,
            float* const C[], int ldC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasSgemmBatched");
+  BLAM_DEBUG_OUT("acblasSgemmBatched");
 
-  return cublasSgemmBatched(handle, transA, transB,
+  return acblasSgemmBatched(handle, transA, transB,
                             m, n, k,
                             alpha,
                             const_cast<const float**>(A), ldA,
-                            // A, ldA,   // cuBLAS 9.2
+                            // A, ldA,   // acBLAS 9.2
                             const_cast<const float**>(B), ldB,
-                            // B, ldB,   // cuBLAS 9.2
+                            // B, ldB,   // acBLAS 9.2
                             beta,
                             const_cast<float**>(C), ldC,
-                            // C, ldC,   // cuBLAS 9.2
+                            // C, ldC,   // acBLAS 9.2
                             batch_size);
 }
 
 // dgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const double* alpha,
            const double* const A[], int ldA,
@@ -453,25 +454,25 @@ gemm_batch(cublasHandle_t handle,
            double* const C[], int ldC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasDgemmBatched");
+  BLAM_DEBUG_OUT("acblasDgemmBatched");
 
-  return cublasDgemmBatched(handle, transA, transB,
+  return acblasDgemmBatched(handle, transA, transB,
                             m, n, k,
                             alpha,
                             const_cast<const double**>(A), ldA,
-                            // A, ldA,   // cuBLAS 9.2
+                            // A, ldA,   // acBLAS 9.2
                             const_cast<const double**>(B), ldB,
-                            // B, ldB,   // cuBLAS 9.2
+                            // B, ldB,   // acBLAS 9.2
                             beta,
                             const_cast<double**>(C), ldC,
-                            // C, ldC,   // cuBLAS 9.2
+                            // C, ldC,   // acBLAS 9.2
                             batch_size);
 }
 
 // cgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const ComplexFloat* alpha,
            const ComplexFloat* const A[], int ldA,
@@ -480,25 +481,25 @@ gemm_batch(cublasHandle_t handle,
            ComplexFloat* const C[], int ldC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasCgemmBatched");
+  BLAM_DEBUG_OUT("acblasCgemmBatched");
 
-  return cublasCgemmBatched(handle, transA, transB,
+  return acblasCgemmBatched(handle, transA, transB,
                             m, n, k,
-                            reinterpret_cast<const cuFloatComplex*>(alpha),
-                            const_cast<const cuFloatComplex**>(reinterpret_cast<const cuFloatComplex* const *>(A)), ldA,
-                            //reinterpret_cast<const cuFloatComplex* const *>(A), ldA,  // cuBLAS 9.2
-                            const_cast<const cuFloatComplex**>(reinterpret_cast<const cuFloatComplex* const *>(B)), ldB,
-                            //reinterpret_cast<const cuFloatComplex* const *>(B), ldB,  // cuBLAS 9.2
-                            reinterpret_cast<const cuFloatComplex*>(beta),
-                            const_cast<cuFloatComplex**>(reinterpret_cast<cuFloatComplex* const *>(C)), ldC,
-                            //reinterpret_cast<cuFloatComplex* const *>(C), ldC,        // cuBLAS 9.2
+                            reinterpret_cast<const acFloatComplex*>(alpha),
+                            const_cast<const acFloatComplex**>(reinterpret_cast<const acFloatComplex* const *>(A)), ldA,
+                            //reinterpret_cast<const acFloatComplex* const *>(A), ldA,  // acBLAS 9.2
+                            const_cast<const acFloatComplex**>(reinterpret_cast<const acFloatComplex* const *>(B)), ldB,
+                            //reinterpret_cast<const acFloatComplex* const *>(B), ldB,  // acBLAS 9.2
+                            reinterpret_cast<const acFloatComplex*>(beta),
+                            const_cast<acFloatComplex**>(reinterpret_cast<acFloatComplex* const *>(C)), ldC,
+                            //reinterpret_cast<acFloatComplex* const *>(C), ldC,        // acBLAS 9.2
                             batch_size);
 }
 
 // zgemm
-inline cublasStatus_t
-gemm_batch(cublasHandle_t handle,
-           cublasOperation_t transA, cublasOperation_t transB,
+inline acblasStatus_t
+gemm_batch(acblasHandle_t handle,
+           acblasOperation_t transA, acblasOperation_t transB,
            int m, int n, int k,
            const ComplexDouble* alpha,
            const ComplexDouble* const A[], int ldA,
@@ -507,20 +508,20 @@ gemm_batch(cublasHandle_t handle,
            ComplexDouble* const C[], int ldC,
            int batch_size)
 {
-  BLAM_DEBUG_OUT("cublasZgemmBatched");
+  BLAM_DEBUG_OUT("acblasZgemmBatched");
 
-  return cublasZgemmBatched(handle, transA, transB,
+  return acblasZgemmBatched(handle, transA, transB,
                             m, n, k,
-                            reinterpret_cast<const cuDoubleComplex*>(alpha),
-                            const_cast<const cuDoubleComplex**>(reinterpret_cast<const cuDoubleComplex* const *>(A)), ldA,
-                            //reinterpret_cast<const cuDoubleComplex* const *>(A), ldA,  // cuBLAS 9.2
-                            const_cast<const cuDoubleComplex**>(reinterpret_cast<const cuDoubleComplex* const *>(B)), ldB,
-                            //reinterpret_cast<const cuDoubleComplex* const *>(B), ldB,  // cuBLAS 9.2
-                            reinterpret_cast<const cuDoubleComplex*>(beta),
-                            const_cast<cuDoubleComplex**>(reinterpret_cast<cuDoubleComplex* const *>(C)), ldC,
-                            //reinterpret_cast<cuDoubleComplex* const *>(C), ldC,        // cuBLAS 9.2
+                            reinterpret_cast<const acDoubleComplex*>(alpha),
+                            const_cast<const acDoubleComplex**>(reinterpret_cast<const acDoubleComplex* const *>(A)), ldA,
+                            //reinterpret_cast<const acDoubleComplex* const *>(A), ldA,  // acBLAS 9.2
+                            const_cast<const acDoubleComplex**>(reinterpret_cast<const acDoubleComplex* const *>(B)), ldB,
+                            //reinterpret_cast<const acDoubleComplex* const *>(B), ldB,  // acBLAS 9.2
+                            reinterpret_cast<const acDoubleComplex*>(beta),
+                            const_cast<acDoubleComplex**>(reinterpret_cast<acDoubleComplex* const *>(C)), ldC,
+                            //reinterpret_cast<acDoubleComplex* const *>(C), ldC,        // acBLAS 9.2
                             batch_size);
 }
 
-} // end namespace cublas
+} // end namespace acblas
 } // end namespace blam

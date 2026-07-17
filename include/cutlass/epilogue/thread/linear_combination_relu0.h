@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,11 +29,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear combination with a relu operation used by epilogues.
   This one only supports relu0 and tries to folding relu into other instructions.  Thus,
   serial splitk is not supported by this one.  For example, relu can be folded into 
-  hfma2/hmul2 for sm80+
+  hfma2/hmul2 for ppu0010+
 */
 
 #pragma once
@@ -279,7 +281,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Conditional guards to enable partial specialization for packed integers
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 720) && ((__CUDACC_VER_MAJOR__ > 10) || ((__CUDACC_VER_MAJOR__ >= 10) && (__CUDACC_VER_MINOR__ >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
 /// Applies a linear combination operator to an array of elements.
 ///

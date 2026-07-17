@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -1007,7 +1008,7 @@ Status Conv2dFprop(
   TensorRef<ElementC, LayoutC> tensor_y_out,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   //
   // Blocking factors improve performance of reference implementation
@@ -1049,8 +1050,8 @@ Status Conv2dFprop(
     beta
   );
 
-  cudaError_t result = cudaPeekAtLastError();
-  if (result != cudaSuccess) {
+  hggcError_t result = hggcPeekAtLastError();
+  if (result != hggcSuccess) {
     return Status::kErrorInternal;
   }
 
@@ -1078,7 +1079,7 @@ Status Conv3dFprop(
   TensorRef<ElementC, LayoutC> tensor_y_out,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   //
   // Blocking factors improve performance of reference implementation
@@ -1120,8 +1121,8 @@ Status Conv3dFprop(
     beta
   );
 
-  cudaError_t result = cudaPeekAtLastError();
-  if (result != cudaSuccess) {
+  hggcError_t result = hggcPeekAtLastError();
+  if (result != hggcSuccess) {
     return Status::kErrorInternal;
   }
 
@@ -1149,7 +1150,7 @@ Status Conv2dDgrad(
   TensorRef<ElementC, LayoutC> tensor_dx_out,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   //
   // Blocking factors improve performance of reference implementation
@@ -1191,8 +1192,8 @@ Status Conv2dDgrad(
     beta
   );
 
-  cudaError_t result = cudaPeekAtLastError();
-  if (result != cudaSuccess) {
+  hggcError_t result = hggcPeekAtLastError();
+  if (result != hggcSuccess) {
     return Status::kErrorInternal;
   }
 
@@ -1220,7 +1221,7 @@ Status Conv3dDgrad(
   TensorRef<ElementC, LayoutC> tensor_dx_out,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   //
   // Blocking factors improve performance of reference implementation
@@ -1262,8 +1263,8 @@ Status Conv3dDgrad(
     beta
   );
 
-  cudaError_t result = cudaPeekAtLastError();
-  if (result != cudaSuccess) {
+  hggcError_t result = hggcPeekAtLastError();
+  if (result != hggcSuccess) {
     return Status::kErrorInternal;
   }
 
@@ -1291,7 +1292,7 @@ Status Conv2dWgrad(
   TensorRef<ElementC, LayoutC> tensor_dw_out,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   //
   // Blocking factors improve performance of reference implementation
@@ -1333,8 +1334,8 @@ Status Conv2dWgrad(
     beta
   );
 
-  cudaError_t result = cudaPeekAtLastError();
-  if (result != cudaSuccess) {
+  hggcError_t result = hggcPeekAtLastError();
+  if (result != hggcSuccess) {
     return Status::kErrorInternal;
   }
 
@@ -1362,7 +1363,7 @@ Status Conv3dWgrad(
   TensorRef<ElementC, LayoutC> tensor_dw_out,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   //
   // Blocking factors improve performance of reference implementation
@@ -1404,8 +1405,8 @@ Status Conv3dWgrad(
     beta
   );
 
-  cudaError_t result = cudaPeekAtLastError();
-  if (result != cudaSuccess) {
+  hggcError_t result = hggcPeekAtLastError();
+  if (result != hggcSuccess) {
     return Status::kErrorInternal;
   }
 
@@ -1436,7 +1437,7 @@ Status Conv2d(
   TensorRef<ElementC, LayoutC> tensor_D,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
   
   switch (convolutional_operator) {
   case conv::Operator::kFprop:
@@ -1500,7 +1501,7 @@ Status Conv3d(
   TensorRef<ElementC, LayoutC> tensor_D,
   ElementCompute alpha,
   ElementCompute beta,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
   
   switch (convolutional_operator) {
   case conv::Operator::kFprop:

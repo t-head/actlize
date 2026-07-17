@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines basic thread level reduction with specializations for Array<T, N>.
 */
@@ -101,7 +103,7 @@ struct Reduce < plus<half_t>, Array<half_t, N> > {
 
     } else {
     
-      #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 600)
+      #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
         
         __half result_d;
         Array<half_t, 1> const *in_ptr_half = reinterpret_cast<Array<half_t, 1> const *>(&input);
@@ -175,7 +177,7 @@ struct Reduce < plus<half_t>, AlignedArray<half_t, N> > {
 
     } else {
     
-      #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 600)
+      #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
         
         __half result_d;
         AlignedArray<half_t, 1> const *in_ptr_half = reinterpret_cast<AlignedArray<half_t, 1> const *>(&input);

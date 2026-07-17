@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Functor performing linear combination operations used by epilogues.
 */
@@ -94,7 +96,16 @@ public:
     ElementCompute const *beta_ptr;               ///< pointer to source scalar - if not null, loads it from memory
     ElementCompute const* const* alpha_ptr_array; ///< array of pointers to accumulator scalar per group/batch
     ElementCompute const* const* beta_ptr_array;  ///< array of pointers to source scalar per group/batch
-
+#if SUPPORT_FP8_SCALING
+    ElementScalar scale_a = ElementScalar(1);
+    ElementScalar scale_b = ElementScalar(1);
+    ElementScalar scale_c = ElementScalar(1);
+    ElementScalar scale_d = ElementScalar(1);
+    ElementScalar const* scale_a_ptr = nullptr;
+    ElementScalar const* scale_b_ptr = nullptr;
+    ElementScalar const* scale_c_ptr = nullptr;
+    ElementScalar const* scale_d_ptr = nullptr;
+#endif
     CUTLASS_HOST_DEVICE
     Params():
       alpha(ElementCompute(1)),
@@ -170,6 +181,17 @@ public:
   /// Constructs the function object, possibly loading from pointers in host memory
   CUTLASS_HOST_DEVICE
   LinearCombination(Params const &params, int group_idx = 0) {
+#if SUPPORT_FP8_SCALING
+    auto alpha   = ElementCompute(params.alpha_ptr ? *params.alpha_ptr : params.alpha);
+    auto beta    = ElementCompute(params.beta_ptr  ? *params.beta_ptr  : params.beta);
+    auto scale_a = ElementCompute(params.scale_a_ptr ? *params.scale_a_ptr : params.scale_a);
+    auto scale_b = ElementCompute(params.scale_b_ptr ? *params.scale_b_ptr : params.scale_b);
+    auto scale_c = ElementCompute(params.scale_c_ptr ? *params.scale_c_ptr : params.scale_c);
+
+    multiplies<ElementCompute> multiply;
+    alpha_ = multiply(alpha, multiply(scale_a, scale_b));
+    beta_  = multiply(beta, scale_c);
+#else
     if (params.alpha_ptr_array != nullptr && params.alpha_ptr_array[group_idx] != nullptr) {
       alpha_ = *(params.alpha_ptr_array[group_idx]);
     }
@@ -188,6 +210,7 @@ public:
     else {
       beta_ = params.beta;
     }
+#endif
   }
 
   /// Returns true if source is needed

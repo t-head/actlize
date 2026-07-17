@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -42,7 +43,6 @@
 #include "cutlass/conv/threadblock/threadblock_swizzle.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_simt.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_with_broadcast.h"
 #include "cutlass/epilogue/threadblock/default_epilogue_with_reduction.h"
 #include "cutlass/conv/convolution.h"
@@ -82,29 +82,6 @@ struct DefaultConvEpilogue {
   >::Epilogue;
 };
 
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename OutputOp
->
-struct DefaultConvEpilogue<
-  arch::Sm70,
-  Shape,
-  WarpMmaTensorOp,
-  PartitionsK,
-  OutputOp
-> {
-
-  using Epilogue = typename epilogue::threadblock::DefaultEpilogueVoltaTensorOp<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    OutputOp,
-    OutputOp::kCount
-  >::Epilogue;
-};
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <
@@ -120,39 +97,6 @@ template <
 >
 struct DefaultConvEpilogueWithBroadcastTensorOp {
   using Epilogue = typename epilogue::threadblock::DefaultEpilogueWithBroadcastTensorOp<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    ElementOutput,
-    ElementTensor,
-    ElementVector,
-    OutputOp,
-    ElementsPerAccess
-  >::Epilogue;
-};
-
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename ElementOutput,
-  typename ElementTensor,
-  typename ElementVector,
-  typename OutputOp,
-  int ElementsPerAccess
->
-struct DefaultConvEpilogueWithBroadcastTensorOp<
-  arch::Sm70,
-  Shape,
-  WarpMmaTensorOp,
-  PartitionsK,
-  ElementOutput,
-  ElementTensor,
-  ElementVector,
-  OutputOp,
-  ElementsPerAccess
-  > {
-  using Epilogue = typename epilogue::threadblock::DefaultEpilogueWithBroadcastVoltaTensorOp<
     Shape,
     WarpMmaTensorOp,
     PartitionsK,
@@ -188,36 +132,6 @@ struct DefaultConvEpilogueWithReductionTensorOp {
   >::Epilogue;
 };
 
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename ElementOutput,
-  typename OutputOp,
-  typename ReductionOp,
-  int ElementsPerAccess
->
-struct DefaultConvEpilogueWithReductionTensorOp<
-  arch::Sm70,
-  Shape,
-  WarpMmaTensorOp,
-  PartitionsK,
-  ElementOutput,
-  OutputOp,
-  ReductionOp,
-  ElementsPerAccess
-  > {
-  using Epilogue = typename epilogue::threadblock::DefaultEpilogueWithReductionVoltaTensorOp<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    ElementOutput,
-    OutputOp,
-    ReductionOp,
-    ElementsPerAccess
-  >::Epilogue;
-};
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Defaults for strided Dgrad
@@ -230,29 +144,6 @@ template <
 >
 struct DefaultConvEpilogueStridedDgrad {
   using Epilogue = typename epilogue::threadblock::DefaultEpilogueTensorOpStridedDgrad<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    OutputOp,
-    OutputOp::kCount
-  >::Epilogue;
-};
-
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename OutputOp
->
-struct DefaultConvEpilogueStridedDgrad<
-  arch::Sm70,
-  Shape,
-  WarpMmaTensorOp,
-  PartitionsK,
-  OutputOp
-> {
-
-  using Epilogue = typename epilogue::threadblock::DefaultEpilogueVoltaTensorOpStridedDgrad<
     Shape,
     WarpMmaTensorOp,
     PartitionsK,

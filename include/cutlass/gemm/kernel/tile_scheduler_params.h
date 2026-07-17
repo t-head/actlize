@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -61,11 +62,11 @@ namespace detail {
 ////////////////////////////////////////////////////////////////////////////////
 
 //
-// Parameters for SM90 tile schedulers
+// Parameters for PPU0015 tile schedulers
 //
 
-// Parameters for SM90 persistent tile scheduler
-struct PersistentTileSchedulerSm90Params {
+// Parameters for PPU0015 persistent tile scheduler
+struct PersistentTileSchedulerParams {
 
   enum class RasterOrder {
     AlongM,
@@ -204,7 +205,7 @@ struct PersistentTileSchedulerSm90Params {
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true) {
 
-    int const sm_count = hw_info.sm_count;
+    int const cu_count = hw_info.cu_count;
 
     // Round up to nearest multiple of swizzle_size along each mode
     auto log_swizzle_size = get_log_swizzle_size(problem_blocks.x, problem_blocks.y, max_swizzle_size);
@@ -241,31 +242,31 @@ struct PersistentTileSchedulerSm90Params {
     auto cluster_size = cluster_shape.m() * cluster_shape.n();
     if (cluster_size == 1) {
       if (raster_order == RasterOrder::AlongN) {
-        launch_grid.y = possibly_truncate(sm_count, problem_blocks_total);
+        launch_grid.y = possibly_truncate(cu_count, problem_blocks_total);
       }
       else {
-        launch_grid.x = possibly_truncate(sm_count, problem_blocks_total);
+        launch_grid.x = possibly_truncate(cu_count, problem_blocks_total);
       }
     }
     else {
       /*
       * Optimal grid size calculation is based on
-      * GH100: 8 GPCs, 72 TPCs (9 TPCs/GPC), 2 SMs/TPC, 144 SMs per full GPU
-      * Hence, maximum SMs per GPC = 18
+      * GH100: 8 GPCs, 72 TPCs (9 TPCs/GPC), 2 CUs/TPC, 144 CUs per full PPU
+      * Hence, maximum CUs per GPC = 18
       */
-      constexpr int max_sm_per_gpc = 18;
-      // Provided SM count could possibly be less than the assumed maximum SMs per GPC
+      constexpr int max_cu_per_gpc = 18;
+      // Provided CU count could possibly be less than the assumed maximum CUs per GPC
       auto cluster_size = cluster_shape.m() * cluster_shape.n();
-      int const min_num_gpc = sm_count < max_sm_per_gpc ? 1 : sm_count / max_sm_per_gpc;
-      int const max_cta_occupancy_per_gpc = max_sm_per_gpc - (max_sm_per_gpc % cluster_size);
+      int const min_num_gpc = cu_count < max_cu_per_gpc ? 1 : cu_count / max_cu_per_gpc;
+      int const max_cta_occupancy_per_gpc = max_cu_per_gpc - (max_cu_per_gpc % cluster_size);
       int cta_per_device = min_num_gpc * max_cta_occupancy_per_gpc;
 
-      // The calculation below allows for larger grid size launch for different GPUs.
-      int const num_gpc_residual = sm_count < max_sm_per_gpc ? 0 : sm_count % max_sm_per_gpc;
+      // The calculation below allows for larger grid size launch for different PPUs.
+      int const num_gpc_residual = cu_count < max_cu_per_gpc ? 0 : cu_count % max_cu_per_gpc;
       int const max_cta_occupancy_per_residual_gpc = num_gpc_residual - (num_gpc_residual % cluster_size);
       cta_per_device += max_cta_occupancy_per_residual_gpc;
 
-      cta_per_device = sm_count < cta_per_device ? sm_count : cta_per_device;
+      cta_per_device = cu_count < cta_per_device ? cu_count : cta_per_device;
 
       if (raster_order == RasterOrder::AlongN) {
         launch_grid.y = possibly_truncate(
@@ -358,8 +359,8 @@ struct PersistentTileSchedulerSm90Params {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// Parameters for SM90 persistent stream-K scheduler
-struct PersistentTileSchedulerSm90StreamKParams {
+// Parameters for PPU0015 persistent stream-K scheduler
+struct PersistentTileSchedulerPPUStreamKParams {
 
   // Strategies for computing reductions between CTAs computing portions of a given output tile
   enum class ReductionMode {
@@ -394,7 +395,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     StreamK
   };
 
-  using UnderlyingParams = PersistentTileSchedulerSm90Params;
+  using UnderlyingParams = PersistentTileSchedulerParams;
   using RasterOrder = UnderlyingParams::RasterOrder;
   using RasterOrderOptions = UnderlyingParams::RasterOrderOptions;
 
@@ -581,14 +582,14 @@ struct PersistentTileSchedulerSm90StreamKParams {
         (decomposition_mode == DecompositionMode::Heuristic && splits > 1)) {
       // Short circuit to basic split-K decomposition
 
-      // Don't split by more than the available number of SMs
-      if (splits > hw_info.sm_count) {
-        splits = hw_info.sm_count;
+      // Don't split by more than the available number of CUs
+      if (splits > hw_info.cu_count) {
+        splits = hw_info.cu_count;
       }
 
       // Don't split by more than the K tile iterations
       //
-      // splits is almost certainly nonnegative here (e.g., hw_info.sm_count,
+      // splits is almost certainly nonnegative here (e.g., hw_info.cu_count,
       // despite being an int, is a count), so it can safely be converted to unsigned
       // in the comparison to avoid a signed-unsigned comparison warning-as-error.
       if (static_cast<decltype(k_tiles_per_output_tile)>(splits) > k_tiles_per_output_tile) {
@@ -609,7 +610,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     }
 
     // Calculate the maximum number of blocks from clusters of shape cluster_shape that we
-    // can fit within sm_count SMs.
+    // can fit within cu_count CUs.
     dim3 grid = get_grid_shape(
       problem_blocks,
       cluster_shape,
@@ -742,8 +743,8 @@ struct PersistentTileSchedulerSm90StreamKParams {
     auto sk_units_per_group = sk_units / groups;
 
     // sk_tiles is guaranteed to be divisible by cluster_size because it is calculated as:
-    //    sk_tiles = (waves <= 2) ? total_tiles : (sm_count + (total_tiles % sm_count))
-    // Both total_tiles and sm_count are multiples of cluster size due to padding added
+    //    sk_tiles = (waves <= 2) ? total_tiles : (cu_count + (total_tiles % cu_count))
+    // Both total_tiles and cu_count are multiples of cluster size due to padding added
     // prior to kernel launch.
     uint64_t sk_clustered_tiles = sk_tiles / cluster_size;
     uint64_t sk_clustered_tiles_per_group = sk_clustered_tiles / groups;
@@ -940,7 +941,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     return round_up_to_l2_alignment(bits_to_bytes(static_cast<int>(workspace_bits)));
   }
 
-  #if !defined(__CUDACC_RTC__)
+  #if !defined(__HGGCCC_RTC__)
   static void
   get_workspace_component_sizes(
     dim3 problem_blocks,
@@ -980,11 +981,11 @@ struct PersistentTileSchedulerSm90StreamKParams {
     else {
       KernelHardwareInfo new_hw_info;
       new_hw_info.device_id = hw_info.device_id;
-      new_hw_info.sm_count = hw_info.sm_count;
-      if (new_hw_info.sm_count <= 0) {
-        CUTLASS_TRACE_HOST("  WARNING: Arguments do not include a valid SM count.\n"
-            "  For optimal performance, populate the arguments KernelHardwareInfo struct with the SM count.");
-        new_hw_info.sm_count = KernelHardwareInfo::query_device_multiprocessor_count(new_hw_info.device_id);
+      new_hw_info.cu_count = hw_info.cu_count;
+      if (new_hw_info.cu_count <= 0) {
+        CUTLASS_TRACE_HOST("  WARNING: Arguments do not include a valid CU count.\n"
+            "  For optimal performance, populate the arguments KernelHardwareInfo struct with the CU count.");
+        new_hw_info.cu_count = KernelHardwareInfo::query_device_multiprocessor_count(new_hw_info.device_id);
       }
 
       dim3 grid = get_grid_shape(
@@ -1015,7 +1016,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
       reduction_workspace_size = get_reduction_workspace_size(reduction_tiles, tile_shape, accumulator_bits);
     }
   }
-  #endif // !defined(__CUDACC_RTC__)
+  #endif // !defined(__HGGCC_RTC__)
 
   // Returns whether the kernel is configured in a manner for which separate reduction should be used
   CUTLASS_HOST_DEVICE
@@ -1087,7 +1088,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     int barrier_workspace_size = 0;
     int reduction_workspace_size = 0;
 
-    #if !defined(__CUDACC_RTC__)
+    #if !defined(__HGGCCC_RTC__)
       get_workspace_component_sizes(
         problem_blocks,
         k_tiles_per_output_tile,
@@ -1115,7 +1116,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
   static cutlass::Status
   initialize_workspace(
     void* workspace,
-    cudaStream_t stream,
+    hggcStream_t stream,
     BatchedGemmCoord problem_shape,
     GemmCoord tile_shape,
     GemmCoord cluster_shape,
@@ -1157,7 +1158,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
   static cutlass::Status
   initialize_workspace(
     void* workspace,
-    cudaStream_t stream,
+    hggcStream_t stream,
     dim3 problem_blocks,
     uint32_t k_tiles_per_output_tile,
     GemmCoord tile_shape,
@@ -1172,7 +1173,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     uint32_t element_accumulator_bits,
     uint32_t epilogue_subtile = 1) {
 
-    #if !defined(__CUDACC_RTC__)
+    #if !defined(__HGGCCC_RTC__)
       int barrier_workspace_size = 0;
       int reduction_workspace_size = 0;
 
@@ -1204,7 +1205,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
         uint8_t* barrier_workspace = reinterpret_cast<uint8_t*>(workspace) + reduction_workspace_size;
         return zero_workspace(static_cast<void*>(barrier_workspace), barrier_workspace_size, stream);
       }
-    #endif // !defined(__CUDACC_RTC__)
+    #endif // !defined(__HGGCC_RTC__)
 
     return Status::kSuccess;
   }
@@ -1256,9 +1257,9 @@ struct PersistentTileSchedulerSm90StreamKParams {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// Parameters for SM90 persistent group scheduler (only used for Grouped Gemms)
+// Parameters for PPU0015 persistent group scheduler (only used for Grouped Gemms)
 template<class ProblemShape>
-struct PersistentTileSchedulerSm90GroupParams {
+struct PersistentTileSchedulerPPUGroupParams {
 
   enum class RasterOrder {
     AlongM,
@@ -1371,7 +1372,7 @@ struct PersistentTileSchedulerSm90GroupParams {
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true) {
 
-    int const sm_count = hw_info.sm_count;
+    int const cu_count = hw_info.cu_count;
 
     // Round up to nearest multiple of swizzle_size along each mode
     auto log_swizzle_size = get_log_swizzle_size(problem_blocks.x, problem_blocks.y, max_swizzle_size);
@@ -1408,29 +1409,29 @@ struct PersistentTileSchedulerSm90GroupParams {
     auto cluster_size = cluster_shape.m() * cluster_shape.n();
     if (cluster_size == 1) {
       if (raster_order == RasterOrder::AlongN) {
-        launch_grid.y = possibly_truncate(sm_count, problem_blocks_total);
+        launch_grid.y = possibly_truncate(cu_count, problem_blocks_total);
       }
       else {
-        launch_grid.x = possibly_truncate(sm_count, problem_blocks_total);
+        launch_grid.x = possibly_truncate(cu_count, problem_blocks_total);
       }
     }
     else {
       // Optimal grid size calculation is based on
-      // GH100: 8 GPCs, 72 TPCs (9 TPCs/GPC), 2 SMs/TPC, 144 SMs per full GPU
-      // Hence, maximum SMs per GPC = 18
-      constexpr int max_sm_per_gpc = 18;
-      // Provided SM count could possibly be less than the assumed maximum SMs per GPC
+      // GH100: 8 GPCs, 72 TPCs (9 TPCs/GPC), 2 CUs/TPC, 144 CUs per full PPU
+      // Hence, maximum CUs per GPC = 18
+      constexpr int max_cu_per_gpc = 18;
+      // Provided CU count could possibly be less than the assumed maximum CUs per GPC
       auto cluster_size = cluster_shape.m() * cluster_shape.n();
-      int const min_num_gpc = sm_count < max_sm_per_gpc ? 1 : sm_count / max_sm_per_gpc;
-      int const max_cta_occupancy_per_gpc = max_sm_per_gpc - (max_sm_per_gpc % cluster_size);
+      int const min_num_gpc = cu_count < max_cu_per_gpc ? 1 : cu_count / max_cu_per_gpc;
+      int const max_cta_occupancy_per_gpc = max_cu_per_gpc - (max_cu_per_gpc % cluster_size);
       int cta_per_device = min_num_gpc * max_cta_occupancy_per_gpc;
 
-      // The calculation below allows for larger grid size launch for different GPUs.
-      int const num_gpc_residual = sm_count < max_sm_per_gpc ? 0 : sm_count % max_sm_per_gpc;
+      // The calculation below allows for larger grid size launch for different PPUs.
+      int const num_gpc_residual = cu_count < max_cu_per_gpc ? 0 : cu_count % max_cu_per_gpc;
       int const max_cta_occupancy_per_residual_gpc = num_gpc_residual - (num_gpc_residual % cluster_size);
       cta_per_device += max_cta_occupancy_per_residual_gpc;
 
-      cta_per_device = sm_count < cta_per_device ? sm_count : cta_per_device;
+      cta_per_device = cu_count < cta_per_device ? cu_count : cta_per_device;
 
       if (raster_order == RasterOrder::AlongN) {
         launch_grid.y = possibly_truncate(

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM A (output gradient tile) 
     matrix from memory.
@@ -298,18 +300,18 @@ private:
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
 
-      // We are using inline PTX assembly here to avoid an CUDA C++ compilation
+      // We are using inline PTX assembly here to avoid an HGGC C++ compilation
       // artifact in which control flow instructions are generated. Instead, our
       // intent is to predicate the mov instructions.
-      #if defined(__CUDA_ARCH__)
+      #if defined(__HGGC_ARCH__)
       asm volatile(
           "{\n"
           "  .reg .pred p;\n"
           "  .reg .u32  m;"
-          "  mov.u32 m, %2;"
-          "  setp.ne.b32 p, %1, 0;\n"
-          "  @p mov.u32 m, 0;\n"
-          "  mov.u32 %0, m;\n"
+          "  ppu.mov.u32 m, %2;"
+          "  ppu.cmpp.ne.b32 p, %1, 0;\n"
+          "  @p ppu.mov.u32 m, 0;\n"
+          "  ppu.mov.u32 %0, m;\n"
           "}\n" 
         :
           "=r"(masks_[s][0])
@@ -321,10 +323,10 @@ private:
           "{\n"
           "  .reg .pred p;\n"
           "  .reg .u32  m;"
-          "  mov.u32 m, %2;"
-          "  setp.ne.b32 p, %1, 0;\n"
-          "  @p mov.u32 m, 0;\n"
-          "  mov.u32 %0, m;\n"
+          "  ppu.mov.u32 m, %2;"
+          "  ppu.cmpp.ne.b32 p, %1, 0;\n"
+          "  @p ppu.mov.u32 m, 0;\n"
+          "  ppu.mov.u32 %0, m;\n"
           "}\n" 
         :
           "=r"(masks_[s][1])
@@ -336,10 +338,10 @@ private:
           "{\n"
           "  .reg .pred p;\n"
           "  .reg .u32  m;"
-          "  mov.u32 m, %2;"
-          "  setp.ne.b32 p, %1, 0;\n"
-          "  @p mov.u32 m, 0;\n"
-          "  mov.u32 %0, m;\n"
+          "  ppu.mov.u32 m, %2;"
+          "  ppu.cmpp.ne.b32 p, %1, 0;\n"
+          "  @p ppu.mov.u32 m, 0;\n"
+          "  ppu.mov.u32 %0, m;\n"
           "}\n" 
         :
           "=r"(masks_[s][2])

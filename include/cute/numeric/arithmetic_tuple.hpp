@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -346,11 +348,9 @@ make_basis_like(Shape const& shape)
       // Generate bases for each rank of si and add an i on front
       using I_type = decltype(I);
       return transform_leaf(make_basis_like(si), [](auto e) {
-        // MSVC has trouble capturing variables as constexpr,
-        // so that they can be used as template arguments.
-        // This is exactly what the code needs to do with i, unfortunately.
-        // The work-around is to define i inside the inner lambda,
-        // by using just the type from the enclosing scope.
+        // Define i inside the inner lambda so it can be used
+        // as a template argument (some compilers have trouble
+        // capturing variables as constexpr).
         constexpr int i = I_type::value;
         return ScaledBasis<decltype(e), i>{};
       });
@@ -481,7 +481,7 @@ CUTE_HOST_DEVICE void print(ScaledBasis<T,N> const& e)
   print(e.value()); printf("@%d", N);
 }
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 template <class ArithTuple>
 CUTE_HOST std::ostream& operator<<(std::ostream& os, ArithmeticTupleIterator<ArithTuple> const& iter)
 {
@@ -523,11 +523,11 @@ struct tuple_element<I, const cute::ArithmeticTuple<T...>>
 
 } // end namespace CUTE_STL_NAMESPACE
 
-#ifdef CUTE_STL_NAMESPACE_IS_CUDA_STD
+#ifdef CUTE_STL_NAMESPACE_IS_HGGC_STD
 namespace std
 {
 
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
 template <class... _Tp>
 struct tuple_size;
 
@@ -556,4 +556,4 @@ struct tuple_element<I, const cute::ArithmeticTuple<T...>>
 {};
 
 } // end namespace std
-#endif // CUTE_STL_NAMESPACE_IS_CUDA_STD
+#endif // CUTE_STL_NAMESPACE_IS_HGGC_STD

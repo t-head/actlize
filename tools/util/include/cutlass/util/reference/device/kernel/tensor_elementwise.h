@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -31,7 +32,7 @@
 
 #pragma once
 
-#include <curand_kernel.h>
+#include "cutlass/util/reference/device/acrand/acrand_kernel.h"
 
 #include "cutlass/cutlass.h"
 
@@ -46,11 +47,11 @@ namespace kernel {
 template <typename T>
 __global__ void TensorInitializeUniform(
     Distribution dist, int64_t seed, int dim_contiguous, int dim_strided, T *tensor, int ldm) {
-  __shared__ curandState_t rng_state[1024];
+  __shared__ acrandState_t rng_state[1024];
 
   uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * gridDim.x * blockDim.x;
 
-  curand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
+  acrand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
 
   int c_idx = blockIdx.x * blockDim.x + threadIdx.x;
   int s_idx = blockIdx.y * blockDim.x;
@@ -61,7 +62,7 @@ __global__ void TensorInitializeUniform(
     if (s_idx < dim_strided && c_idx < dim_contiguous) {
       double range = dist.uniform.max - dist.uniform.min;
 
-      double rnd = curand_uniform(&rng_state[threadIdx.x]);
+      double rnd = acrand_uniform(&rng_state[threadIdx.x]);
 
       rnd = dist.uniform.min + range * rnd;
 
@@ -85,11 +86,11 @@ __global__ void TensorInitializeUniform(
 template <typename T>
 __global__ void TensorInitializeGaussian(
     Distribution dist, int64_t seed, int dim_contiguous, int dim_strided, T *tensor, int ldm) {
-  __shared__ curandState_t rng_state[1024];
+  __shared__ acrandState_t rng_state[1024];
 
   uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * gridDim.x * blockDim.x;
 
-  curand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
+  acrand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
 
   int c_idx = blockIdx.x * blockDim.x + threadIdx.x;
   int s_idx = blockIdx.y * blockDim.x;
@@ -101,7 +102,7 @@ __global__ void TensorInitializeGaussian(
       // Random values are cast to integer after scaling by a power of two to facilitate error
       // testing
 
-      double rnd = curand_normal(&rng_state[threadIdx.x]);
+      double rnd = acrand_normal(&rng_state[threadIdx.x]);
 
       rnd = dist.gaussian.mean + dist.gaussian.stddev * rnd;
 
@@ -119,11 +120,11 @@ __global__ void TensorInitializeGaussian(
 template <typename T>
 __global__ void TensorInitializeLinear(
     Distribution dist, int64_t seed, int dim_contiguous, int dim_strided, T *tensor, int ldm) {
-  __shared__ curandState_t rng_state[1024];
+  __shared__ acrandState_t rng_state[1024];
 
   uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * gridDim.x * blockDim.x;
 
-  curand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
+  acrand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
 
   int c_idx = blockIdx.x * blockDim.x + threadIdx.x;
   int s_idx = blockIdx.y * blockDim.x;
@@ -142,11 +143,11 @@ __global__ void TensorInitializeLinear(
 template <typename T>
 __global__ void TensorInitializeIdentity(
     Distribution dist, int64_t seed, int dim_contiguous, int dim_strided, T *tensor, int ldm) {
-  __shared__ curandState_t rng_state[1024];
+  __shared__ acrandState_t rng_state[1024];
 
   uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * gridDim.x * blockDim.x;
 
-  curand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
+  acrand_init(seed, gtid, 0, &rng_state[threadIdx.x]);
 
   int c_idx = blockIdx.x * blockDim.x + threadIdx.x;
   int s_idx = blockIdx.y * blockDim.x;

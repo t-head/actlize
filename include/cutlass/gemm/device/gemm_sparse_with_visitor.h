@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -75,7 +77,7 @@ template <
     /// Operator class tag
     typename OperatorClass_ = arch::OpClassSimt,
     /// Tag indicating architecture to tune for
-    typename ArchTag_ = arch::Sm80,
+    typename ArchTag_ = arch::PPU0010,
     /// Threadblock-level tile size (concept: GemmShape)
     typename ThreadblockShape_ = typename DefaultGemmConfiguration<
         OperatorClass_, ArchTag_, ElementA_, ElementB_, ElementC_,
@@ -250,7 +252,7 @@ public:
   }
 
   /// Initializes GEMM state from arguments.
-  Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
+  Status initialize(Arguments const &args, void *workspace = nullptr, hggcStream_t stream = nullptr) {
 
     constexpr int SplitKSlices = 1;
 
@@ -274,11 +276,11 @@ public:
 
     int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
     if (smem_size >= (48 << 10)) {
-      cudaError_t result = cudaFuncSetAttribute(Kernel<GemmKernel>,
-                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+      hggcError_t result = hggcFuncSetAttribute(Kernel<GemmKernel>,
+                                    hggcFuncAttributeMaxDynamicSharedMemorySize,
                                     smem_size);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
     }
@@ -298,7 +300,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     ThreadblockSwizzle threadblock_swizzle;
 
@@ -309,13 +311,13 @@ public:
 
     cutlass::Kernel<GemmKernel><<<grid, block, smem_size, stream>>>(params_);
 
-    cudaError_t result = cudaGetLastError();
+    hggcError_t result = hggcGetLastError();
 
-    return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -323,7 +325,7 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
 
     Status status = initialize(args, workspace, stream);
 

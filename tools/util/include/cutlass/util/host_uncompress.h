@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -42,7 +43,7 @@
 
 namespace cutlass {
 
-// uncompress sparse tensor core A matrix
+// uncompress sparse tensor cell A matrix
 template <typename ElementA, typename LayoutA, typename ElementE,
           typename LayoutE>
 void uncompress(TensorRef<ElementA, LayoutA> uncompressed_tensor_a,

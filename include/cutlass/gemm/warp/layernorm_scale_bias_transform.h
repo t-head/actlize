@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,9 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level per channel scale+bias+relu before
-   matrix multiply-accumulate operations targeting Tensor Cores.
+   matrix multiply-accumulate operations targeting Tensor cells.
 */
 
 #pragma once
@@ -43,9 +45,8 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h" 
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu0010.h" 
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -53,7 +54,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op_policy.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu0010.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -87,7 +88,7 @@ struct LayernormScaleBiasTransform {
                  VarMeanOperand const &var_mean,
                  GammaBetaOperand const &gamma_beta) {
 
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800))
+#if (defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100))
     uint32_t *ptr_activations = reinterpret_cast<uint32_t *>(&activations);
     uint32_t const *ptr_var_mean = reinterpret_cast<uint32_t const *>(&var_mean);
     uint32_t const *ptr_gamma_beta = reinterpret_cast<uint32_t const *>(&gamma_beta);
@@ -99,8 +100,8 @@ struct LayernormScaleBiasTransform {
     // It requires C to be an even number.
     asm volatile(
         "{\n\t"
-        " fma.rn.f16x2 %0, %1, %2, %3;\n"
-        " fma.rn.f16x2 %0, %4, %0, %5;\n"
+        " ppu.fma.rtte.f16x2 %0, %1, %2, %3;\n"
+        " ppu.fma.rtte.f16x2 %0, %4, %0, %5;\n"
         "}\n"
         : "=r"(ptr_activations[0])
         : "r"(ptr_var_mean[0]), "r"(ptr_activations[0]),

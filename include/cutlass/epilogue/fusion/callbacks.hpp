@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -42,7 +43,7 @@ namespace cutlass::epilogue::fusion {
 
 // Dispatch interface for epilogue fusion callbacks
 // For visitor fusions, this is just a convenience wrapper to provide metadata and non-nested args.
-// It is also valid to just pass visitor callbacks directly to the collective, e.g. fusion::Sm90LinearCombination,
+// It is also valid to just pass visitor callbacks directly to the collective, e.g. fusion::PPU0015LinearCombination,
 // provided the collective supports a visitor callbacks interface. This is useful for implementing custom fusions.
 template <
   class DispatchPolicy,  // specialize on collective's dispatch policy since callbacks API will depend on collective's algorithm

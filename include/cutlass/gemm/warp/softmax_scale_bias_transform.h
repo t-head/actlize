@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,9 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing warp-level per-channel softmax before
-   matrix multiply-accumulate operations targeting Tensor Cores.
+   matrix multiply-accumulate operations targeting Tensor cells.
 */
 
 #pragma once
@@ -43,9 +45,8 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/mma_sm75.h"
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
+#include "cutlass/arch/mma_ppu0010.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -53,7 +54,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op_policy.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu0010.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

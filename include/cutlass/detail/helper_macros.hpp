@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -46,10 +47,10 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__NVCC__) || (defined(__clang__) && defined(__CUDA__))
+#if defined(__HGGCCC__) || (defined(__clang__) && defined(__HGGC__))
 #define CUTLASS_HOST_DEVICE __forceinline__ __device__ __host__
 #define CUTLASS_DEVICE __forceinline__ __device__
-#elif defined(__CUDACC_RTC__)
+#elif defined(__HGGCCC_RTC__)
 #define CUTLASS_HOST_DEVICE __forceinline__ __device__
 #define CUTLASS_DEVICE __forceinline__ __device__
 #else
@@ -72,27 +73,14 @@ CUTLASS_HOST_DEVICE void __CUTLASS_UNUSED(T const &)
   #define CUTLASS_UNUSED(expr) do { ; } while (&expr != &expr)
 #endif
 
-#ifdef _MSC_VER
-// Provides support for alternative operators 'and', 'or', and 'not'
-#include <iso646.h>
-#endif // _MSC_VER
-
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <assert.h>
 #endif
 
-#if defined(__CUDA_ARCH__)
-  #if defined(_MSC_VER)
-    #define CUTLASS_NOT_IMPLEMENTED() { printf("%s not implemented\n", __FUNCSIG__); asm volatile ("brkpt;\n"); }
-  #else
-    #define CUTLASS_NOT_IMPLEMENTED() { printf("%s not implemented\n", __PRETTY_FUNCTION__); asm volatile ("brkpt;\n"); }
-  #endif
+#if defined(__HGGC_ARCH__)
+  #define CUTLASS_NOT_IMPLEMENTED() { printf("%s not implemented\n", __PRETTY_FUNCTION__);}
 #else
-  #if defined(_MSC_VER)
-    #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __FUNCSIG__)
-  #else
-    #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __PRETTY_FUNCTION__)
-  #endif
+  #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __PRETTY_FUNCTION__)
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +93,7 @@ namespace cutlass {
 #endif
 
 
-// CUDA 10.1 introduces the mma instruction
+// HGGC 10.1 introduces the mma instruction
 #if !defined(CUTLASS_ENABLE_TENSOR_CORE_MMA)
 #define CUTLASS_ENABLE_TENSOR_CORE_MMA 0
 #endif
@@ -116,9 +104,9 @@ namespace cutlass {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// CUTLASS_PRAGMA_(UNROLL|NO_UNROLL) optimization directives for the CUDA compiler.
-#if defined(__CUDA_ARCH__) && !defined(__INTELLISENSE__)
-  #if defined(__CUDACC_RTC__) || (defined(__clang__) && defined(__CUDA__))
+// CUTLASS_PRAGMA_(UNROLL|NO_UNROLL) optimization directives for the HGGC compiler.
+#if defined(__HGGC_ARCH__) && !defined(__INTELLISENSE__)
+  #if defined(__HGGCCC_RTC__) || (defined(__clang__) && defined(__HGGC__))
     #define CUTLASS_PRAGMA_UNROLL _Pragma("unroll")
     #define CUTLASS_PRAGMA_NO_UNROLL _Pragma("unroll 1")
   #else
@@ -138,7 +126,7 @@ namespace cutlass {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #define CUTLASS_THREAD_LOCAL thread_local
 #else
 #define CUTLASS_THREAD_LOCAL

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 /**
@@ -35,7 +37,7 @@
  * \brief Debugging and logging functionality
  */
 
-#include <cuda_runtime_api.h>
+#include <hggc_runtime_api.h>
 
 #include <cute/config.hpp>
 
@@ -50,7 +52,7 @@ namespace cute
  * Formats and prints the given message to stdout
  */
 #if !defined(CUTE_LOG)
-#  if !defined(__CUDA_ARCH__)
+#  if !defined(__HGGC_ARCH__)
 #    define CUTE_LOG(format, ...) printf(format, __VA_ARGS__)
 #  else
 #    define CUTE_LOG(format, ...)                                \
@@ -78,11 +80,11 @@ namespace cute
 #if !defined(CUTE_ERROR_EXIT)
 #  define CUTE_ERROR_EXIT(e)                                         \
       do {                                                           \
-        cudaError_t code = (e);                                      \
-        if (code != cudaSuccess) {                                   \
+        hggcError_t code = (e);                                      \
+        if (code != hggcSuccess) {                                   \
           fprintf(stderr, "<%s:%d> %s:\n    %s: %s\n",               \
                   __FILE__, __LINE__, #e,                            \
-                  cudaGetErrorName(code), cudaGetErrorString(code)); \
+                  hggcGetErrorName(code), hggcGetErrorString(code)); \
           fflush(stderr);                                            \
           exit(1);                                                   \
         }                                                            \
@@ -90,7 +92,7 @@ namespace cute
 #endif
 
 #if !defined(CUTE_CHECK_LAST)
-#  define CUTE_CHECK_LAST() CUTE_ERROR_EXIT(cudaPeekAtLastError()); CUTE_ERROR_EXIT(cudaDeviceSynchronize())
+#  define CUTE_CHECK_LAST() CUTE_ERROR_EXIT(hggcPeekAtLastError()); CUTE_ERROR_EXIT(hggcDeviceSynchronize())
 #endif
 
 #if !defined(CUTE_CHECK_ERROR)
@@ -122,7 +124,7 @@ CUTE_HOST_DEVICE
 bool
 block(int bid)
 {
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
   return blockIdx.x + blockIdx.y*gridDim.x + blockIdx.z*gridDim.x*gridDim.y == bid;
 #else
   return true;
@@ -133,7 +135,7 @@ CUTE_HOST_DEVICE
 bool
 thread(int tid, int bid)
 {
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
   return (threadIdx.x + threadIdx.y*blockDim.x + threadIdx.z*blockDim.x*blockDim.y == tid) && block(bid);
 #else
   return true;

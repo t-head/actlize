@@ -1,3 +1,4 @@
+# Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
 # Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -25,9 +26,11 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 cmake_policy(SET CMP0112 NEW)
+
 add_library(cutlass_tools_util_includes INTERFACE)
-add_library(nvidia::cutlass::tools::util ALIAS cutlass_tools_util_includes)
+add_library(cutlass3::tools::util ALIAS cutlass_tools_util_includes)
 set_target_properties(cutlass_tools_util_includes PROPERTIES EXPORT_NAME tools::util)
 
 target_include_directories(
@@ -37,11 +40,7 @@ target_include_directories(
   $<BUILD_INTERFACE:${CUTLASS_TOOLS_UTIL_INCLUDE_DIR}>
   )
 
-target_link_libraries(
-  cutlass_tools_util_includes
-  INTERFACE
- 	$<$<BOOL:${CUTLASS_ENABLE_CUBLAS}>:cublas>
-  )
+#todo: need linking PPU profiling library?
 
 install(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
@@ -50,6 +49,6 @@ install(
 
 install(
   TARGETS cutlass_tools_util_includes
-  EXPORT NvidiaCutlass
+  EXPORT Cutlass3
   )
 

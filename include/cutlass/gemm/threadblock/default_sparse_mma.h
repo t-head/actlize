@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -37,18 +39,12 @@
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/arch/arch.h"
-#include "cutlass/arch/wmma.h"
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/transform/threadblock/predicated_tile_iterator.h"
 #include "cutlass/transform/threadblock/predicated_tile_iterator_2dthreadtile.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm70.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm75.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm80.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sparse_sm80.h"
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-#include "cutlass/gemm/threadblock/default_mma_core_wmma.h"
-#endif //CUTLASS_ARCH_WMMA_ENABLED
+#include "cutlass/gemm/threadblock/default_mma_core_ppu0010.h"
+#include "cutlass/gemm/threadblock/default_mma_core_sparse_ppu0010.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 

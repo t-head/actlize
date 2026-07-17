@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -48,7 +50,7 @@ is_byte_aligned(void const* const ptr)
   return (reinterpret_cast<uintptr_t>(ptr) & (N-1)) == 0;
 }
 
-#if defined(__CUDACC__)
+#if defined(__HGGCCC__)
 #  define CUTE_ALIGNAS(n) __align__(n)
 #else
 #  define CUTE_ALIGNAS(n) alignas(n)

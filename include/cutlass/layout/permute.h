@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Defines layout functions used by GEMM+permute path for common tensor or matrix formats.
 
@@ -38,8 +40,8 @@
     computation lies in operator() with private member variables  {col_permute_, row_permute_ and stride_} as new addresses after permute op.
 */
 #pragma once
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cassert>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cassert>
 #else
 #include "assert.h"
 #endif

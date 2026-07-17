@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Stream-K Gemm kernel compatible with fused epilogues 
     that broadcast a bias vector over the MMA output.
@@ -106,7 +108,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
 
   /// Workspace bytes per thread block
   static size_t const kWorkspaceBytesPerBlock =
-    __NV_STD_MAX(
+    __HGGC_STD_MAX(
       kThreadCount * sizeof(AccumulatorTile),
       Epilogue::kWorkspaceBytesPerBlock);
 
@@ -157,7 +159,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
     typename LayoutC::Stride::Index ldr;
     typename LayoutC::Stride::Index ldt;
 
-    int avail_sms;          /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+    int avail_cus;          /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
 
 
     //
@@ -173,7 +175,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
       ptr_C1(nullptr),
       ptr_C2(nullptr),
       ptr_D(nullptr),
-      avail_sms(-1)
+      avail_cus(-1)
     {}
 
     /// constructs an arguments structure
@@ -203,7 +205,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
       typename LayoutC::Stride::Index ldd,
       typename LayoutC::Stride::Index ldr,
       typename LayoutC::Stride::Index ldt,
-      int avail_sms = -1)                           /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+      int avail_cus = -1)                           /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
     :
       mode(mode),
       problem_size(problem_size),
@@ -218,14 +220,14 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
       batch_stride_C2(batch_stride_C2), 
       batch_stride_Vector(batch_stride_Vector),
       batch_stride_Tensor(batch_stride_Tensor),
-      lda(lda), ldb(ldb), ldc1(ldc1), ldc2(ldc2), ldd(ldd), ldr(ldr), ldt(ldt), avail_sms(avail_sms)
+      lda(lda), ldb(ldb), ldc1(ldc1), ldc2(ldc2), ldd(ldd), ldr(ldr), ldt(ldt), avail_cus(avail_cus)
     {
       CUTLASS_TRACE_HOST("GemmStreamkWithFusedEpilogue::Arguments::Arguments() - problem_size: " << problem_size);
       CUTLASS_TRACE_HOST("  ptr_Vector: " << (void *)this->ptr_Vector);
       CUTLASS_TRACE_HOST("  ptr_Tensor: " << (void *)this->ptr_Tensor);
       CUTLASS_TRACE_HOST("  ldr: " << this->ldr);
       CUTLASS_TRACE_HOST("  ldt: " << this->ldt);
-      CUTLASS_TRACE_HOST("  avail_sms: " << this->avail_sms);
+      CUTLASS_TRACE_HOST("  avail_cus: " << this->avail_cus);
     }
 
     /// Returns arguments for the transposed problem
@@ -332,8 +334,8 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
     /// Constructor
     Params(
       Arguments const &args,  /// GEMM application arguments
-      int device_sms,         /// Number of SMs on the device
-      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+      int device_cus,         /// Number of CUs on the device
+      int cu_occupancy)       /// Kernel CU occupancy (in thread blocks)
     :
       params_A(args.lda),
       params_B(args.ldb),
@@ -366,12 +368,12 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
       CUTLASS_TRACE_HOST("  ptr_Tensor: " << (void *)this->ptr_Tensor);
       CUTLASS_TRACE_HOST("  ldr: " << this->ldr);
       CUTLASS_TRACE_HOST("  ldt: " << args.ldt);
-      CUTLASS_TRACE_HOST("  avail_sms: " << avail_sms);
+      CUTLASS_TRACE_HOST("  avail_cus: " << avail_cus);
 
-      // Number of SMs to make available for StreamK decomposition
-      int avail_sms = (args.avail_sms == -1) ?
-                        device_sms :
-                        fast_min(args.avail_sms, device_sms);
+      // Number of CUs to make available for StreamK decomposition
+      int avail_cus = (args.avail_cus == -1) ?
+                        device_cus :
+                        fast_min(args.avail_cus, device_cus);
 
       // Initialize the block mapping structure
       block_mapping = ThreadblockSwizzle(
@@ -379,9 +381,9 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
         args.problem_size,
         {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
         args.batch_count,
-        sm_occupancy,
-        device_sms,
-        avail_sms,
+        cu_occupancy,
+        device_cus,
+        avail_cus,
         sizeof(ElementA),
         sizeof(ElementB),
         sizeof(ElementC),
@@ -400,7 +402,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
     /// the memory allocated to workspace is at least as large as get_workspace_size().
     Status init_workspace(
       void *workspace,
-      cudaStream_t stream = nullptr)
+      hggcStream_t stream = nullptr)
     {
       uint8_t *ptr = static_cast<uint8_t*>(workspace);
 
@@ -436,14 +438,14 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, false>
 
         CUTLASS_TRACE_HOST("  Initialize " << barrier_workspace_bytes << " barrier bytes");
 
-        cudaError_t result = cudaMemsetAsync(
+        hggcError_t result = hggcMemsetAsync(
           barrier_workspace,
           0,
           barrier_workspace_bytes,
           stream);
 
-        if (result != cudaSuccess) {
-          CUTLASS_TRACE_HOST("  cudaMemsetAsync() returned error " << cudaGetErrorString(result));
+        if (result != hggcSuccess) {
+          CUTLASS_TRACE_HOST("  hggcMemsetAsync() returned error " << hggcGetErrorString(result));
           return Status::kErrorInternal;
         }
       }
@@ -1108,7 +1110,7 @@ protected:
     int block_idx = params.block_mapping.get_block_idx();
 
     int sk_padding_start_block_idx =  params.block_mapping.sk_regions() * params.block_mapping.sk_blocks_per_region();
-    int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_sms;
+    int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_cus;
     int reduce_start_block_idx = dp_start_block_idx + params.block_mapping.dp_blocks;
     int grid_padding_start_block_idx = reduce_start_block_idx + params.block_mapping.reduction_blocks;
 
@@ -1132,9 +1134,9 @@ protected:
       int tile_allottment = params.block_mapping.dp_first_wave_tiles;
 
       // Blocks in subsequent DP waves get 1 tile
-      if (dp_block_idx >= params.block_mapping.avail_sms) {
+      if (dp_block_idx >= params.block_mapping.avail_cus) {
           tile_allottment = 1;
-          tile_idx += (params.block_mapping.dp_first_wave_tiles - 1) * params.block_mapping.avail_sms;
+          tile_idx += (params.block_mapping.dp_first_wave_tiles - 1) * params.block_mapping.avail_cus;
       }
 
       block_iters_remaining = params.block_mapping.iters_per_tile() * tile_allottment;
@@ -1195,7 +1197,7 @@ protected:
       if (block_idx >= dp_start_block_idx)
       {
         // DP block consume their tiles at stride
-        tile_idx += params.block_mapping.avail_sms;
+        tile_idx += params.block_mapping.avail_cus;
         init_dp_tile_work(tile_work, tile_idx);
       }
       else
@@ -1297,7 +1299,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
 
   /// Workspace bytes per thread block
   static size_t const kWorkspaceBytesPerBlock =
-    __NV_STD_MAX(
+    __HGGC_STD_MAX(
       kThreadCount * sizeof(AccumulatorTile),
       Epilogue::kWorkspaceBytesPerBlock);
 
@@ -1346,7 +1348,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
     typename LayoutC::Stride::Index ldr;
     typename LayoutC::Stride::Index ldt;
 
-    int avail_sms;          /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+    int avail_cus;          /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
 
 
     //
@@ -1361,7 +1363,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
       ptr_B(nullptr),
       ptr_C(nullptr),
       ptr_D(nullptr),
-      avail_sms(-1)
+      avail_cus(-1)
     {}
 
     /// constructs an arguments structure
@@ -1388,7 +1390,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
       typename LayoutC::Stride::Index ldd,
       typename LayoutC::Stride::Index ldr,
       typename LayoutC::Stride::Index ldt,
-      int avail_sms = -1)                           /// The number of SMs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
+      int avail_cus = -1)                           /// The number of CUs that StreamK dispatch heuristics will attempt to load-balance across (-1 defaults to device width, 1 implies classic data-parallel scheduling)
     :
       mode(mode),
       problem_size(problem_size),
@@ -1402,14 +1404,14 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
       batch_stride_C(batch_stride_C), 
       batch_stride_Vector(batch_stride_Vector),
       batch_stride_Tensor(batch_stride_Tensor),
-      lda(lda), ldb(ldb), ldc(ldc), ldd(ldd), ldr(ldr), ldt(ldt), avail_sms(avail_sms)
+      lda(lda), ldb(ldb), ldc(ldc), ldd(ldd), ldr(ldr), ldt(ldt), avail_cus(avail_cus)
     {
       CUTLASS_TRACE_HOST("GemmStreamkWithFusedEpilogue::Arguments::Arguments() - problem_size: " << problem_size);
       CUTLASS_TRACE_HOST("  ptr_Vector: " << (void *)this->ptr_Vector);
       CUTLASS_TRACE_HOST("  ptr_Tensor: " << (void *)this->ptr_Tensor);
       CUTLASS_TRACE_HOST("  ldr: " << this->ldr);
       CUTLASS_TRACE_HOST("  ldt: " << this->ldt);
-      CUTLASS_TRACE_HOST("  avail_sms: " << this->avail_sms);
+      CUTLASS_TRACE_HOST("  avail_cus: " << this->avail_cus);
     }
 
     /// Returns arguments for the transposed problem
@@ -1514,8 +1516,8 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
     /// Constructor
     Params(
       Arguments const &args,  /// GEMM application arguments
-      int device_sms,         /// Number of SMs on the device
-      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+      int device_cus,         /// Number of CUs on the device
+      int cu_occupancy)       /// Kernel CU occupancy (in thread blocks)
     :
       params_A(args.lda),
       params_B(args.ldb),
@@ -1545,12 +1547,12 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
       CUTLASS_TRACE_HOST("  ptr_Tensor: " << (void *)this->ptr_Tensor);
       CUTLASS_TRACE_HOST("  ldr: " << this->ldr);
       CUTLASS_TRACE_HOST("  ldt: " << args.ldt);
-      CUTLASS_TRACE_HOST("  avail_sms: " << avail_sms);
+      CUTLASS_TRACE_HOST("  avail_cus: " << avail_cus);
 
-      // Number of SMs to make available for StreamK decomposition
-      int avail_sms = (args.avail_sms == -1) ?
-                        device_sms :
-                        fast_min(args.avail_sms, device_sms);
+      // Number of CUs to make available for StreamK decomposition
+      int avail_cus = (args.avail_cus == -1) ?
+                        device_cus :
+                        fast_min(args.avail_cus, device_cus);
 
       // Initialize the block mapping structure
       block_mapping = ThreadblockSwizzle(
@@ -1558,9 +1560,9 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
         args.problem_size,
         {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
         args.batch_count,
-        sm_occupancy,
-        device_sms,
-        avail_sms,
+        cu_occupancy,
+        device_cus,
+        avail_cus,
         sizeof(ElementA),
         sizeof(ElementB),
         sizeof(ElementC),
@@ -1580,7 +1582,7 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
     /// the memory allocated to workspace is at least as large as get_workspace_size().
     Status init_workspace(
       void *workspace,
-      cudaStream_t stream = nullptr)
+      hggcStream_t stream = nullptr)
     {
       uint8_t *ptr = static_cast<uint8_t*>(workspace);
 
@@ -1615,14 +1617,14 @@ struct GemmStreamkWithFusedEpilogue<Mma_, Epilogue_, ThreadblockSwizzle_, true> 
 
         CUTLASS_TRACE_HOST("  Initialize " << barrier_workspace_bytes << " barrier bytes");
 
-        cudaError_t result = cudaMemsetAsync(
+        hggcError_t result = hggcMemsetAsync(
           barrier_workspace,
           0,
           barrier_workspace_bytes,
           stream);
 
-        if (result != cudaSuccess) {
-          CUTLASS_TRACE_HOST("  cudaMemsetAsync() returned error " << cudaGetErrorString(result));
+        if (result != hggcSuccess) {
+          CUTLASS_TRACE_HOST("  hggcMemsetAsync() returned error " << hggcGetErrorString(result));
           return Status::kErrorInternal;
         }
       }
@@ -2261,7 +2263,7 @@ protected:
     int block_idx = params.block_mapping.get_block_idx();
 
     int sk_padding_start_block_idx =  params.block_mapping.sk_regions() * params.block_mapping.sk_blocks_per_region();
-    int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_sms;
+    int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_cus;
     int reduce_start_block_idx = dp_start_block_idx + params.block_mapping.dp_blocks;
     int grid_padding_start_block_idx = reduce_start_block_idx + params.block_mapping.reduction_blocks;
 
@@ -2285,9 +2287,9 @@ protected:
       int tile_allottment = params.block_mapping.dp_first_wave_tiles;
 
       // Blocks in subsequent DP waves get 1 tile
-      if (dp_block_idx >= params.block_mapping.avail_sms) {
+      if (dp_block_idx >= params.block_mapping.avail_cus) {
           tile_allottment = 1;
-          tile_idx += (params.block_mapping.dp_first_wave_tiles - 1) * params.block_mapping.avail_sms;
+          tile_idx += (params.block_mapping.dp_first_wave_tiles - 1) * params.block_mapping.avail_cus;
       }
 
       block_iters_remaining = params.block_mapping.iters_per_tile() * tile_allottment;
@@ -2348,7 +2350,7 @@ protected:
       if (block_idx >= dp_start_block_idx)
       {
         // DP block consume their tiles at stride
-        tile_idx += params.block_mapping.avail_sms;
+        tile_idx += params.block_mapping.avail_cus;
         init_dp_tile_work(tile_work, tile_idx);
       }
       else

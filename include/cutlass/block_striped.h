@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Utilities for performing block-striped access (load, store, reduce) of trivially-copyable,
     statically-sized array types to global memory.
@@ -37,7 +39,6 @@
 
 #include "cutlass/cutlass.h"
 #include "cutlass/array.h"
-#include "cutlass/wmma_array.h"
 #include "cutlass/functional.h"
 #include "cutlass/complex.h"
 
@@ -107,34 +108,11 @@ struct StripedAccessType<
     TransferBytes>
 : public AlignedArray<
             T,                                                  // Element type of StripedAccessType
-            __NV_STD_MAX(1, TransferBytes / (int) sizeof(T)),   // Number of elements T in StripedAccessType
+            __HGGC_STD_MAX(1, TransferBytes / (int) sizeof(T)),   // Number of elements T in StripedAccessType
             TransferBytes>                                      // Alignment of StripedAccessType
 {};
 
 
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-
-/// ReinterpretCast type for striping a trivially-copyable type in global memory
-/// (Specialization for cutlass::WmmaFragmentArray<T>.  Striping granularity is a multiple of T.)
-template<
-    typename Use,
-    int m,
-    int n,
-    int k,
-    typename ElementT,
-    typename Layout,
-    int kFragments,
-    int TransferBytes>
-struct StripedAccessType<
-    WmmaFragmentArray<nvcuda::wmma::fragment<Use, m, n, k, ElementT, Layout>, kFragments>,
-    TransferBytes>
-: public AlignedArray<
-            ElementT,
-            __NV_STD_MAX(1, TransferBytes / (int) sizeof(ElementT)),
-            TransferBytes>
-{};
-
-#endif // if defined(CUTLASS_ARCH_WMMA_ENABLED)
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

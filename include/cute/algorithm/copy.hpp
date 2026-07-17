@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -333,61 +335,5 @@ copy(Copy_Atom<AutoVectorizingCopyWithAssumedAlignment<MaxVecBits>, Args...> con
 {
   return copy(AutoVectorizingCopyWithAssumedAlignment<MaxVecBits>{}, src, dst);
 }
-
-#if defined(CUTE_COPY_ATOM_TMA_SM90_ENABLED)
-template <class... CT_Args,
-          class SrcEngine, class SrcLayout,
-          class DstEngine, class DstLayout>
-CUTE_HOST_DEVICE
-void
-copy(Copy_Traits<SM90_BULK_COPY_AUTO, CT_Args...> const& atom,  // Copy_Traits may or may not have the memory barrier in it already
-     Tensor<SrcEngine, SrcLayout>                 const& src,
-     Tensor<DstEngine, DstLayout>                      & dst)
-{
-  using SrcType = typename SrcEngine::value_type;
-  using DstType = typename DstEngine::value_type;
-  static_assert(sizeof_bits<SrcType>::value == sizeof_bits<DstType>::value);
-  static_assert((is_gmem<SrcEngine>::value && is_smem<DstEngine>::value) ||
-                (is_smem<SrcEngine>::value && is_gmem<DstEngine>::value),
-                "Bulk Copy only supports gmem -> smem or smem -> gmem movement.");
-  // G2S or S2G dispatch
-  using BULK_COPY_OP = conditional_t<is_gmem<SrcEngine>::value,
-                                     SM90_BULK_COPY_G2S,
-                                     SM90_BULK_COPY_S2G>;
-
-  // Find the common subtensor of src and dst
-  auto tiler = max_common_layout(src, dst);
-  constexpr int vec_elem = decltype(size(tiler))::value;
-  constexpr int vec_bits = vec_elem * sizeof_bits_v<SrcType>;
-  static_assert(vec_bits >= 128, "Expected at least 128-bits for BLKCP");
-
-  // Construct a new concrete Atom of the vector size
-  using BulkAtom = Copy_Atom<Copy_Traits<BULK_COPY_OP, Int<vec_bits>, CT_Args...>, SrcType>;
-  auto bulk_atom = apply(atom.opargs_, [](auto const&... args) { return BulkAtom{args...}; });
-
-#if 0
-  if (thread0()) {
-    print("copy blkcp -- found a max_common_layout of "); print(tiler); print("\n");
-    print("   "); print(src); print("\n");
-    print("   "); print(dst); print("\n");
-  }
-#endif
-
-  return copy(bulk_atom, logical_divide(src, tiler), logical_divide(dst, tiler));
-}
-
-// Backwards-compat. Throw out any extra Copy_Atom args.
-template <class... CT_Args, class... CA_Args,
-          class SrcEngine, class SrcLayout,
-          class DstEngine, class DstLayout>
-CUTE_HOST_DEVICE
-void
-copy(Copy_Atom<Copy_Traits<SM90_BULK_COPY_AUTO, CT_Args...>, CA_Args...> const& atom,
-     Tensor<SrcEngine, SrcLayout>                const& src,
-     Tensor<DstEngine, DstLayout>                     & dst)
-{
-  return copy(static_cast<Copy_Traits<SM90_BULK_COPY_AUTO, CT_Args...> const&>(atom), src, dst);
-}
-#endif // #if defined(CUTE_COPY_ATOM_TMA_SM90_ENABLED)
 
 } // end namespace cute

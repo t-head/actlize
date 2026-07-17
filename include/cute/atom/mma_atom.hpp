@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -933,10 +935,5 @@ print_latex_mma(LayoutC const& C, ThrIDC const& TC,  // (m,n) -> (tid,vid)  and 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <cute/atom/mma_traits_sm61.hpp>
-#include <cute/atom/mma_traits_sm70.hpp>
-#include <cute/atom/mma_traits_sm75.hpp>
-#include <cute/atom/mma_traits_sm80.hpp>
-#include <cute/atom/mma_traits_sm90.hpp>
-#include <cute/atom/mma_traits_sm90_gmma.hpp>
+#include <cute/atom/mma_traits_ppu.hpp>
 ////////////////////////////////////////////////////////////////////////////////////////////////////

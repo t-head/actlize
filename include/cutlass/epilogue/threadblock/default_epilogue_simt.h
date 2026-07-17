@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using SIMT.
 
@@ -52,7 +54,6 @@
 #include "cutlass/epilogue/thread/linear_combination_relu.h"
 #include "cutlass/epilogue/thread/linear_combination_gelu.h"
 #include "cutlass/epilogue/thread/linear_combination_sigmoid.h"
-#include "cutlass/epilogue/thread/linear_combination_planar_complex.h"
 #include "cutlass/epilogue/thread/conversion_op.h"
 #include "cutlass/epilogue/thread/reduction_op.h"
 

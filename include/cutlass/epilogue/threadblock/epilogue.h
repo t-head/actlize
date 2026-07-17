@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -39,8 +41,8 @@
 
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cassert>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cassert>
 #else
 #include <assert.h>
 #endif
@@ -426,7 +428,7 @@ public:
     if (!output_op.is_source_needed())
     {
       source_iterator.clear_mask();
-      __syncthreads();  // Dummy (CUDA 11.0)
+      __syncthreads();  // Dummy (HGGC 11.0)
     }
 
     operator()(output_op, destination_iterator, accumulators, SourceAspectNeeded(source_iterator));

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -93,7 +95,7 @@ template <
     /// Store the accumulators in row major or column major.  Row major is used
     /// when output layout is interleaved.
     bool AccumulatorsInRowMajor = false,
-    /// Use zfill or predicate for SM80 out-of-bound cp.async 
+    /// Use zfill or predicate for PPU0010 out-of-bound cp.async 
     SharedMemoryClearOption SharedMemoryClear = SharedMemoryClearOption::kNone
     >
 struct DefaultMmaLayernormMainloopFusion {

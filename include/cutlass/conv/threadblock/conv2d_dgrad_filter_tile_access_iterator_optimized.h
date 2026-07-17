@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing loading of convolution tiles mapped to GEMM B (filter tile) 
     matrix from memory.
@@ -274,11 +276,11 @@ public:
         "{\n\t"
         " .reg .pred %%p;\n\t"
         " .reg .s64 t1;\n\t"
-        " setp.lt.s32 %%p, %3, %4;\n\t"
-        " selp.s32 %0, %3, %5, %%p;\n\t"
-        " selp.s32 %1, 1, 2, %%p;\n\t"
-        " selp.s64 t1, %6, %7, %%p;\n\t"
-        " add.s64 %2, %8, t1;\n\t"
+        " ppu.cmpp.lt.s32 %%p, %3, %4;\n\t"
+        " ppu.selp.s32 %0, %3, %5, %%p;\n\t"
+        " ppu.selp.s32 %1, 1, 2, %%p;\n\t"
+        " ppu.selp.s64 t1, %6, %7, %%p;\n\t"
+        " ppu.add.s64 %2, %8, t1;\n\t"
         "}\n"
         : "=r"(filter_r_), "=r"(next_idx), "=l"(reset_bytes)
         : "r"(filter_r_), "r"(problem_size_.R), "r"(start_r_),

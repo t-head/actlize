@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -72,7 +74,7 @@ template <
   typename Element_,         ///< Element data type
   bool ScatterD = false,     ///< Scatter D operand or not
   typename PermuteDLayout = layout::NoPermute, ///< Permute D operand or not
-  bool UseCUDAStore = false
+  bool UseDeviceStore = false
 >
 class PredicatedTileIterator {
 public:
@@ -415,7 +417,7 @@ public:
                  + permute_layout_(PitchLinearCoord(col, row)) * sizeof(AccessType) / kElementsPerAccess);
             }
 
-            if (UseCUDAStore) {
+            if (UseDeviceStore) {
               if (guard) {
                 memory_pointer[0] =
                     frag_ptr[frag_row_idx * ThreadMap::Iterations::kColumn + column];

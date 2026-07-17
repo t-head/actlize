@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -36,7 +37,7 @@
 
 #pragma once
 
-#include "cutlass/epilogue/fusion/sm90_visitor_tma_warpspecialized.hpp"
+#include "cutlass/epilogue/fusion/ppu_visitor_tma_warpspecialized.hpp"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,9 +51,9 @@ using cute::tuple;
 namespace detail {
 
 template <class... Ops>
-struct VisitorImpl2x: fusion::detail::Sm90VisitorImplBase<Ops...> {
-  using fusion::detail::Sm90VisitorImplBase<Ops...>::Sm90VisitorImplBase;
-  using fusion::detail::Sm90VisitorImplBase<Ops...>::ops;
+struct VisitorImpl2x: fusion::detail::PPU0015VisitorImplBase<Ops...> {
+  using fusion::detail::PPU0015VisitorImplBase<Ops...>::PPU0015VisitorImplBase;
+  using fusion::detail::PPU0015VisitorImplBase<Ops...>::ops;
 
   template <class CallbacksTuple>
   struct Callbacks {
@@ -314,14 +315,14 @@ struct TopologicalVisitor2x : VisitorImpl2x<Ops...> {
 
 
 template <class NodeOp, class... ChildOps>
-using Sm80EVT = TreeVisitor2x<NodeOp, ChildOps...>;
+using PPU0010EVT = TreeVisitor2x<NodeOp, ChildOps...>;
 
 template<
   class ElementCompute,
   class EdgeTuple,
   class... Ops
 >
-using Sm80TopologicalVisitor = TopologicalVisitor2x<ElementCompute, EdgeTuple, Ops...>;
+using PPU0010TopologicalVisitor = TopologicalVisitor2x<ElementCompute, EdgeTuple, Ops...>;
 
 
 using X = Underscore;
@@ -353,7 +354,7 @@ struct OutputTileThreadLayout: DefaultThreadMapTensorOp<
   using Base::Base;
 
   // Software pipeline stages in epilogue
-  static_assert(Stages_ <= 2, "Sm80 EVT only support upto 2 Stages.");
+  static_assert(Stages_ <= 2, "PPU0010 EVT only support upto 2 Stages.");
   static const int Stages = Stages_;
 
   using ThreadShape = cute::Shape<
@@ -431,3 +432,4 @@ struct OutputTileThreadLayout: DefaultThreadMapTensorOp<
 } // namespace cutlass::epilogue::threadblock
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+

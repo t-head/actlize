@@ -1,4 +1,4 @@
-
+# Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
 # Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -27,24 +27,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
 set(CUTLASS_EXAMPLES_COMMON_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
 add_custom_target(cutlass_examples)
-add_custom_target(test_examples)
 
 function(cutlass_example_add_executable NAME)
 
-  set(options)
-  set(oneValueArgs DISABLE_TESTS)
-  set(multiValueArgs DEPENDS DEPENDEES TEST_COMMAND_OPTIONS)
-  cmake_parse_arguments(_ "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-
-  if (NOT DEFINED __DISABLE_TESTS)
-    set(__DISABLE_TESTS OFF)
-  endif()
-
-  cutlass_add_executable(${NAME} ${__UNPARSED_ARGUMENTS} BATCH_SOURCES OFF)
+  cutlass_add_executable(${NAME} ${ARGN})
 
   add_dependencies(cutlass_examples ${NAME})
 
@@ -53,8 +42,7 @@ function(cutlass_example_add_executable NAME)
     PRIVATE
     CUTLASS
     cutlass_tools_util_includes
-    $<$<BOOL:${CUTLASS_ENABLE_CUBLAS}>:nvidia::cublas>
-    cuda
+    ppu::driver
     )
 
   target_include_directories(
@@ -69,75 +57,15 @@ function(cutlass_example_add_executable NAME)
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
-  cutlass_add_executable_tests(
-    test_examples_${NAME} ${NAME}
-    DEPENDS ${__DEPENDS}
-    DEPENDEES test_examples ${__DEPENDEES}
-    TEST_COMMAND_OPTIONS ${__TEST_COMMAND_OPTIONS}
-    DISABLE_EXECUTABLE_INSTALL_RULE
-    DISABLE_TESTS ${__DISABLE_TESTS}
-    )
-
 endfunction()
 
 foreach(EXAMPLE
-  00_basic_gemm
-  01_cutlass_utilities
-  02_dump_reg_shmem
-  03_visualize_layout
-  04_tile_iterator
-  05_batched_gemm
-  06_splitK_gemm
-  07_volta_tensorop_gemm
-  08_turing_tensorop_gemm
-  09_turing_tensorop_conv2dfprop
-  10_planar_complex
-  11_planar_complex_array
-  12_gemm_bias_relu
-  13_two_tensor_op_fusion
-  14_ampere_tf32_tensorop_gemm
-  15_ampere_sparse_tensorop_gemm
-  16_ampere_tensorop_conv2dfprop
-  17_fprop_per_channel_bias
-  18_ampere_fp64_tensorop_affine2_gemm
-  19_tensorop_canonical
-  20_simt_canonical
-  21_quaternion_gemm
-  22_quaternion_conv
-  23_ampere_gemm_operand_reduction_fusion
-  24_gemm_grouped
-  25_ampere_fprop_mainloop_fusion
-  26_ampere_wgrad_mainloop_fusion
-  27_ampere_3xtf32_fast_accurate_tensorop_gemm
-  28_ampere_3xtf32_fast_accurate_tensorop_fprop
-  29_ampere_3xtf32_fast_accurate_tensorop_complex_gemm
-  30_wgrad_split_k
-  31_basic_syrk
-  32_basic_trmm
-  33_ampere_3xtf32_tensorop_symm
-  34_transposed_conv2d
-  35_gemm_softmax
-  36_gather_scatter_fusion
-  37_gemm_layernorm_gemm_fusion
-  38_syr2k_grouped
-  cute
-  39_gemm_permute
-  41_fused_multi_head_attention
-  42_ampere_tensorop_group_conv
-  43_ell_block_sparse_gemm
-  45_dual_gemm
-  46_depthwise_simt_conv2dfprop
-  47_ampere_gemm_universal_streamk
-  48_hopper_warp_specialized_gemm
-  49_hopper_gemm_with_collective_builder
-  50_hopper_gemm_with_epilogue_swizzle
-  51_hopper_gett
-  52_hopper_gather_scatter_fusion
-  53_hopper_gemm_permute
-  54_hopper_fp8_warp_specialized_gemm
-  55_hopper_mixed_dtype_gemm
-  56_hopper_ptr_array_batched_gemm
-  57_hopper_grouped_gemm
+  00_ppu_basic_tensor_op_gemm
+  01_ppu_gemm_with_collective_builder
+  02_ppu_mixed_dtype_gemm
+  03_ppu_ptr_array_batched_gemm
+  04_ppu_grouped_gemm
+  05_ppu_cute_gemm
   )
 
   add_subdirectory(${EXAMPLE})

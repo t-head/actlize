@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing computing the addresses of storing of tiles
    from pitch-linear rank=2 tensors.
@@ -191,7 +193,7 @@ class RegularTileAccessIterator<
 
   /// Adds a tile offset in the unit of tile.
   /// In GEMM/Conv implementation, this is used to move in the k dimension in the shared memory.
-  /// Below layouts are the shared memory layouts.  Current SM50 SIMT kernels only use col major A and row major B.
+  /// Below layouts are the shared memory layouts.  Current PPU0010 SIMT kernels only use col major A and row major B.
   ///   For row major A operand, k dimension is contiguous dimension;
   ///   For col major A operand, k dimension is strided dimension;
   ///   For row major B operand, k dimension is strided dimension;

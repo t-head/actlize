@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief 
 */
@@ -301,8 +303,7 @@ struct PredicatedTileIteratorDirect2dConvParams{
 
     // Fastdivmod for output O, P, Q
     if(threadblock_output_shape.row() != 0 && threadblock_output_shape.column() !=0 ){
-      // MSVC emits a "potential divide by 0" warning as error
-      // if the code just divides without a check and substitution.
+      // Guard against potential divide-by-zero.
 
       CUTLASS_ASSERT(threadblock_output_shape.row() != 0);
       const auto row_denom = threadblock_output_shape.row() != 0 ?

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*!
     \file
     \brief Defines a class for using IEEE half-precision floating-point types in host or
@@ -45,18 +47,18 @@
 
 #pragma once
 
-// FP8 types are available starting CUDA 11.8+
-#if (__CUDACC_VER_MAJOR__ >= 12) || ((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ >= 8))
-#define CUDA_FP8_ENABLED 1
+// FP8 types are available starting HGGC 11.8+
+#if (__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 8))
+#define HGGC_FP8_ENABLED 1
 #endif
 
-#if defined(__CUDA_ARCH__)
-#  if (__CUDA_ARCH__ >= 900)
-#    if (__CUDACC_VER_MAJOR__ >= 12) || ((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ >= 8))
-#      define CUDA_PTX_FP8_CVT_ENABLED 1
-#    endif // (__CUDACC_VER_MAJOR__ >= 12) || ((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ >= 8))
-#  endif // (__CUDA_ARCH__ >= 900)
-#endif // defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
+#  if (__HGGC_ARCH__ >= 150)
+#    if (__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 8))
+#      define HGGC_PTX_FP8_CVT_ENABLED 1
+#    endif // (__HGGCC_VER_MAJOR__ >= 12) || ((__HGGCC_VER_MAJOR__ == 11) && (__HGGCC_VER_MINOR__ >= 8))
+#  endif // (__HGGC_ARCH__ >= 150)
+#endif // defined(__HGGC_ARCH__)
 
 #ifdef __GNUC__
 // Ignore checks on reinterpret-casts that are being used for bitcasts.
@@ -65,13 +67,13 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
 
-#include "cutlass/floating_point_nvrtc.h"
+#include "cutlass/floating_point_hgrtc.h"
 
 #else
 //
-// Standard Library headers belong here to avoid conflicts with NVRTC.
+// Standard Library headers belong here to avoid conflicts with HGRTC.
 //
 #include <cmath>
 #include <limits>
@@ -79,10 +81,10 @@
 #include <cstring>
 #endif
 
-#ifdef CUDA_FP8_ENABLED
-#include <cuda_fp8.h>
+#ifdef HGGC_FP8_ENABLED
+#include <hggc_fp8.h>
 #endif
-#include <cuda_fp16.h>
+#include <hggc_fp16.h>
 
 #include "cutlass/cutlass.h"
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -161,7 +163,7 @@ struct alignas(1) float8_base {
     static bool isfinite(float flt) {
         uint32_t s;
 
-        #if defined(__CUDA_ARCH__)
+        #if defined(__HGGC_ARCH__)
         s = reinterpret_cast<uint32_t const &>(flt);
         #else
         std::memcpy(&s, &flt, sizeof(s));
@@ -175,7 +177,7 @@ struct alignas(1) float8_base {
     static bool isnan(float flt) {
         uint32_t s;
 
-        #if defined(__CUDA_ARCH__)
+        #if defined(__HGGC_ARCH__)
         s = reinterpret_cast<uint32_t const &>(flt);
         #else
         std::memcpy(&s, &flt, sizeof(s));
@@ -189,7 +191,7 @@ struct alignas(1) float8_base {
     static bool isinf(float flt) {
         uint32_t s;
 
-        #if defined(__CUDA_ARCH__)
+        #if defined(__HGGC_ARCH__)
         s = reinterpret_cast<uint32_t const &>(flt);
         #else
         std::memcpy(&s, &flt, sizeof(s));
@@ -208,7 +210,7 @@ struct alignas(1) float8_base {
         // software implementation rounds toward nearest even
         uint32_t s;
 
-        #if defined(__CUDA_ARCH__)
+        #if defined(__HGGC_ARCH__)
         s = reinterpret_cast<uint32_t const &>(flt);
         #else
         std::memcpy(&s, &flt, sizeof(s));
@@ -355,7 +357,7 @@ struct alignas(1) float8_base {
             }
         }
 
-        #if defined(__CUDA_ARCH__)
+        #if defined(__HGGC_ARCH__)
         return reinterpret_cast<float const&>(f);
         #else
         float flt;
@@ -397,10 +399,10 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     /// FP32 -> FP8 conversion - rounds to nearest even
     CUTLASS_HOST_DEVICE
     static float_e4m3_t from_float(float const& flt) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t tmp;
         float y = float();
-        asm volatile("cvt.rn.satfinite.e4m3x2.f32 %0, %1, %2;" : "=h"(tmp) : "f"(y), "f"(flt));
+        asm volatile("ppu.cvt.rtte.satfinite.e4m3x2.f32 %0, %1, %2;" : "=h"(tmp) : "f"(y), "f"(flt));
 
         return *reinterpret_cast<float_e4m3_t *>(&tmp);
     #else
@@ -411,10 +413,10 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     /// FP16 -> E5M2 conversion - rounds to nearest even
     CUTLASS_HOST_DEVICE
     static float_e4m3_t from_half(half const& flt) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t tmp = 0;
         uint32_t bits = reinterpret_cast<uint16_t const &>(flt);
-        asm volatile("cvt.rn.satfinite.e4m3x2.f16x2 %0, %1;" : "=h"(tmp) : "r"(bits));
+        asm volatile("ppu.cvt.rtte.satfinite.e4m3x2.f16x2 %0, %1;" : "=h"(tmp) : "r"(bits));
 
         return *reinterpret_cast<float_e4m3_t *>(&tmp);
     #else
@@ -425,10 +427,10 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     // E4M3 -> half
     CUTLASS_HOST_DEVICE
     static half to_half(float_e4m3_t const& x) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t bits = x.storage;
         uint32_t packed;
-        asm volatile("cvt.rn.f16x2.e4m3x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
+        asm volatile("ppu.cvt.rtte.f16x2.e4m3x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
 
         return reinterpret_cast<half2 const &>(packed).x;
     #else
@@ -439,10 +441,10 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     // E4M3 -> Float
     CUTLASS_HOST_DEVICE
     static float to_float(float_e4m3_t const& x) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t bits = x.storage;
         uint32_t packed;
-        asm volatile("cvt.rn.f16x2.e4m3x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
+        asm volatile("ppu.cvt.rtte.f16x2.e4m3x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
 
         return __half2float(reinterpret_cast<half2 const &>(packed).x);
     #else
@@ -460,10 +462,10 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     /// Default constructor
     float_e4m3_t() = default;
 
-#ifdef CUDA_FP8_ENABLED
-    /// Conversion from CUDA's FP8 type
+#ifdef HGGC_FP8_ENABLED
+    /// Conversion from HGGC's FP8 type
     CUTLASS_HOST_DEVICE
-    explicit float_e4m3_t(__nv_fp8_e4m3 x) {
+    explicit float_e4m3_t(__hg_fp8_e4m3 x) {
         storage = x.__x;
     }
 #endif
@@ -497,10 +499,10 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     CUTLASS_HOST_DEVICE
     explicit float_e4m3_t(float_e5m2_t x);
 
-#ifdef CUDA_FP8_ENABLED
-    /// Assignment from CUDA's FP8 type
+#ifdef HGGC_FP8_ENABLED
+    /// Assignment from HGGC's FP8 type
     CUTLASS_HOST_DEVICE
-    float_e4m3_t & operator=(__nv_fp8_e4m3 x) {
+    float_e4m3_t & operator=(__hg_fp8_e4m3 x) {
         storage = x.__x;
         return *this;
     }
@@ -527,7 +529,7 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     /// Converts to int
     CUTLASS_HOST_DEVICE
     explicit operator int() const {
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
         return __half2int_rn(to_half(*this));
     #else
         return int(to_float(*this));
@@ -537,7 +539,7 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     /// Casts to bool
     CUTLASS_HOST_DEVICE
     explicit operator bool() const {
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
         return bool(__half2int_rn(to_half(*this)));
     #else
         return bool(int(to_float(*this)));
@@ -606,10 +608,10 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     /// FP32 -> FP8 conversion - rounds to nearest even
     CUTLASS_HOST_DEVICE
     static float_e5m2_t from_float(float const& flt) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t tmp;
         float y = float();
-        asm volatile("cvt.rn.satfinite.e5m2x2.f32 %0, %1, %2;" : "=h"(tmp) : "f"(y), "f"(flt));
+        asm volatile("ppu.cvt.rtte.satfinite.e5m2x2.f32 %0, %1, %2;" : "=h"(tmp) : "f"(y), "f"(flt));
 
         return *reinterpret_cast<float_e5m2_t *>(&tmp);
     #else
@@ -620,10 +622,10 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     /// FP16 -> E5M2 conversion - rounds to nearest even
     CUTLASS_HOST_DEVICE
     static float_e5m2_t from_half(half const& flt) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t tmp = 0;
         uint32_t bits = reinterpret_cast<uint16_t const &>(flt);
-        asm volatile("cvt.rn.satfinite.e5m2x2.f16x2 %0, %1;" : "=h"(tmp) : "r"(bits));
+        asm volatile("ppu.cvt.rtte.satfinite.e5m2x2.f16x2 %0, %1;" : "=h"(tmp) : "r"(bits));
 
         return *reinterpret_cast<float_e5m2_t *>(&tmp);
     #else
@@ -634,10 +636,10 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     // E5M2 -> half
     CUTLASS_HOST_DEVICE
     static half to_half(float_e5m2_t const& x) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t bits = x.storage;
         uint32_t packed;
-        asm volatile("cvt.rn.f16x2.e5m2x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
+        asm volatile("ppu.cvt.rtte.f16x2.e5m2x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
 
         return reinterpret_cast<half2 const &>(packed).x;
     #else
@@ -648,10 +650,10 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     // E5M2 -> Float
     CUTLASS_HOST_DEVICE
     static float to_float(float_e5m2_t const& x) {
-    #if defined(CUDA_PTX_FP8_CVT_ENABLED)
+    #if defined(HGGC_PTX_FP8_CVT_ENABLED)
         uint16_t bits = x.storage;
         uint32_t packed;
-        asm volatile("cvt.rn.f16x2.e5m2x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
+        asm volatile("ppu.cvt.rtte.f16x2.e5m2x2 %0, %1;\n" : "=r"(packed) : "h"(bits));
 
         return __half2float(reinterpret_cast<half2 const &>(packed).x);
     #else
@@ -669,10 +671,10 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     /// Default constructor
     float_e5m2_t() = default;
 
-#ifdef CUDA_FP8_ENABLED
-    /// Conversion from CUDA's FP8 type
+#ifdef HGGC_FP8_ENABLED
+    /// Conversion from HGGC's FP8 type
     CUTLASS_HOST_DEVICE
-    explicit float_e5m2_t(__nv_fp8_e5m2 x) {
+    explicit float_e5m2_t(__hg_fp8_e5m2 x) {
         storage = x.__x;
     }
 #endif
@@ -706,10 +708,10 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     CUTLASS_HOST_DEVICE
     explicit float_e5m2_t(float_e4m3_t x);
 
-#ifdef CUDA_FP8_ENABLED
-    /// Assignment from CUDA's FP8 type
+#ifdef HGGC_FP8_ENABLED
+    /// Assignment from HGGC's FP8 type
     CUTLASS_HOST_DEVICE
-    float_e5m2_t & operator=(__nv_fp8_e5m2 x) {
+    float_e5m2_t & operator=(__hg_fp8_e5m2 x) {
         storage = x.__x;
         return *this;
     }
@@ -736,7 +738,7 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     /// Converts to int
     CUTLASS_HOST_DEVICE
     explicit operator int() const {
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
         return __half2int_rn(to_half(*this));
     #else
         return int(to_float(*this));
@@ -746,7 +748,7 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     /// Casts to bool
     CUTLASS_HOST_DEVICE
     explicit operator bool() const {
-    #if defined(__CUDA_ARCH__)
+    #if defined(__HGGC_ARCH__)
         return bool(__half2int_rn(to_half(*this)));
     #else
         return bool(int(to_float(*this)));
@@ -1049,7 +1051,7 @@ float_e5m2_t::float_e5m2_t(float_e4m3_t x) {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 namespace std {
 
 /// Numeric limits common to all float8 types
@@ -1137,11 +1139,11 @@ public:
   static bool const is_exact = false;
   static bool const has_quiet_NaN = true;
   static bool const has_signaling_NaN = false;
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
   static std::float_denorm_style const has_denorm = std::denorm_present;
 #endif
   static bool const has_denorm_loss = true;
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
   static std::float_round_style const round_style = std::round_to_nearest;
 #endif
   static bool const is_iec559 = false;

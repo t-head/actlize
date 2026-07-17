@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,8 +29,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-    \brief Defines iterators used by warp-level matrix multiply operations targeting Tensor Cores.
+    \brief Defines iterators used by warp-level matrix multiply operations targeting Tensor cells.
 */
 
 #pragma once
@@ -41,13 +43,13 @@
 #include "cutlass/tensor_ref.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
+#include "cutlass/arch/memory_ppu.h"
 #include "cutlass/gemm/gemm.h"
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/tensor.h"
 #include "cutlass/layout/pitch_linear.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm75.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu0010.h"
 
 #include "cutlass/platform/platform.h"
 #include "cutlass/fast_math.h"
@@ -1478,9 +1480,8 @@ class MmaTensorOpMultiplicandTileIterator<
     // Warp level iterator at most use double buffer to hide latency.  If there
     // are more than 2 sections, every stage should have more than 1 section.
 
-    // Turing silicon requires all 32 threads in a warp provide valid addresses
     // even for LDSM.1 and LDSM.2
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ == 750))
+#if (defined(__HGGC_ARCH__) && (__HGGC_ARCH__ == 100))
     lane_id = lane_id % (Policy::LdsmShape::kCount * Policy::kLdsmOpInner);
 #endif
 

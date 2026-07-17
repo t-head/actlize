@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -284,7 +286,7 @@ CUTE_HOST_DEVICE void print(rmem_ptr<T> ptr)
   printf("rmem_"); print(ptr.get());
 }
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 template <class T>
 CUTE_HOST std::ostream& operator<<(std::ostream& os, gmem_ptr<T> ptr)
 {
@@ -303,6 +305,6 @@ CUTE_HOST std::ostream& operator<<(std::ostream& os, rmem_ptr<T> ptr)
   return os << "rmem_[" << int(sizeof_bits<iter_value_t<T>>::value) << "b]";
 }
 
-#endif // !defined(__CUDACC_RTC__)
+#endif // !defined(__HGGCC_RTC__)
 
 } // end namespace cute

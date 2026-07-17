@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates exposing SIMD operators
 */
@@ -119,7 +121,6 @@ Accumulator dot(Array<T, N> const &a, Array<T, N> const &b, Accumulator accum) {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "simd_sm60.h"
-#include "simd_sm61.h"
+#include "simd_ppu.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

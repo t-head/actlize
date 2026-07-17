@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Implementation of a CTA-wide barrier for inter-CTA synchronization.
 */
@@ -97,15 +99,15 @@ protected:
   {
     int state = 0;
 
-#if (__CUDA_ARCH__ >= 700)
-    /// SM70 and newer use memory consistency qualifiers
+#if (__HGGC_ARCH__ >= 100)
+    /// PPU0010 and newer use memory consistency qualifiers
 
     // Acquire pattern using acquire modifier
-    asm volatile ("ld.global.acquire.gpu.b32 %0, [%1];\n" : "=r"(state) : "l"(ptr));
+    asm volatile ("ppu.ld.global.acquire.gpu.b32 %0, [%1];\n" : "=r"(state) : "l"(ptr));
 
 #else
-    asm volatile ("ld.cg.global.b32 %0, [%1];\n" : "=r"(state) : "l"(ptr));
-#endif // (__CUDA_ARCH__ >= 700)
+    asm volatile ("ppu.ld.cg.global.b32 %0, [%1];\n" : "=r"(state) : "l"(ptr));
+#endif // (__HGGC_ARCH__ >= 100)
 
     return state;
   }
@@ -115,18 +117,18 @@ protected:
   CUTLASS_DEVICE
   static void red_release(int *ptr, int val)
   {
-#if (__CUDA_ARCH__ >= 700)
-    /// SM70 and newer use memory consistency qualifiers
+#if (__HGGC_ARCH__ >= 100)
+    /// PPU0010 and newer use memory consistency qualifiers
 
     // Release pattern using acq_rel fence + relaxed modifier.  (The fence also releases data
     // that was weakly-written by other threads prior to the last syncthreads)
-    asm volatile ("fence.acq_rel.gpu;\n");
-    asm volatile ("red.relaxed.gpu.global.add.s32 [%0], %1;\n" : : "l"(ptr), "r"(val));
+    asm volatile ("ppu.fence.acq_rel.gpu;\n");
+    asm volatile ("ppu.atom.relaxed.gpu.global.add.s32 _, [%0], %1;\n" : : "l"(ptr), "r"(val));
 
 #else
     __threadfence();
     atomicAdd(ptr, val);
-#endif // (__CUDA_ARCH__ >= 700)
+#endif // (__HGGC_ARCH__ >= 100)
   }
 
 

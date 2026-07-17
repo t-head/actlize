@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,10 +29,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cstdint>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cstdint>
 #else
 #include <cstdint>
 #endif
@@ -164,7 +166,7 @@ using bin1_t = bool;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 
 #include <limits>
 
@@ -232,4 +234,4 @@ struct numeric_limits<cute::uint4b_t> {
 
 }  // namespace std
 
-#endif // !defined(__CUDACC_RTC__)
+#endif // !defined(__HGGCC_RTC__)

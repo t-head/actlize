@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Architecture-specific operators on memory
 */
@@ -60,9 +62,9 @@ struct global_load;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if (((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ >= 4)) || \
-     (__CUDACC_VER_MAJOR__ > 11)) &&                                  \
-    defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 750)
+#if (((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 4)) || \
+     (__HGGCCC_VER_MAJOR__ > 11)) &&                                  \
+    defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   #define CUTLASS_ENABLE_L2_PREFETCH 1
 #else
   #define CUTLASS_ENABLE_L2_PREFETCH 0
@@ -84,21 +86,21 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %9, 0;\n"
-        "  mov.b32 %0, %10;\n"
-        "  mov.b32 %1, %11;\n"
-        "  mov.b32 %2, %12;\n"
-        "  mov.b32 %3, %13;\n"
-        "  mov.b32 %4, %14;\n"
-        "  mov.b32 %5, %15;\n"
-        "  mov.b32 %6, %16;\n"
-        "  mov.b32 %7, %17;\n"
+        "  ppu.cmpp.ne.b32 p, %9, 0;\n"
+        "  ppu.mov.b32 %0, %10;\n"
+        "  ppu.mov.b32 %1, %11;\n"
+        "  ppu.mov.b32 %2, %12;\n"
+        "  ppu.mov.b32 %3, %13;\n"
+        "  ppu.mov.b32 %4, %14;\n"
+        "  ppu.mov.b32 %5, %15;\n"
+        "  ppu.mov.b32 %6, %16;\n"
+        "  ppu.mov.b32 %7, %17;\n"
 #if CUTLASS_ENABLE_L2_PREFETCH
-        "  @p ld.global.L2::128B.v4.u32 {%0, %1, %2, %3}, [%8];\n"
-        "  @p ld.global.L2::128B.v4.u32 {%4, %5, %6, %7}, [%18];\n"
+        "  @p ppu.ld.global.LLC::128B.v4.u32 {%0, %1, %2, %3}, [%8];\n"
+        "  @p ppu.ld.global.LLC::128B.v4.u32 {%4, %5, %6, %7}, [%18];\n"
 #else
-        "  @p ld.global.v4.u32 {%0, %1, %2, %3}, [%8];\n"
-        "  @p ld.global.v4.u32 {%4, %5, %6, %7}, [%18];\n"
+        "  @p ppu.ld.global.v4.u32 {%0, %1, %2, %3}, [%8];\n"
+        "  @p ppu.ld.global.v4.u32 {%4, %5, %6, %7}, [%18];\n"
 #endif
         "}\n"
         : "=r"(data[0].x), "=r"(data[0].y), "=r"(data[0].z), "=r"(data[0].w),
@@ -121,17 +123,17 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %9, 0;\n"
-        "  mov.b32 %0, %10;\n"
-        "  mov.b32 %1, %11;\n"
-        "  mov.b32 %2, %12;\n"
-        "  mov.b32 %3, %13;\n"
-        "  mov.b32 %4, %14;\n"
-        "  mov.b32 %5, %15;\n"
-        "  mov.b32 %6, %16;\n"
-        "  mov.b32 %7, %17;\n"
-        "  @p ld.global.lu.v4.u32 {%0, %1, %2, %3}, [%8];\n"
-        "  @p ld.global.lu.v4.u32 {%4, %5, %6, %7}, [%18];\n"
+        "  ppu.cmpp.ne.b32 p, %9, 0;\n"
+        "  ppu.mov.b32 %0, %10;\n"
+        "  ppu.mov.b32 %1, %11;\n"
+        "  ppu.mov.b32 %2, %12;\n"
+        "  ppu.mov.b32 %3, %13;\n"
+        "  ppu.mov.b32 %4, %14;\n"
+        "  ppu.mov.b32 %5, %15;\n"
+        "  ppu.mov.b32 %6, %16;\n"
+        "  ppu.mov.b32 %7, %17;\n"
+        "  @p ppu.ld.global.lu.v4.u32 {%0, %1, %2, %3}, [%8];\n"
+        "  @p ppu.ld.global.lu.v4.u32 {%4, %5, %6, %7}, [%18];\n"
         "}\n"
         : "=r"(data[0].x), "=r"(data[0].y), "=r"(data[0].z), "=r"(data[0].w),
           "=r"(data[1].x), "=r"(data[1].y), "=r"(data[1].z), "=r"(data[1].w)
@@ -152,15 +154,15 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %5, 0;\n"
-        "  mov.b32 %0, %6;\n"
-        "  mov.b32 %1, %7;\n"
-        "  mov.b32 %2, %8;\n"
-        "  mov.b32 %3, %9;\n"
+        "  ppu.cmpp.ne.b32 p, %5, 0;\n"
+        "  ppu.mov.b32 %0, %6;\n"
+        "  ppu.mov.b32 %1, %7;\n"
+        "  ppu.mov.b32 %2, %8;\n"
+        "  ppu.mov.b32 %3, %9;\n"
 #if CUTLASS_ENABLE_L2_PREFETCH
-        "  @p ld.global.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4];\n"
+        "  @p ppu.ld.global.LLC::128B.v4.u32 {%0, %1, %2, %3}, [%4];\n"
 #else
-        "  @p ld.global.v4.u32 {%0, %1, %2, %3}, [%4];\n"
+        "  @p ppu.ld.global.v4.u32 {%0, %1, %2, %3}, [%4];\n"
 #endif
         "}\n"
         : "=r"(data.x), "=r"(data.y), "=r"(data.z), "=r"(data.w)
@@ -179,12 +181,12 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %5, 0;\n"
-        "  mov.b32 %0, %6;\n"
-        "  mov.b32 %1, %7;\n"
-        "  mov.b32 %2, %8;\n"
-        "  mov.b32 %3, %9;\n"
-        "  @p ld.global.lu.v4.u32 {%0, %1, %2, %3}, [%4];\n"
+        "  ppu.cmpp.ne.b32 p, %5, 0;\n"
+        "  ppu.mov.b32 %0, %6;\n"
+        "  ppu.mov.b32 %1, %7;\n"
+        "  ppu.mov.b32 %2, %8;\n"
+        "  ppu.mov.b32 %3, %9;\n"
+        "  @p ppu.ld.global.lu.v4.u32 {%0, %1, %2, %3}, [%4];\n"
         "}\n"
         : "=r"(data.x), "=r"(data.y), "=r"(data.z), "=r"(data.w)
         : "l"(ptr), "r"((int)pred_guard), "r"(data.x), "r"(data.y), "r"(data.z), "r"(data.w));
@@ -203,13 +205,13 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %3, 0;\n"
-        "  mov.b32 %0, %4;\n"
-        "  mov.b32 %1, %5;\n"
+        "  ppu.cmpp.ne.b32 p, %3, 0;\n"
+        "  ppu.mov.b32 %0, %4;\n"
+        "  ppu.mov.b32 %1, %5;\n"
 #if CUTLASS_ENABLE_L2_PREFETCH
-        "  @p ld.global.L2::128B.v2.u32 {%0, %1}, [%2];\n"
+        "  @p ppu.ld.global.LLC::128B.v2.u32 {%0, %1}, [%2];\n"
 #else
-        "  @p ld.global.v2.u32 {%0, %1}, [%2];\n"
+        "  @p ppu.ld.global.v2.u32 {%0, %1}, [%2];\n"
 #endif
         "}\n"
         : "=r"(data.x), "=r"(data.y)
@@ -229,10 +231,10 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %3, 0;\n"
-        "  mov.b32 %0, %4;\n"
-        "  mov.b32 %1, %5;\n"
-        "  @p ld.global.lu.v2.u32 {%0, %1}, [%2];\n"
+        "  ppu.cmpp.ne.b32 p, %3, 0;\n"
+        "  ppu.mov.b32 %0, %4;\n"
+        "  ppu.mov.b32 %1, %5;\n"
+        "  @p ppu.ld.global.lu.v2.u32 {%0, %1}, [%2];\n"
         "}\n"
         : "=r"(data.x), "=r"(data.y)
         : "l"(ptr), "r"((int)pred_guard), "r"(data.x), "r"(data.y));
@@ -251,12 +253,12 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %2, 0;\n"
-        "  mov.b32 %0, %3;\n"
+        "  ppu.cmpp.ne.b32 p, %2, 0;\n"
+        "  ppu.mov.b32 %0, %3;\n"
 #if CUTLASS_ENABLE_L2_PREFETCH
-        "  @p ld.global.L2::128B.u32 %0, [%1];\n"
+        "  @p ppu.ld.global.LLC::128B.u32 %0, [%1];\n"
 #else
-        "  @p ld.global.u32 %0, [%1];\n"
+        "  @p ppu.ld.global.u32 %0, [%1];\n"
 #endif
         "}\n"
         : "=r"(data)
@@ -276,9 +278,9 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %2, 0;\n"
-        "  mov.b32 %0, %3;\n"
-        "  @p ld.global.lu.u32 %0, [%1];\n"
+        "  ppu.cmpp.ne.b32 p, %2, 0;\n"
+        "  ppu.mov.b32 %0, %3;\n"
+        "  @p ppu.ld.global.lu.u32 %0, [%1];\n"
         "}\n"
         : "=r"(data)
         : "l"(ptr), "r"((int)pred_guard), "r"(data));
@@ -297,12 +299,12 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %2, 0;\n"
-        "  mov.b16 %0, %3;\n"
+        "  ppu.cmpp.ne.b32 p, %2, 0;\n"
+        "  ppu.mov.b16 %0, %3;\n"
 #if CUTLASS_ENABLE_L2_PREFETCH
-        "  @p ld.global.L2::128B.u16 %0, [%1];\n"
+        "  @p ppu.ld.global.LLC::128B.u16 %0, [%1];\n"
 #else
-        "  @p ld.global.u16 %0, [%1];\n"
+        "  @p ppu.ld.global.u16 %0, [%1];\n"
 #endif
         "}\n"
         : "=h"(data)
@@ -322,9 +324,9 @@ struct global_load<AccessType,
     asm volatile(
         "{\n"
         "  .reg .pred p;\n"
-        "  setp.ne.b32 p, %2, 0;\n"
-        "  mov.b16 %0, %3;\n"
-        "  @p ld.global.lu.u16 %0, [%1];\n"
+        "  ppu.cmpp.ne.b32 p, %2, 0;\n"
+        "  ppu.mov.b16 %0, %3;\n"
+        "  @p ppu.ld.global.lu.u16 %0, [%1];\n"
         "}\n"
         : "=h"(data)
         : "l"(ptr), "r"((int)pred_guard), "h"(data));
@@ -368,11 +370,11 @@ struct global_store<AccessType, 64> {
   asm volatile(
       "{\n"
       "  .reg .pred p;\n"
-      "  setp.ne.b32 p, %5, 0;\n"
-      "  @p st.global.v4.u32 [%0], {%1, %2, %3, %4};\n"
-      "  @p st.global.v4.u32 [%6], {%7, %8, %9, %10};\n"
-      "  @p st.global.v4.u32 [%11], {%12, %13, %14, %15};\n"
-      "  @p st.global.v4.u32 [%16], {%17, %18, %19, %20};\n"
+      "  ppu.cmpp.ne.b32 p, %5, 0;\n"
+      "  @p ppu.st.global.v4.u32 [%0], {%1, %2, %3, %4};\n"
+      "  @p ppu.st.global.v4.u32 [%6], {%7, %8, %9, %10};\n"
+      "  @p ppu.st.global.v4.u32 [%11], {%12, %13, %14, %15};\n"
+      "  @p ppu.st.global.v4.u32 [%16], {%17, %18, %19, %20};\n"
       "}\n"
       :
       : "l"(ptr), "r"(data[0].x), "r"(data[0].y), "r"(data[0].z),
@@ -395,9 +397,9 @@ struct global_store<AccessType, 32> {
   asm volatile(
       "{\n"
       "  .reg .pred p;\n"
-      "  setp.ne.b32 p, %5, 0;\n"
-      "  @p st.global.v4.u32 [%0], {%1, %2, %3, %4};\n"
-      "  @p st.global.v4.u32 [%6], {%7, %8, %9, %10};\n"
+      "  ppu.cmpp.ne.b32 p, %5, 0;\n"
+      "  @p ppu.st.global.v4.u32 [%0], {%1, %2, %3, %4};\n"
+      "  @p ppu.st.global.v4.u32 [%6], {%7, %8, %9, %10};\n"
       "}\n"
       :
       : "l"(ptr), "r"(data[0].x), "r"(data[0].y), "r"(data[0].z),
@@ -414,8 +416,8 @@ struct global_store<AccessType, 16> {
   asm volatile(
       "{\n"
       "  .reg .pred p;\n"
-      "  setp.ne.b32 p, %5, 0;\n"
-      "  @p st.global.v4.u32 [%0], {%1, %2, %3, %4};\n"
+      "  ppu.cmpp.ne.b32 p, %5, 0;\n"
+      "  @p ppu.st.global.v4.u32 [%0], {%1, %2, %3, %4};\n"
       "}\n"
       :
       : "l"(ptr), "r"(data.x), "r"(data.y), "r"(data.z), "r"(data.w), "r"((int)pred_guard));
@@ -430,8 +432,8 @@ struct global_store<AccessType, 8> {
   asm volatile(
       "{\n"
       "  .reg .pred p;\n"
-      "  setp.ne.b32 p, %3, 0;\n"
-      "  @p st.global.v2.u32 [%0], {%1, %2};\n"
+      "  ppu.cmpp.ne.b32 p, %3, 0;\n"
+      "  @p ppu.st.global.v2.u32 [%0], {%1, %2};\n"
       "}\n"
       :
       : "l"(ptr), "r"(data.x), "r"(data.y), "r"((int)pred_guard));
@@ -446,8 +448,8 @@ struct global_store<AccessType, 4> {
   asm volatile(
       "{\n"
       "  .reg .pred p;\n"
-      "  setp.ne.b32 p, %2, 0;\n"
-      "  @p st.global.u32 [%0], %1;\n"
+      "  ppu.cmpp.ne.b32 p, %2, 0;\n"
+      "  @p ppu.st.global.u32 [%0], %1;\n"
       "}\n"
       :
       : "l"(ptr), "r"(data), "r"((int)pred_guard));
@@ -462,8 +464,8 @@ struct global_store<AccessType, 2> {
   asm volatile(
       "{\n"
       "  .reg .pred p;\n"
-      "  setp.ne.b32 p, %2, 0;\n"
-      "  @p st.global.u16 [%0], %1;\n"
+      "  ppu.cmpp.ne.b32 p, %2, 0;\n"
+      "  @p ppu.st.global.u16 [%0], %1;\n"
       "}\n"
       :
       : "l"(ptr), "h"(data), "r"((int)pred_guard));
@@ -490,7 +492,7 @@ void shared_load(void *dst, uint32_t ptr);
 template <>
 CUTLASS_DEVICE
 void shared_load<2>(void *dst, uint32_t ptr) {
-  asm volatile("ld.shared.u16 %0, [%1];\n"
+  asm volatile("ppu.ld.shared.u16 %0, [%1];\n"
     : "=h"(*reinterpret_cast<uint16_t *>(dst))
     : "r"(ptr));
 }
@@ -499,7 +501,7 @@ void shared_load<2>(void *dst, uint32_t ptr) {
 template <>
 CUTLASS_DEVICE
 void shared_load<4>(void *dst, uint32_t ptr) {
-  asm volatile("ld.shared.u32 %0, [%1];\n"
+  asm volatile("ppu.ld.shared.u32 %0, [%1];\n"
     : "=r"(*reinterpret_cast<uint32_t *>(dst))
     : "r"(ptr));
 }
@@ -509,7 +511,7 @@ template <>
 CUTLASS_DEVICE
 void shared_load<8>(void *dst, uint32_t ptr) {
   uint2 *dst_u64 = reinterpret_cast<uint2 *>(dst);
-  asm volatile("ld.shared.v2.u32 {%0, %1}, [%2];\n"
+  asm volatile("ppu.ld.shared.v2.u32 {%0, %1}, [%2];\n"
     :
       "=r"(dst_u64->x),
       "=r"(dst_u64->y)
@@ -521,7 +523,7 @@ template <>
 CUTLASS_DEVICE
 void shared_load<16>(void *dst, uint32_t ptr) {
   uint4 *dst_u128 = reinterpret_cast<uint4 *>(dst);
-  asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];\n"
+  asm volatile("ppu.ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];\n"
     :
       "=r"(dst_u128->x),
       "=r"(dst_u128->y),
@@ -542,7 +544,7 @@ void shared_store(uint32_t ptr, void const *src);
 template <>
 CUTLASS_DEVICE
 void shared_store<2>(uint32_t ptr, void const *src) {
-  asm volatile("st.shared.u16 [%0], %1;\n"
+  asm volatile("ppu.st.shared.u16 [%0], %1;\n"
     : :
     "r"(ptr),
     "h"(*reinterpret_cast<uint16_t const *>(src))
@@ -553,7 +555,7 @@ void shared_store<2>(uint32_t ptr, void const *src) {
 template <>
 CUTLASS_DEVICE
 void shared_store<4>(uint32_t ptr, void const *src) {
-  asm volatile("st.shared.u32 [%0], %1;\n"
+  asm volatile("ppu.st.shared.u32 [%0], %1;\n"
     : :
     "r"(ptr),
     "r"(*reinterpret_cast<uint32_t const  *>(src))
@@ -565,7 +567,7 @@ template <>
 CUTLASS_DEVICE
 void shared_store<8>(uint32_t ptr, void const *src) {
   uint2 const *dst_u64 = reinterpret_cast<uint2 const *>(src);
-  asm volatile("st.shared.v2.u32 [%0], {%1, %2};\n"
+  asm volatile("ppu.st.shared.v2.u32 [%0], {%1, %2};\n"
     : :
       "r"(ptr),
       "r"(dst_u64->x),
@@ -578,7 +580,7 @@ template <>
 CUTLASS_DEVICE
 void shared_store<16>(uint32_t ptr, void const *src) {
   uint4 const *dst_u128 = reinterpret_cast<uint4 const *>(src);
-  asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};\n"
+  asm volatile("ppu.st.shared.v4.u32 [%0], {%1, %2, %3, %4};\n"
     : :
       "r"(ptr),
       "r"(dst_u128->x),
@@ -595,7 +597,6 @@ void shared_store<16>(uint32_t ptr, void const *src) {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "cutlass/arch/memory_sm75.h"
-#include "cutlass/arch/memory_sm80.h"
+#include "cutlass/arch/memory_ppu.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,4 +1,5 @@
-/******************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -27,13 +28,13 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- ******************************************************************************/
+ **************************************************************************************************/
 
 #pragma once
 
 /**
  * \file
- * \brief cuda kernels to transform a device memory tensor from NHWC layout to NCHW layout.
+ * \brief hggc kernels to transform a device memory tensor from NHWC layout to NCHW layout.
  */
 
 #include "cutlass/cutlass.h"
@@ -52,7 +53,7 @@ void nhwc_to_nchw(cutlass::Tensor4DCoord input_tensor_size,
                   cutlass::Tensor4DCoord output_tensor_size,
                   TensorRef<T, layout::TensorNHWC> ref_input,
                   TensorRef<T, layout::TensorNCHW> ref_output,
-                  cudaStream_t stream);
+                  hggcStream_t stream);
 
 
 template <typename T>
@@ -121,7 +122,7 @@ void nhwc_to_nchw(cutlass::Tensor4DCoord input_tensor_size,
                   cutlass::Tensor4DCoord output_tensor_size,
                   TensorRef<T, layout::TensorNHWC> ref_input,
                   TensorRef<T, layout::TensorNCHW> ref_output,
-                  cudaStream_t stream) {
+                  hggcStream_t stream) {
   
   assert(
     input_tensor_size.n() == output_tensor_size.n() &&

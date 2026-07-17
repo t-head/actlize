@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates exposing architecture support for warp-level multiply-add operations
 */
@@ -83,8 +85,6 @@ struct Mma;
 // Overloads specialized for existing architectures
 //
 
-#include "cutlass/gemm/thread/mma_sm50.h"
-#include "cutlass/gemm/thread/mma_sm60.h"
-#include "cutlass/gemm/thread/mma_sm61.h"
+#include "cutlass/gemm/thread/mma_ppu0010.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

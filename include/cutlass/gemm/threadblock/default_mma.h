@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for a pipelined GEMM kernel. Does not compute batching or support split-K.
 */
@@ -37,7 +39,6 @@
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/arch/arch.h"
-#include "cutlass/arch/wmma.h"
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/permute.h"
@@ -46,13 +47,7 @@
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/threadblock/default_mma_core_simt.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm70.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm75.h"
-#include "cutlass/gemm/threadblock/default_mma_core_sm80.h"
-
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-#include "cutlass/gemm/threadblock/default_mma_core_wmma.h"
-#endif //CUTLASS_ARCH_WMMA_ENABLED
+#include "cutlass/gemm/threadblock/default_mma_core_ppu0010.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -693,128 +688,6 @@ struct DefaultMma<int8_t, LayoutA, kAlignmentA, int8_t, LayoutB, kAlignmentB,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-
-#if defined(CUTLASS_ARCH_WMMA_ENABLED)
-/// Specialization for Wmma TensorOp operator with 2 staged pipeline
-template <
-    ///< Element type for A matrix operand
-    typename ElementA,
-    /// Layout type for A matrix operand
-    typename LayoutA,
-    /// Access granularity of A matrix in units of elements
-    int kAlignmentA,
-    /// Element type for B matrix operand
-    typename ElementB,
-    /// Layout type for B matrix operand
-    typename LayoutB,
-    /// Access granularity of B matrix in units of elements
-    int kAlignmentB,
-    /// Element type for internal accumulation
-    typename ElementAccumulator,
-    /// Layout type for C and D matrix operands
-    typename LayoutC,
-    /// Tag indicating architecture to tune for
-    typename ArchTag,
-    /// Threadblock-level tile size (concept: GemmShape)
-    typename ThreadblockShape,
-    /// Warp-level tile size (concept: GemmShape)
-    typename WarpShape,
-    /// Instruction-level tile size (concept: GemmShape)
-    typename InstructionShape,
-    /// Operation performed by GEMM
-    typename Operator>
-struct DefaultMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB,
-                  kAlignmentB, ElementAccumulator, LayoutC,
-                  arch::OpClassWmmaTensorOp, ArchTag, ThreadblockShape, WarpShape,
-                  InstructionShape, 2, Operator, false, SharedMemoryClearOption::kNone,
-                  false, false, layout::NoPermute, layout::NoPermute> {
-  // Define the MmaCore components
-  using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
-      ThreadblockShape, WarpShape, InstructionShape, ElementA, LayoutA,
-      ElementB, LayoutB, ElementAccumulator, LayoutC,
-      arch::OpClassWmmaTensorOp, 2, Operator>;
-
-  // Define iterators over tiles from the A operand
-  using IteratorA =
-      cutlass::transform::threadblock::PredicatedTileIterator<
-          cutlass::MatrixShape<MmaCore::Shape::kM, MmaCore::Shape::kK>,
-          ElementA, LayoutA, 1, typename MmaCore::IteratorThreadMapA, kAlignmentA>;
-
-  // Define iterators over tiles from the B operand
-  using IteratorB =
-      cutlass::transform::threadblock::PredicatedTileIterator<
-          cutlass::MatrixShape<MmaCore::Shape::kK, MmaCore::Shape::kN>,
-          ElementB, LayoutB, 0, typename MmaCore::IteratorThreadMapB, kAlignmentB>;
-
-  // Define the threadblock-scoped pipelined matrix multiply
-  using ThreadblockMma = cutlass::gemm::threadblock::MmaPipelined<
-      typename MmaCore::Shape, IteratorA, typename MmaCore::SmemIteratorA,
-      IteratorB, typename MmaCore::SmemIteratorB, ElementAccumulator,
-      LayoutC, typename MmaCore::MmaPolicy>;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
-/// Specialization for Wmma TensorOp operator with 1 staged pipeline
-template <
-    ///< Element type for A matrix operand
-    typename ElementA,
-    /// Layout type for A matrix operand
-    typename LayoutA,
-    /// Access granularity of A matrix in units of elements
-    int kAlignmentA,
-    /// Element type for B matrix operand
-    typename ElementB,
-    /// Layout type for B matrix operand
-    typename LayoutB,
-    /// Access granularity of B matrix in units of elements
-    int kAlignmentB,
-    /// Element type for internal accumulation
-    typename ElementAccumulator,
-    /// Layout type for C and D matrix operands
-    typename LayoutC,
-    /// Tag indicating architecture to tune for
-    typename ArchTag,
-    /// Threadblock-level tile size (concept: GemmShape)
-    typename ThreadblockShape,
-    /// Warp-level tile size (concept: GemmShape)
-    typename WarpShape,
-    /// Instruction-level tile size (concept: GemmShape)
-    typename InstructionShape,
-    /// Operation performed by GEMM
-    typename Operator>
-struct DefaultMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB,
-                  kAlignmentB, ElementAccumulator, LayoutC,
-                  arch::OpClassWmmaTensorOp, ArchTag, ThreadblockShape, WarpShape,
-                  InstructionShape, 1, Operator, false, SharedMemoryClearOption::kNone,
-                  false, false, layout::NoPermute, layout::NoPermute> {
-  // Define the MmaCore components
-  using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<
-      ThreadblockShape, WarpShape, InstructionShape, ElementA, LayoutA,
-      ElementB, LayoutB, ElementAccumulator, LayoutC,
-      arch::OpClassWmmaTensorOp, 1, Operator>; 
-
-  // Define iterators over tiles from the A operand
-  using IteratorA =
-      cutlass::transform::threadblock::PredicatedTileIterator<
-          cutlass::MatrixShape<MmaCore::Shape::kM, MmaCore::Shape::kK>,
-          ElementA, LayoutA, 1, typename MmaCore::IteratorThreadMapA, kAlignmentA>;
-
-  // Define iterators over tiles from the B operand
-  using IteratorB =
-      cutlass::transform::threadblock::PredicatedTileIterator<
-          cutlass::MatrixShape<MmaCore::Shape::kK, MmaCore::Shape::kN>,
-          ElementB, LayoutB, 0, typename MmaCore::IteratorThreadMapB, kAlignmentB>;
-
-  // Define the threadblock-scoped singlestage matrix multiply
-  using ThreadblockMma = cutlass::gemm::threadblock::MmaSingleStage<
-      typename MmaCore::Shape, IteratorA, typename MmaCore::SmemIteratorA,
-      IteratorB, typename MmaCore::SmemIteratorB, ElementAccumulator,
-      LayoutC, typename MmaCore::MmaPolicy>;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-#endif //CUTLASS_ARCH_WMMA_ENABLED
 
 } // namespace threadblock
 } // namespace gemm

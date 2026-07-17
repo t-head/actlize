@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Gemm kernel with fused reduction operation.
 */
@@ -281,10 +283,10 @@ public:
     /// Constructor
     Params(
       Arguments const &args,  /// GEMM application arguments
-      int device_sms,         /// Number of SMs on the device
-      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+      int device_cus,         /// Number of CUs on the device
+      int cu_occupancy)       /// Kernel CU occupancy (in thread blocks)
     :
-      ParamsBase(args, device_sms, sm_occupancy),
+      ParamsBase(args, device_cus, cu_occupancy),
       params_A(args.lda),
       params_B(args.ldb),
       params_C1(args.ldc1),
@@ -1012,10 +1014,10 @@ public:
     /// Constructor
     Params(
       Arguments const &args,  /// GEMM application arguments
-      int device_sms,         /// Number of SMs on the device
-      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+      int device_cus,         /// Number of CUs on the device
+      int cu_occupancy)       /// Kernel CU occupancy (in thread blocks)
     :
-      ParamsBase(args, device_sms, sm_occupancy),
+      ParamsBase(args, device_cus, cu_occupancy),
       params_A(args.lda),
       params_B(args.ldb),
       params_C(args.ldc),

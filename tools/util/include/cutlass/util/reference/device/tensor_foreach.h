@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <stdexcept>
@@ -48,17 +50,17 @@ struct TensorForEach {
   TensorForEach(
     Coord<Rank> size, Params params = Params(),
     int grid_size = 0, int block_size = 0,
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
 
     if (!grid_size || !block_size) {
 
-      // if grid_size or block_size are zero, query occupancy using the CUDA Occupancy API
-      cudaError_t result = cudaOccupancyMaxPotentialBlockSize(
+      // if grid_size or block_size are zero, query occupancy using the device Occupancy API
+      hggcError_t result = hggcOccupancyMaxPotentialBlockSize(
         &grid_size,
         &block_size,
         reinterpret_cast<void const *>(kernel::TensorForEach<Func, Rank, Params>));
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         throw std::runtime_error("Failed to query occupancy.");
       }
 
@@ -84,7 +86,7 @@ struct TensorDiagonalForEach {
   TensorDiagonalForEach(
     Coord<Rank> size, Params params = Params(),
     int start = 0, int end = -1,
-    int block_size = 128, cudaStream_t stream = nullptr) {
+    int block_size = 128, hggcStream_t stream = nullptr) {
 
     if (end < 0) {
       end = size.min();
@@ -111,17 +113,17 @@ struct BlockForEach {
     typename Func::Params params = typename Func::Params(),
     int grid_size = 0,
     int block_size = 0,
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
 
     if (!grid_size || !block_size) {
 
-      // if grid_size or block_size are zero, query occupancy using the CUDA Occupancy API
-      cudaError_t result = cudaOccupancyMaxPotentialBlockSize(
+      // if grid_size or block_size are zero, query occupancy using the device Occupancy API
+      hggcError_t result = hggcOccupancyMaxPotentialBlockSize(
         &grid_size,
         &block_size,
         reinterpret_cast<void const *>(kernel::BlockForEach<Element, Func>));
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         throw std::runtime_error("Failed to query occupancy.");
       }
 

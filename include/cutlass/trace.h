@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Helpers for optionally tracing through code when debugging.
 
@@ -46,7 +48,7 @@
 #if CUTLASS_DEBUG_TRACE_LEVEL
 #include <iostream>
 #include "cutlass/core_io.h"
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
 #define CUTLASS_TRACE_HOST(x)
 #else
 #define CUTLASS_TRACE_HOST(x) { std::cout << __FILE__ << ":" << __LINE__ << "  " << x << std::endl; }

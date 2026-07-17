@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /* \file
   \brief Performs comparison between two elements with support for floating-point comparisons.
 */
@@ -56,8 +58,8 @@ template <typename T>
 CUTLASS_HOST_DEVICE
 bool relatively_equal_float(T a, T b, T epsilon, T nonzero_floor) {
   
-#if defined(__CUDACC_RTC__)
-  using cuda::std::abs;
+#if defined(__HGGCCC_RTC__)
+  using hggc::std::abs;
 #else
   using std::abs;
 #endif

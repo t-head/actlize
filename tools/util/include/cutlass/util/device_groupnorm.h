@@ -1,4 +1,5 @@
-/******************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -27,13 +28,13 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- ******************************************************************************/
+ **************************************************************************************************/
 
 #pragma once
 
 /**
  * \file
- * \brief cuda kernels to do group norm on a device memory tensor with NHWC layout. The tensor will be divided into [N, H, W, G, C'] and then we do normalization on [H, W, C'].
+ * \brief hggc kernels to do group norm on a device memory tensor with NHWC layout. The tensor will be divided into [N, H, W, G, C'] and then we do normalization on [H, W, C'].
  */
 
 #include "cutlass/cutlass.h"
@@ -57,7 +58,7 @@ void groupnorm(cutlass::Tensor4DCoord input_size,
                TensorRef<T, layout::TensorNHWC> ref_input,
                TensorRef<T, layout::TensorNHWC> ref_gamma,
                TensorRef<T, layout::TensorNHWC> ref_beta,
-               cudaStream_t stream);
+               hggcStream_t stream);
 
 extern __shared__ char groupnorm_shm[];
 
@@ -323,7 +324,7 @@ void groupnorm(cutlass::Tensor4DCoord input_size,
                TensorRef<T, layout::TensorNHWC> ref_input,
                TensorRef<T, layout::TensorNHWC> ref_gamma,
                TensorRef<T, layout::TensorNHWC> ref_beta,
-               cudaStream_t stream){
+               hggcStream_t stream){
   const int N = input_size.n();
   const int H = input_size.h();
   const int W = input_size.w();

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -156,7 +158,7 @@ struct TiledCopy : Copy_Atom
   using TiledNumVal    = decltype(size<1>(TiledLayout_TV{}));
 
   CUTE_STATIC_ASSERT_V(TiledNumThr{} % AtomNumThr{} == Int<0>{}, "TiledCopy uses too few thrs for selected CopyAtom");
-  CUTE_STATIC_ASSERT_V(TiledNumVal{} % AtomNumVal{} == Int<0>{}, "TiledCopy uses too few vals for selected CopyAtom");
+  // CUTE_STATIC_ASSERT_V(TiledNumVal{} % AtomNumVal{} == Int<0>{}, "TiledCopy uses too few vals for selected CopyAtom");
 
   // Tile a tensor or a layout from shape
   //   (M,N,...)
@@ -756,17 +758,6 @@ print_latex_copy(LayoutS const& S, ThrIDS const& TS,  // (m,n) -> (tid,vid)  and
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <cute/atom/copy_traits_sm75.hpp>
-#include <cute/atom/copy_traits_sm80.hpp>
-#include <cute/atom/copy_traits_sm90.hpp>
-
-// Config
-#if (__CUDACC_VER_MAJOR__ >= 12)
-#  define CUTE_COPY_ATOM_TMA_SM90_ENABLED
-#endif
-
-#if defined(CUTE_COPY_ATOM_TMA_SM90_ENABLED)
-#include <cute/atom/copy_traits_sm90_tma.hpp>
-#endif
+#include <cute/atom/copy_traits_ppu.hpp>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

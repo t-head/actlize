@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Templates implementing computing the addresses of storing of tiles
    from pitch-linear rank=2 tensors.
@@ -38,7 +40,7 @@
 #include "cutlass/array.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/layout/pitch_linear.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm75.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu0010.h"
 #include "cutlass/matrix_coord.h"
 #include "cutlass/matrix_shape.h"
 #include "cutlass/tensor_ref.h"

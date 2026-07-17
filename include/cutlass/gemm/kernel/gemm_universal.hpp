@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include "cutlass/gemm/kernel/tile_scheduler.hpp"
@@ -76,17 +78,24 @@ struct IsCutlass3ArrayKernel<ProblemShape, cute::void_t<typename ProblemShape::U
 
 ////////////////////////////////////////////////////////////////////////////////
 
+namespace detail {
+
+// IF_SWAP_AB<T>::value will be true only if:
+//   class T has member SwapAB and T::SwapAB is true
+template <typename T, typename = void>
+struct IF_SWAP_AB { static constexpr bool value = false; };
+
+template <typename T>
+struct IF_SWAP_AB<T, cute::void_t<decltype(T::SwapAB)>>
+{ static constexpr bool value = T::SwapAB; };
+
+} // namespace detail
+
+////////////////////////////////////////////////////////////////////////////////
+
 } // namespace cutlass::gemm::kernel
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "cutlass/gemm/kernel/sm70_gemm.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_tma.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_warpspecialized.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_warpspecialized_pingpong.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_warpspecialized_cooperative.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_pingpong.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp"
-#include "cutlass/gemm/kernel/sm90_gemm_array_tma_warpspecialized_cooperative.hpp"
+#include "cutlass/gemm/kernel/ppu0010_gemm.hpp"
 ////////////////////////////////////////////////////////////////////////////////

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -33,7 +34,7 @@
 
 /**
  * \file
- * \brief C++ features that may be otherwise unimplemented for CUDA device functions.
+ * \brief C++ features that may be otherwise unimplemented for HGGC device functions.
  *
  * This file has three components:
  *
@@ -48,9 +49,9 @@
  *
  *       - Macro functions that we need in constant expressions because the
  *         C++ equivalents require constexpr compiler support.  These are
- *         prefixed with \p __NV_STD_*
- *           - \p __NV_STD_MAX
- *           - \p __NV_STD_MIN
+ *         prefixed with \p __HGGC_STD_*
+ *           - \p __HGGC_STD_MAX
+ *           - \p __HGGC_STD_MIN
  *
  *   (2) Re-implementations of STL functions and types:
  *       - C++ features that need the \p __device__ annotation.  These are
@@ -91,7 +92,7 @@
  *           - \p aligned_storage
  *
  * The idea is that, as we drop support for older compilers, we can simply #define
- * the \p __NV_STD_XYZ macros and \p platform namespace to alias their C++
+ * the \p __HGGC_STD_XYZ macros and \p platform namespace to alias their C++
  * counterparts (or trivially find-and-replace their occurrences in code text).
  */
 
@@ -109,17 +110,17 @@
 // Dependencies
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/type_traits>
-#include <cuda/std/utility>
-#include <cuda/std/cstddef>
-#include <cuda/std/cstdint>
-#include <cuda/std/limits>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/type_traits>
+#include <hggc/std/utility>
+#include <hggc/std/cstddef>
+#include <hggc/std/cstdint>
+#include <hggc/std/limits>
 #else
 #include <stdint.h>
 #endif
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 //-----------------------------------------------------------------------------
 // Include STL files that platform provides functionality for
 //-----------------------------------------------------------------------------
@@ -129,11 +130,11 @@
 #include <functional>  // Arithmetic operations
 #include <utility>     // For methods on std::pair
 #include <limits>      // float_round_style, float_denorm_style
-#if (!defined(_MSC_VER) && (__cplusplus >= 201103L)) || (defined(_MSC_VER) && (_MS_VER >= 1500))
+#if __cplusplus >= 201103L
 #include <type_traits>  // For integral constants, conditional metaprogramming, and type traits
 #endif
 
-#include <vector_types.h>
+// hggc_vector_types.h removed: vector_types.h from SDK already provides dim3, uint3 etc.
 #include <cutlass/cutlass.h>
 
 #endif
@@ -141,17 +142,14 @@
 //-----------------------------------------------------------------------------
 // OS
 //-----------------------------------------------------------------------------
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-#define CUTLASS_OS_WINDOWS
-#endif
 
 /******************************************************************************
  * Macros
  ******************************************************************************/
 /// std
 #if !defined(CUTLASS_STL_NAMESPACE)
-#if defined(__CUDACC_RTC__)
-#define CUTLASS_STL_NAMESPACE cuda::std
+#if defined(__HGGCCC_RTC__)
+#define CUTLASS_STL_NAMESPACE hggc::std
 #else
 #define CUTLASS_STL_NAMESPACE std
 #endif
@@ -171,7 +169,7 @@
 //-----------------------------------------------------------------------------
 
 /// noexcept, constexpr
-#if (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1900))
+#if __cplusplus < 201103L
 #ifndef noexcept
 #define noexcept
 #endif
@@ -181,14 +179,14 @@
 #endif
 
 /// nullptr
-#if (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1310))
+#if __cplusplus < 201103L
 #ifndef nullptr
 #define nullptr 0
 #endif
 #endif
 
 /// static_assert
-#if (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1600))
+#if __cplusplus < 201103L
 #ifndef static_assert
 #define __platform_cat_(a, b) a##b
 #define __platform_cat(a, b) __platform_cat_(a, b)
@@ -201,13 +199,13 @@
 //-----------------------------------------------------------------------------
 
 /// Select maximum(a, b)
-#ifndef __NV_STD_MAX
-#define __NV_STD_MAX(a, b) (((b) > (a)) ? (b) : (a))
+#ifndef __HGGC_STD_MAX
+#define __HGGC_STD_MAX(a, b) (((b) > (a)) ? (b) : (a))
 #endif
 
 /// Select minimum(a, b)
-#ifndef __NV_STD_MIN
-#define __NV_STD_MIN(a, b) (((b) < (a)) ? (b) : (a))
+#ifndef __HGGC_STD_MIN
+#define __HGGC_STD_MIN(a, b) (((b) < (a)) ? (b) : (a))
 #endif
 
 /******************************************************************************
@@ -220,7 +218,7 @@ namespace platform {
 // Abs operations <algorithm>
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__)
+#if defined(__HGGCCC_RTC__)
 /// std::abs
 CUTLASS_HOST_DEVICE constexpr int abs(int a) {
     return (a < 0) ? -a : a;
@@ -248,7 +246,7 @@ CUTLASS_HOST_DEVICE constexpr const T& max(const T& a, const T& b) {
   return (a < b) ? b : a;
 }
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 //-----------------------------------------------------------------------------
 // Methods on std::pair
 //-----------------------------------------------------------------------------
@@ -307,7 +305,7 @@ namespace platform {
 // Integral constant helper types <type_traits>
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1500))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L)
 
 /// std::integral_constant
 template <typename value_t, value_t V>
@@ -339,7 +337,7 @@ typedef integral_constant<bool, true> true_type;
 /// The type used as a compile-time boolean with false value.
 typedef integral_constant<bool, false> false_type;
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus <= 201402L)) || (defined(_MSC_VER) && (_MSC_VER < 1900))
+#if defined(__HGGCCC_RTC__) || (__cplusplus <= 201402L)
 
 /// std::bool_constant
 template <bool V>
@@ -351,7 +349,7 @@ using std::bool_constant;
 
 #endif
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1700))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L)
 
 /// std::nullptr_t
 struct nullptr_t {};
@@ -366,7 +364,7 @@ using std::nullptr_t;
 // Conditional metaprogramming <type_traits>
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201700L)) || (defined(_MSC_VER) && (_MSC_VER < 1600))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201700L)
 
 /// std::enable_if (true specialization)
 template <bool C, typename T = void>
@@ -410,7 +408,7 @@ using CUTLASS_STL_NAMESPACE::conditional_t;
 // Const/volatility specifiers <type_traits>
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201703L)) || (defined(_MSC_VER) && (_MSC_VER < 1500))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201703L)
 
 /// std::remove_const (non-const specialization)
 template <typename T>
@@ -476,7 +474,7 @@ using remove_cvref_t = typename remove_cvref<T>::type;
 // Type relationships <type_traits>
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1500))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L)
 
 /// std::is_same (false specialization)
 template <typename A, typename B>
@@ -526,7 +524,7 @@ using std::is_base_of;
 // Type properties <type_traits>
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1500))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L)
 
 /// std::is_volatile
 template <typename T>
@@ -613,7 +611,7 @@ using std::is_fundamental;
 
 #endif
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1800)) || \
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L) || \
     (defined(__GNUG__) && (__GNUC__ < 5))
 
 /**
@@ -663,7 +661,7 @@ constexpr To CUTLASS_HOST_DEVICE bit_cast(const From& src) noexcept
 // Alignment and layout utilities
 //-----------------------------------------------------------------------------
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1500))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L)
 
 /// std::alignment_of
 template <typename value_t>
@@ -683,7 +681,7 @@ struct alignment_of : std::alignment_of<value_t> {};
 
 #endif
 
-/* 16B specializations where 32-bit Win32 host compiler disagrees with device compiler */
+/* 16B specializations for alignment correctness */
 template <>
 struct alignment_of<int4> {
   enum { value = 16 };
@@ -737,7 +735,7 @@ struct alignment_of<const value_t> : alignment_of<value_t> {};
 template <typename value_t>
 struct alignment_of<const volatile value_t> : alignment_of<value_t> {};
 
-#if defined(__CUDACC_RTC__) || (!defined(_MSC_VER) && (__cplusplus < 201103L)) || (defined(_MSC_VER) && (_MSC_VER < 1800))
+#if defined(__HGGCCC_RTC__) || (__cplusplus < 201103L)
 
 template <size_t Align>
 struct aligned_chunk;
@@ -806,7 +804,7 @@ using std::aligned_storage;
 
 #endif
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 /// Default deleter
 template <typename T>
 struct default_delete {
@@ -950,7 +948,7 @@ struct numeric_limits<uint8_t> {
   static constexpr bool is_integer = true;
 };
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 template <>
 struct numeric_limits<float> {
   CUTLASS_HOST_DEVICE

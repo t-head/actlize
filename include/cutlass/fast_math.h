@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*
   Note:  CUTLASS 3x increases the host compiler requirements to C++17. However, certain
          existing integrations of CUTLASS require C++11 host compilers.
@@ -40,8 +42,8 @@
 
 #pragma once
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cstdint>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cstdint>
 #else
 #include <cstdint>
 #include <cmath>
@@ -273,7 +275,7 @@ void find_divisor(unsigned int& mul, unsigned int& shr, unsigned int denom) {
 CUTLASS_HOST_DEVICE 
 void fast_divmod(int& quo, int& rem, int src, int div, unsigned int mul, unsigned int shr) {
 
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   // Use IMUL.HI if div != 1, else simply copy the source.
   quo = (div != 1) ? __umulhi(src, mul) >> shr : src;
   #else
@@ -288,7 +290,7 @@ void fast_divmod(int& quo, int& rem, int src, int div, unsigned int mul, unsigne
 CUTLASS_HOST_DEVICE
 void fast_divmod(int& quo, int64_t& rem, int64_t src, int div, unsigned int mul, unsigned int shr) {
 
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   // Use IMUL.HI if div != 1, else simply copy the source.
   quo = (div != 1) ? __umulhi(src, mul) >> shr : src;
   #else
@@ -328,7 +330,7 @@ struct FastDivmod {
   CUTLASS_HOST_DEVICE
   void fast_divmod(int& quotient, int& remainder, int dividend) const {
 
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
     // Use IMUL.HI if divisor != 1, else simply copy the source.
     quotient = (divisor != 1) ? __umulhi(dividend, multiplier) >> shift_right : dividend;
 #else
@@ -343,7 +345,7 @@ struct FastDivmod {
   CUTLASS_HOST_DEVICE
   void fast_divmod(int& quotient, int64_t& remainder, int64_t dividend) const {
 
-#if defined(__CUDA_ARCH__)
+#if defined(__HGGC_ARCH__)
     // Use IMUL.HI if divisor != 1, else simply copy the source.
     quotient = (divisor != 1) ? __umulhi(dividend, multiplier) >> shift_right : dividend;
 #else
@@ -502,7 +504,7 @@ struct FastDivmodU64 {
   uint64_t divide(uint64_t dividend) const {
     uint64_t quotient = 0;
 
-    #ifdef __CUDA_ARCH__
+    #ifdef __HGGC_ARCH__
       uint64_t x = dividend;
       if (multiplier) {
         x = __umul64hi(dividend + round_up, multiplier);
@@ -565,7 +567,6 @@ struct FastDivmodU64Pow2 {
   /// Computes the remainder given a computed quotient and dividend
   CUTLASS_HOST_DEVICE
   uint64_t modulus(uint64_t dividend) const {
-    // See https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#division-modulo-operations
     return dividend & (divisor - 1);
   }
 
@@ -772,7 +773,7 @@ float fast_max(float a, float b) {
 
 CUTLASS_HOST_DEVICE
 float fast_cos(float theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::cosf(theta);
   #else
   return std::cos(theta);
@@ -781,7 +782,7 @@ float fast_cos(float theta) {
 
 CUTLASS_HOST_DEVICE
 double fast_cos(double theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::cos(theta);
   #else
   return std::cos(theta);
@@ -790,7 +791,7 @@ double fast_cos(double theta) {
 
 CUTLASS_HOST_DEVICE
 float fast_sin(float theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::sinf(theta);
   #else
   return std::sin(theta);
@@ -799,7 +800,7 @@ float fast_sin(float theta) {
 
 CUTLASS_HOST_DEVICE
 double fast_sin(double theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::sin(theta);
   #else
   return std::sin(theta);
@@ -808,7 +809,7 @@ double fast_sin(double theta) {
 
 CUTLASS_HOST_DEVICE
 float fast_acos(float theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::acosf(theta);
   #else
   return std::acos(theta);
@@ -817,7 +818,7 @@ float fast_acos(float theta) {
 
 CUTLASS_HOST_DEVICE
 double fast_acos(double theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::acos(theta);
   #else
   return std::acos(theta);
@@ -826,7 +827,7 @@ double fast_acos(double theta) {
 
 CUTLASS_HOST_DEVICE
 float fast_asin(float theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::asinf(theta);
   #else
   return std::asin(theta);
@@ -835,7 +836,7 @@ float fast_asin(float theta) {
 
 CUTLASS_HOST_DEVICE
 double fast_asin(double theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::asin(theta);
   #else
   return std::asin(theta);
@@ -844,7 +845,7 @@ double fast_asin(double theta) {
 
 CUTLASS_HOST_DEVICE
 float fast_sqrt(float theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::sqrtf(theta);
   #else
   return std::sqrt(theta);
@@ -853,7 +854,7 @@ float fast_sqrt(float theta) {
 
 CUTLASS_HOST_DEVICE
 double fast_sqrt(double theta) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::sqrt(theta);
   #else
   return std::sqrt(theta);
@@ -862,7 +863,7 @@ double fast_sqrt(double theta) {
 
 CUTLASS_HOST_DEVICE
 float fast_exp(float x) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::expf(x);
   #else
   return std::exp(x);
@@ -871,7 +872,7 @@ float fast_exp(float x) {
 
 CUTLASS_HOST_DEVICE
 double fast_exp(double x) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::exp(x);
   #else
   return std::exp(x);
@@ -880,7 +881,7 @@ double fast_exp(double x) {
 
 CUTLASS_HOST_DEVICE
 half_t fast_exp(half_t x) {
-  #if defined(__CUDA_ARCH__) && (__CUDACC_VER_MAJOR__ >= 10) && (__CUDA_ARCH__ >= 750)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       return (half_t)(::hexp(x.to_half()));
   #else
       return (half_t)(fast_exp(float(x)));
@@ -889,7 +890,7 @@ half_t fast_exp(half_t x) {
 
 CUTLASS_HOST_DEVICE
 float fast_log(float x) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::logf(x);
   #else
   return std::log(x);
@@ -898,7 +899,7 @@ float fast_log(float x) {
 
 CUTLASS_HOST_DEVICE
 double fast_log(double x) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::log(x);
   #else
   return std::log(x);
@@ -907,10 +908,10 @@ double fast_log(double x) {
 
 CUTLASS_HOST_DEVICE
 float fast_tanh(float x) {
-  #if defined(__CUDA_ARCH__)
-    #if (__CUDACC_VER_MAJOR__ >= 11) && (__CUDA_ARCH__ >= 750)
+  #if defined(__HGGC_ARCH__)
+    #if (__HGGC_ARCH__ >= 100)
       float y;
-      asm volatile ( "tanh.approx.f32 %0, %1; " : "=f"(y) : "f"(x));
+      asm volatile ( "ppu.tanh.approx.f32 %0, %1; " : "=f"(y) : "f"(x));
       return y;
     #else
       return ::tanhf(x);
@@ -922,7 +923,7 @@ float fast_tanh(float x) {
 
 CUTLASS_HOST_DEVICE
 double fast_tanh(double x) {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
   return ::tanh(x);
   #else
   return std::tanh(x);
@@ -931,9 +932,9 @@ double fast_tanh(double x) {
 
 CUTLASS_HOST_DEVICE
 half_t fast_tanh(half_t x) {
-  #if defined(__CUDA_ARCH__) && (__CUDACC_VER_MAJOR__ >= 11) && (__CUDA_ARCH__ >= 750)
+  #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   
-  asm volatile ( "tanh.approx.f16 %0, %1;" : "=h"(x.raw()) : "h"(x.raw()));
+  asm volatile ( "ppu.tanh.approx.f16 %0, %1;" : "=h"(x.raw()) : "h"(x.raw()));
   return x;
 
   #else
@@ -951,7 +952,7 @@ struct fast_exp_op {
   }
 };
 
-#if defined(__CUDA_ARCH__) && (__CUDACC_VER_MAJOR__ >= 10) && (__CUDA_ARCH__ >= 750)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 template <int N>
 struct fast_exp_op<Array<half_t, N>> {
   CUTLASS_DEVICE
@@ -977,7 +978,7 @@ struct fast_exp_op<Array<half_t, N>> {
     return result;
   }
 };
-#endif // #if defined(__CUDA_ARCH__)
+#endif // #if defined(__HGGC_ARCH__)
 
 template <typename T, int N>
 struct fast_exp_op<Array<T, N>> {
@@ -1006,7 +1007,7 @@ struct fast_tanh_op {
   }
 };
 
-#if defined(__CUDA_ARCH__) && (__CUDACC_VER_MAJOR__ >= 11) && (__CUDA_ARCH__ >= 750)
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 template <int N>
 struct fast_tanh_op<Array<half_t, N>> {
   CUTLASS_DEVICE
@@ -1020,20 +1021,20 @@ struct fast_tanh_op<Array<half_t, N>> {
     
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < N / 2; ++i) {
-      asm volatile ("tanh.approx.f16x2 %0, %1;" : "=r"(out[i]) : "r"(in[i]));
+      asm volatile ("ppu.tanh.approx.f16x2 %0, %1;" : "=r"(out[i]) : "r"(in[i]));
     }
 
     // residual
     if (N % 2) {
       uint16_t const *in = reinterpret_cast<uint16_t const *>(&rhs);
       uint16_t *out = reinterpret_cast<uint16_t *>(&result);
-      asm volatile ("tanh.approx.f16 %0, %1;" : "=h"(out[N - 1]) : "h"(in[N - 1])); 
+      asm volatile ("ppu.tanh.approx.f16 %0, %1;" : "=h"(out[N - 1]) : "h"(in[N - 1])); 
     }
 
     return result;
   }
 };
-#endif // #if defined(__CUDA_ARCH__)
+#endif // #if defined(__HGGC_ARCH__)
 
 template <typename T, int N>
 struct fast_tanh_op<Array<T, N>> {

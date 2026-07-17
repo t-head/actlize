@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,19 +29,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Template for generic CUTLASS kernel.
 */
 
 #pragma once
 
-// __grid_constant__ was introduced in CUDA 11.7.
-#if ((__CUDACC_VER_MAJOR__ >= 12) || ((__CUDACC_VER_MAJOR__ == 11) && (__CUDACC_VER_MINOR__ >= 7)))
+// __grid_constant__ was introduced in HGGC 11.7.
+#if ((__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 7)))
 #  define CUTLASS_GRID_CONSTANT_SUPPORTED
 #endif
 
-// __grid_constant__ can be enabled only on SM70+
-#if defined(CUTLASS_GRID_CONSTANT_SUPPORTED) && defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 700)
+// __grid_constant__ can be enabled only on PPU0010+
+#if defined(CUTLASS_GRID_CONSTANT_SUPPORTED) && defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 #  define CUTLASS_GRID_CONSTANT_ENABLED
 #endif
 
@@ -97,10 +99,10 @@ void Kernel2(typename Operator::Params params) {
 /// Generic CUTLASS kernel template.
 template <typename Operator>
 CUTLASS_GLOBAL
-#ifdef __CUDACC__
-// Enclosing this in __CUDACC__ suppresses MSVC warnings.
+#ifdef __HGGCCC__
+// __launch_bounds__ is only valid inside __HGGCCC__ compilation.
 __launch_bounds__(Operator::MaxThreadsPerBlock, Operator::MinBlocksPerMultiprocessor)
-#endif // __CUDACC__
+#endif // __HGGCC__
 void device_kernel(CUTLASS_GRID_CONSTANT typename Operator::Params const params)
 {
   // Dynamic shared memory base pointer

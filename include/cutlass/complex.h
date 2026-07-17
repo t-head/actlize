@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*
   Note:  CUTLASS 3x increases the host compiler requirements to C++17. However, certain
          existing integrations of CUTLASS require C++11 host compilers.
@@ -40,12 +42,12 @@
 
 #pragma once
 
-#include <cuComplex.h>
+#include <acComplex.h>
 
-#include <cuda_fp16.h>
+#include <hggc_fp16.h>
 
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/cstdint>
+#if defined(__HGGCCC_RTC__)
+#include <hggc/std/cstdint>
 #else
 #include <cstdint>
 #endif
@@ -58,7 +60,7 @@
 
 #include "cutlass/fast_math.h"
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 #include <iosfwd>
 #endif
 
@@ -94,46 +96,46 @@ struct InvertComplexTransform<ComplexTransform::kConjugate> {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 //
-// Accessors for CUDA complex types
+// Accessors for HGGC complex types
 //
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 /// Returns the real part of the complex number
 CUTLASS_HOST_DEVICE
-float const &real(cuFloatComplex const &z) { return z.x; }
-
-/// Returns the real part of the complex number
-CUTLASS_HOST_DEVICE
-float &real(cuFloatComplex &z) { return z.x; }
+float const &real(acFloatComplex const &z) { return z.x; }
 
 /// Returns the real part of the complex number
 CUTLASS_HOST_DEVICE
-double const &real(cuDoubleComplex const &z) { return z.x; }
+float &real(acFloatComplex &z) { return z.x; }
 
 /// Returns the real part of the complex number
 CUTLASS_HOST_DEVICE
-double &real(cuDoubleComplex &z) { return z.x; }
+double const &real(acDoubleComplex const &z) { return z.x; }
+
+/// Returns the real part of the complex number
+CUTLASS_HOST_DEVICE
+double &real(acDoubleComplex &z) { return z.x; }
 
 /// Returns the imaginary part of the complex number
 CUTLASS_HOST_DEVICE
-float const &imag(cuFloatComplex const &z) { return z.y; }
+float const &imag(acFloatComplex const &z) { return z.y; }
 
 /// Returns the imaginary part of the complex number
 CUTLASS_HOST_DEVICE
-float &imag(cuFloatComplex &z) { return z.y; }
+float &imag(acFloatComplex &z) { return z.y; }
 
 /// Returns the imaginary part of the complex number
 CUTLASS_HOST_DEVICE
-double const &imag(cuDoubleComplex const &z) { return z.y; }
+double const &imag(acDoubleComplex const &z) { return z.y; }
 
 /// Returns the imaginary part of the complex number
 CUTLASS_HOST_DEVICE
-double &imag(cuDoubleComplex &z) { return z.y; }
+double &imag(acDoubleComplex &z) { return z.y; }
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Class for representing and manipulating complex numbers with conversions from built-in CUDA
+/// Class for representing and manipulating complex numbers with conversions from built-in HGGC
 /// complex types.
 
 template <typename T>
@@ -177,14 +179,14 @@ class complex
   complex(complex<A> const &z) : _real(static_cast<T>(z.real())), _imag(static_cast<T>(z.imag())) {}
 
 
-  #if !defined(__CUDACC_RTC__)
-  /// Conversion from cuFloatComplex
+  #if !defined(__HGGCCC_RTC__)
+  /// Conversion from acFloatComplex
   CUTLASS_HOST_DEVICE
-  complex(cuFloatComplex const &z) : _real(static_cast<T>(cuCrealf(z))), _imag(static_cast<T>(cuCimagf(z))) {}
+  complex(acFloatComplex const &z) : _real(static_cast<T>(acCrealf(z))), _imag(static_cast<T>(acCimagf(z))) {}
 
-  /// Conversion from cuDoubleComplex
+  /// Conversion from acDoubleComplex
   CUTLASS_HOST_DEVICE
-  complex(cuDoubleComplex const &z) : _real(static_cast<T>(cuCreal(z))), _imag(static_cast<T>(cuCimag(z))) {}
+  complex(acDoubleComplex const &z) : _real(static_cast<T>(acCreal(z))), _imag(static_cast<T>(acCimag(z))) {}
   #endif
 
   /// Equality operator
@@ -316,14 +318,14 @@ class complex
   CUTLASS_HOST_DEVICE
   void imag(T imag) { _imag = imag; }
 
-  #if !defined(__CUDACC_RTC__)
-  /// Converts to cuFloatComplex
+  #if !defined(__HGGCCC_RTC__)
+  /// Converts to acFloatComplex
   CUTLASS_HOST_DEVICE
-  explicit operator cuFloatComplex() const { return make_cuFloatComplex(float(real()), float(imag())); }
+  explicit operator acFloatComplex() const { return make_acFloatComplex(float(real()), float(imag())); }
 
-  /// Converts to cuDoubleComplex
+  /// Converts to acDoubleComplex
   CUTLASS_HOST_DEVICE
-  explicit operator cuDoubleComplex() const { return make_cuDoubleComplex(real(), imag()); }
+  explicit operator acDoubleComplex() const { return make_acDoubleComplex(real(), imag()); }
   #endif
 };
 
@@ -385,7 +387,7 @@ CUTLASS_HOST_DEVICE T &imag(T &r) {
 // Output operators
 //
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 template <typename T>
 std::ostream &operator<<(std::ostream &out, complex<T> const &z) {
   T _r = real(z);

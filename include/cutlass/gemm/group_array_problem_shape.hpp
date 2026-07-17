@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief This file contains definitions and utility functions for describing problem shapes 
            for 3.x Ptr-Array GEMMs and Grouped GEMMs.
@@ -40,7 +42,7 @@
 
 #include "cute/container/array.hpp"
 
-#if ! defined(__CUDACC_RTC__)
+#if ! defined(__HGGCCC_RTC__)
 #include <initializer_list>
 #endif
 

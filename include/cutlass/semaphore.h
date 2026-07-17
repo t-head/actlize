@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Implementation of a CTA-wide semaphore for inter-CTA synchronization.
 */
@@ -72,10 +74,10 @@ public:
   CUTLASS_DEVICE
   void fetch() {
     if (wait_thread) {
-      #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-      asm volatile ("ld.global.acquire.gpu.b32 %0, [%1];\n" : "=r"(state) : "l"(lock));  
+      #if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 100
+      asm volatile ("ppu.ld.global.acquire.gpu.b32 %0, [%1];\n" : "=r"(state) : "l"(lock));  
       #else
-      asm volatile ("ld.global.cg.b32 %0, [%1];\n" : "=r"(state) : "l"(lock));  
+      asm volatile ("ppu.ld.global.cg.b32 %0, [%1];\n" : "=r"(state) : "l"(lock));  
       #endif
     }
   }
@@ -102,10 +104,10 @@ public:
     __syncthreads();
 
     if (wait_thread) {
-      #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-      asm volatile ("st.global.release.gpu.b32 [%0], %1;\n" : : "l"(lock), "r"(status));
+      #if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 100
+      asm volatile ("ppu.st.global.release.gpu.b32 [%0], %1;\n" : : "l"(lock), "r"(status));
       #else
-      asm volatile ("st.global.cg.b32 [%0], %1;\n" : : "l"(lock), "r"(status));
+      asm volatile ("ppu.st.global.cg.b32 [%0], %1;\n" : : "l"(lock), "r"(status));
       #endif
     }
   }

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -31,7 +32,7 @@
 
 /*! \file
     \brief Templates implementing warp-level matrix multiply-accumulate operations targeting
-      Tensor Cores.
+      Tensor cells.
 */
 
 #pragma once
@@ -44,7 +45,7 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/mma_ppu0010.h"
 
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/warp/mma.h"
@@ -53,7 +54,7 @@
 #include "cutlass/gemm/warp/mma_tensor_op.h"
 
 #include "cutlass/gemm/warp/mma_tensor_op_tile_iterator.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu0010.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -144,7 +145,7 @@ namespace detail {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.
+/// Structure to compute the matrix product targeting alu cores and SIMT math instructions.
 template <
   /// Size of the Gemm problem - concept: gemm::GemmShape<>
   typename Shape_,
@@ -382,7 +383,7 @@ public:
     FragmentC const &C
   ) const {
 
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
       using MmaOperandA = typename ArchMmaOperator::FragmentA;
       using MmaOperandB = typename ArchMmaOperator::FragmentB;
@@ -430,7 +431,7 @@ public:
     //
     // Define conversions from source type to instruction type
     //
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
       
       detail::ConvertAndPackAccurateF32<
         FragmentA::kElements / 2,

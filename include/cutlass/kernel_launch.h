@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,8 +29,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-  \brief Defines structures and helpers to launch CUDA kernels within CUTLASS.
+  \brief Defines structures and helpers to launch device kernels within CUTLASS.
 */
 
 #pragma once
@@ -40,13 +42,13 @@ namespace cutlass {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Structure containing the basic launch configuration of a CUDA kernel.
+/// Structure containing the basic launch configuration of a HGGC kernel.
 struct KernelLaunchConfiguration {
 
-  /// CUDA grid dimensions
+  /// HGGC grid dimensions
   dim3 grid;
 
-  /// CUDA threablock dimensions
+  /// HGGC threablock dimensions
   dim3 block;
 
   /// Bytes of dynamically allocated SMEM in addition to static SMEM

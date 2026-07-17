@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -51,7 +52,6 @@
 #include "cutlass/gemm/kernel/gemm_grouped.h"
 #include "cutlass/gemm/kernel/gemm_transpose_operands.h"
 #include "cutlass/gemm/kernel/default_gemm.h"
-#include "cutlass/gemm/kernel/default_gemm_complex.h"
 #include "cutlass/gemm/device/default_gemm_configuration.h"
 
 #include "cutlass/layout/permute.h"
@@ -242,133 +242,6 @@ struct DefaultGemmGrouped<
   using GemmKernel = kernel::GemmGrouped<
     typename DefaultGemmKernel::Mma,
     typename DefaultGemmKernel::Epilogue,
-    ThreadblockSwizzle,
-    GroupScheduleMode_,
-    kInternalTranspose
-  >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-//
-// Complex-valued GEMM kernels
-//
-
-template <
-    /// Element type for A matrix operand
-    typename ElementA,
-    /// Layout type for A matrix operand
-    typename LayoutA,
-    /// Complex elementwise transformation on A operand
-    ComplexTransform TransformA,
-    /// Access granularity of A matrix in units of elements
-    int kAlignmentA,
-    /// Element type for B matrix operand
-    typename ElementB,
-    /// Layout type for B matrix operand
-    typename LayoutB,
-    /// Complex elementwise transformation on B operand
-    ComplexTransform TransformB,
-    /// Access granularity of B matrix in units of elements
-    int kAlignmentB,
-    /// Element type for C and D matrix operands
-    typename ElementC,
-    /// Layout type for C and D matrix operands
-    typename LayoutC,
-    /// Element type for internal accumulation
-    typename ElementAccumulator,
-    /// Operator class tag
-    typename OperatorClass,
-    /// Tag indicating architecture to tune for
-    typename ArchTag,
-    /// Threadblock-level tile size (concept: GemmShape)
-    typename ThreadblockShape,
-    /// Warp-level tile size (concept: GemmShape)
-    typename WarpShape,
-    /// Warp-level tile size (concept: GemmShape)
-    typename InstructionShape,
-    /// Epilogue output operator
-    typename EpilogueOutputOp,
-    /// Threadblock-level swizzling operator
-    typename ThreadblockSwizzle,
-    /// Number of stages used in the pipelined mainloop
-    int Stages,
-    /// Whether the schedule of problems to visit has been precomputed
-    GroupScheduleMode GroupScheduleMode_,
-    /// Operation performed by GEMM
-    typename Operator,
-    /// Use zfill or predicate for out-of-bound cp.async
-    SharedMemoryClearOption SharedMemoryClear
-  >
-struct DefaultGemmGrouped<
-  ElementA,
-  LayoutA,
-  TransformA,
-  kAlignmentA,
-  ElementB,
-  LayoutB,
-  TransformB,
-  kAlignmentB,
-  ElementC,
-  LayoutC,
-  ElementAccumulator,
-  OperatorClass,
-  ArchTag,
-  ThreadblockShape,
-  WarpShape,
-  InstructionShape,
-  EpilogueOutputOp,
-  ThreadblockSwizzle,
-  Stages,
-  GroupScheduleMode_,
-  Operator,
-  SharedMemoryClear,
-  layout::NoPermute, /*PermuteDLayout*/
-  typename platform::enable_if<cutlass::is_complex<ElementAccumulator>::value>::type
-> {
-
-  // If true, we must construct a 'transposed-and-exchanged' Mma operator.
-  static bool const kInternalTranspose = platform::is_same<LayoutC, layout::ColumnMajor>::value;
-
-  using MapArguments = kernel::detail::MapArguments<
-    ElementA,
-    LayoutA,
-    TransformA,
-    kAlignmentA,
-    ElementB,
-    LayoutB,
-    TransformB,
-    kAlignmentB,
-    LayoutC,
-    kInternalTranspose
-  >;
-
-  using DefaultGemmKernel = typename kernel::DefaultGemmComplex<
-    typename MapArguments::ElementA,
-    typename MapArguments::LayoutA,
-    typename MapArguments::ElementB,
-    typename MapArguments::LayoutB,
-    ElementC,
-    typename MapArguments::LayoutC,
-    ElementAccumulator,
-    OperatorClass,
-    ArchTag,
-    ThreadblockShape,
-    WarpShape,
-    InstructionShape,
-    EpilogueOutputOp,
-    ThreadblockSwizzle,
-    Stages,
-    MapArguments::kTransformA,
-    MapArguments::kTransformB,
-    Operator,
-    false
-  >::GemmKernel;
-
-  /// Define the kernel in terms of the default kernel
-  using GemmKernel = kernel::GemmGrouped<
-    typename DefaultGemmKernel::Mma,
-    typename DefaultGemmKernel::Epilogue, 
     ThreadblockSwizzle,
     GroupScheduleMode_,
     kInternalTranspose

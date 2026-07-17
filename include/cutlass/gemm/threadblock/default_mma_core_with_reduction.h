@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -43,11 +44,10 @@
 #include "cutlass/array.h"
 #include "cutlass/cutlass.h"
 
-#include "cutlass/layout/tensor_op_multiplicand_sm75.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm80.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu0010.h"
 
 #include "cutlass/gemm/warp/default_mma_with_reduction_tensor_op.h"
-#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_sm80.h"
+#include "cutlass/gemm/warp/mma_tensor_op_tile_iterator_ppu0010.h"
 
 #include "cutlass/gemm/threadblock/default_mma_core.h"
 
@@ -55,7 +55,7 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/transform/pitch_linear_thread_map.h"
 #include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op.h"
-#include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op_sm80.h"
+#include "cutlass/transform/threadblock/regular_tile_access_iterator_tensor_op_ppu0010.h"
 #include "cutlass/transform/threadblock/regular_tile_access_iterator_pitch_linear.h"
 #include "cutlass/gemm/threadblock/mma_with_reduction_multistage.h"
 

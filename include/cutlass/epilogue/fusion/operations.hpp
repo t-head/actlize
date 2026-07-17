@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -32,10 +33,13 @@
 #pragma once
 
 #include <cutlass/numeric_conversion.h>
+#include <cute/numeric/int.hpp>
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass::epilogue::fusion {
+
+using cute::sizeof_bits_v;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

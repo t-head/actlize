@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Statically sized array of elements that accommodates all CUTLASS-supported numeric types
            and is safe to use in a union.
@@ -1169,7 +1171,7 @@ struct plus<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1202,7 +1204,7 @@ struct plus<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(half_t const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 lhs_pair = __half2half2(reinterpret_cast<__half const &>(lhs));
@@ -1234,7 +1236,7 @@ struct plus<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, half_t const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1269,7 +1271,7 @@ struct minus<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1302,7 +1304,7 @@ struct minus<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(half_t const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 lhs_pair = __half2half2(reinterpret_cast<__half const &>(lhs));
@@ -1334,7 +1336,7 @@ struct minus<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, half_t const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1369,7 +1371,7 @@ struct multiplies<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1402,7 +1404,7 @@ struct multiplies<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(half_t const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 lhs_pair = __half2half2(reinterpret_cast<__half const &>(lhs));
@@ -1437,7 +1439,7 @@ struct multiplies<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, half_t const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1475,7 +1477,7 @@ struct divides<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1511,7 +1513,7 @@ struct divides<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(half_t const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 lhs_pair = __half2half2(reinterpret_cast<__half const &>(lhs));
@@ -1546,7 +1548,7 @@ struct divides<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, half_t const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1584,7 +1586,7 @@ struct negate<Array<half_t, N>> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *source_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -1623,7 +1625,7 @@ struct multiply_add<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> {
     Array<half_t, N> const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *a_ptr = reinterpret_cast<__half2 const *>(&a);
@@ -1669,7 +1671,7 @@ struct multiply_add<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> {
     Array<half_t, N> const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 a_pair = __half2half2(reinterpret_cast<__half const &>(a));
@@ -1713,7 +1715,7 @@ struct multiply_add<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> {
     Array<half_t, N> const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *a_ptr = reinterpret_cast<__half2 const *>(&a);
@@ -1758,7 +1760,7 @@ struct multiply_add<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> {
     half_t const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *a_ptr = reinterpret_cast<__half2 const *>(&a);
@@ -1808,7 +1810,7 @@ struct multiply_add_relu0<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> 
     Array<half_t, N> const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *a_ptr = reinterpret_cast<__half2 const *>(&a);
@@ -1855,7 +1857,7 @@ struct multiply_add_relu0<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> 
     Array<half_t, N> const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 a_pair = __half2half2(reinterpret_cast<__half const &>(a));
@@ -1900,7 +1902,7 @@ struct multiply_add_relu0<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> 
     Array<half_t, N> const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *a_ptr = reinterpret_cast<__half2 const *>(&a);
@@ -1946,7 +1948,7 @@ struct multiply_add_relu0<Array<half_t, N>, Array<half_t, N>, Array<half_t, N>> 
     half_t const &c) const {
 
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *a_ptr = reinterpret_cast<__half2 const *>(&a);
@@ -1991,7 +1993,7 @@ struct minimum<Array<half_t, N>, false> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -2027,7 +2029,7 @@ struct minimum<Array<half_t, N>, false> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(half_t const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 lhs_pair = __half2half2(reinterpret_cast<__half const &>(lhs));
@@ -2062,7 +2064,7 @@ struct minimum<Array<half_t, N>, false> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, half_t const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -2100,7 +2102,7 @@ struct maximum<Array<half_t, N>, false> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -2136,7 +2138,7 @@ struct maximum<Array<half_t, N>, false> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(half_t const & lhs, Array<half_t, N> const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 lhs_pair = __half2half2(reinterpret_cast<__half const &>(lhs));
@@ -2171,7 +2173,7 @@ struct maximum<Array<half_t, N>, false> {
   CUTLASS_HOST_DEVICE
   Array<half_t, N> operator()(Array<half_t, N> const & lhs, half_t const &rhs) const {
     Array<half_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     __half2 *result_ptr = reinterpret_cast<__half2 *>(&result);
     __half2 const *lhs_ptr = reinterpret_cast<__half2 const *>(&lhs);
@@ -2215,7 +2217,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
     Array<bfloat16_t, N> const &c) const {
 
     Array<bfloat16_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     unsigned *result_ptr = reinterpret_cast<unsigned *>(&result);
     unsigned const *a_ptr = reinterpret_cast<unsigned const *>(&a);
@@ -2224,7 +2226,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
 
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < N / 2; ++i) {
-      asm ("fma.rn.bf16x2 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16x2 %0, %1, %2, %3;\n"
         : "=r"(result_ptr[i])
         : "r"(a_ptr[i]), "r"(b_ptr[i]), "r"(c_ptr[i])
       );
@@ -2237,7 +2239,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
       uint16_t const *b_residual_ptr = reinterpret_cast<uint16_t const *>(&b);
       uint16_t const *c_residual_ptr = reinterpret_cast<uint16_t const *>(&c);
 
-      asm ("fma.rn.bf16 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16 %0, %1, %2, %3;\n"
         : "=h"(result_ptr[N - 1])
         : "h"(a_residual_ptr[N - 1]), "h"(b_residual_ptr[N - 1]), "h"(c_residual_ptr[N - 1])
       );
@@ -2263,7 +2265,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
     Array<bfloat16_t, N> const &c) const {
 
     Array<bfloat16_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     unsigned *result_ptr = reinterpret_cast<unsigned *>(&result);
 
@@ -2275,7 +2277,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
 
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < N / 2; ++i) {
-      asm ("fma.rn.bf16x2 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16x2 %0, %1, %2, %3;\n"
         : "=r"(result_ptr[i])
         : "r"(a_packed), "r"(b_ptr[i]), "r"(c_ptr[i])
       );
@@ -2288,7 +2290,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
       uint16_t const *b_residual_ptr = reinterpret_cast<uint16_t const *>(&b);
       uint16_t const *c_residual_ptr = reinterpret_cast<uint16_t const *>(&c);
 
-      asm ("fma.rn.bf16 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16 %0, %1, %2, %3;\n"
         : "=h"(result_ptr[N - 1])
         : "h"(a_residual_ptr[0]), "h"(b_residual_ptr[N - 1]), "h"(c_residual_ptr[N - 1])
       );
@@ -2314,7 +2316,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
     Array<bfloat16_t, N> const &c) const {
 
     Array<bfloat16_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     unsigned *result_ptr = reinterpret_cast<unsigned *>(&result);
 
@@ -2326,7 +2328,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
 
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < N / 2; ++i) {
-      asm ("fma.rn.bf16x2 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16x2 %0, %1, %2, %3;\n"
         : "=r"(result_ptr[i])
         : "r"(a_ptr[i]), "r"(b_packed), "r"(c_ptr[i])
       );
@@ -2339,7 +2341,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
       uint16_t const *b_residual_ptr = reinterpret_cast<uint16_t const *>(&b);
       uint16_t const *c_residual_ptr = reinterpret_cast<uint16_t const *>(&c);
 
-      asm ("fma.rn.bf16 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16 %0, %1, %2, %3;\n"
         : "=h"(result_ptr[N - 1])
         : "h"(a_residual_ptr[N - 1]), "h"(b_residual_ptr[0]), "h"(c_residual_ptr[N - 1])
       );
@@ -2365,7 +2367,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
     bfloat16_t const &c) const {
 
     Array<bfloat16_t, N> result;
-    #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
 
     unsigned *result_ptr = reinterpret_cast<unsigned *>(&result);
 
@@ -2377,7 +2379,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
 
     CUTLASS_PRAGMA_UNROLL
     for (int i = 0; i < N / 2; ++i) {
-      asm ("fma.rn.bf16x2 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16x2 %0, %1, %2, %3;\n"
         : "=r"(result_ptr[i])
         : "r"(a_ptr[i]), "r"(b_ptr[i]), "r"(c_packed)
       );
@@ -2390,7 +2392,7 @@ struct multiply_add<Array<bfloat16_t, N>, Array<bfloat16_t, N>, Array<bfloat16_t
       uint16_t const *b_residual_ptr = reinterpret_cast<uint16_t const *>(&b);
       uint16_t const *c_residual_ptr = reinterpret_cast<uint16_t const *>(&c);
 
-      asm ("fma.rn.bf16 %0, %1, %2, %3;\n"
+      asm ("ppu.fma.rtte.bf16 %0, %1, %2, %3;\n"
         : "=h"(result_ptr[N - 1])
         : "h"(a_residual_ptr[N - 1]), "h"(b_residual_ptr[N - 1]), "h"(c_residual_ptr[0])
       );

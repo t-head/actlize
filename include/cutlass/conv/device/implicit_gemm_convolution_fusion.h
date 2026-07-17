@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /* \file
    \brief Template for device-level fused activation's scale+bias+relu and Implicit GEMM Convolution
 */
@@ -169,7 +171,7 @@ public:
   Status initialize(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
    
     if (args.problem_size.split_k_slices > 1) {
 
@@ -177,9 +179,9 @@ public:
         return Status::kErrorWorkspaceNull;
       }
 
-      cudaError_t status = cudaMemsetAsync(workspace, 0, get_workspace_size(args), stream);
+      hggcError_t status = hggcMemsetAsync(workspace, 0, get_workspace_size(args), stream);
 
-      if (status != cudaSuccess) {
+      if (status != hggcSuccess) {
         return Status::kErrorInternal;
       }
     }
@@ -193,11 +195,11 @@ public:
     int smem_size = int(sizeof(typename ImplicitGemmFusionKernel::SharedStorage));
 
     if (smem_size >= (48 << 10)) {
-      cudaError_t result = cudaFuncSetAttribute(cutlass::Kernel<ImplicitGemmFusionKernel>,
-                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+      hggcError_t result = hggcFuncSetAttribute(cutlass::Kernel<ImplicitGemmFusionKernel>,
+                                    hggcFuncAttributeMaxDynamicSharedMemorySize,
                                     smem_size);
 
-      if (result != cudaSuccess) {
+      if (result != hggcSuccess) {
         return Status::kErrorInternal;
       }
     }
@@ -222,7 +224,7 @@ public:
   }
 
   /// Runs the kernel using initialized state.
-  Status run(cudaStream_t stream = nullptr) {
+  Status run(hggcStream_t stream = nullptr) {
 
     ThreadblockSwizzle threadblock_swizzle;
 
@@ -233,13 +235,13 @@ public:
 
     cutlass::Kernel<ImplicitGemmFusionKernel><<<grid, block, smem_size, stream>>>(params_);
 
-    cudaError_t result = cudaGetLastError();
+    hggcError_t result = hggcGetLastError();
 
-    return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;
+    return result == hggcSuccess ? Status::kSuccess : Status::kErrorInternal;
   }
 
   /// Runs the kernel using initialized state.
-  Status operator()(cudaStream_t stream = nullptr) {
+  Status operator()(hggcStream_t stream = nullptr) {
     return run(stream);
   }
 
@@ -247,7 +249,7 @@ public:
   Status operator()(
     Arguments const &args, 
     void *workspace = nullptr, 
-    cudaStream_t stream = nullptr) {
+    hggcStream_t stream = nullptr) {
     
     Status status = initialize(args, workspace, stream);
     

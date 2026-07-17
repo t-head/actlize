@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
  /*! \file
   \brief Functor performing elementwise operations used by epilogues.
 */
@@ -81,7 +83,7 @@ class EpilogueWithVisitorCallbacks :
 
 public:
 
-  static_assert(Stages <= 2, "Sm80 EVT only support upto 2 Stages.");
+  static_assert(Stages <= 2, "PPU0010 EVT only support upto 2 Stages.");
 
   // Whether the epilogue is pipelined
   static bool constexpr Pipelined = Stages > 1;

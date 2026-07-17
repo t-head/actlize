@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a bug report to help us improve CUTLASS
+about: Create a bug report to help us improve ACTLIZE
 title: "[BUG]"
 labels: "? - Needs Triage, bug"
 assignees: ''

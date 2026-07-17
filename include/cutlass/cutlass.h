@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -112,7 +113,7 @@ static const int NumThreadsPerQuadPair = NumThreadsPerQuad * 2;
 
 /// Helper function to return true when called by thread 0 of threadblock 0.
 CUTLASS_HOST_DEVICE bool thread0() {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
     return (!threadIdx.x && !threadIdx.y && !threadIdx.z) && (!blockIdx.x && !blockIdx.y && !blockIdx.z);
   #else
     return false;
@@ -122,7 +123,7 @@ CUTLASS_HOST_DEVICE bool thread0() {
 /// Returns a lane index in the warp. The threads in warp may not be convergent
 CUTLASS_DEVICE
 int canonical_lane_idx() { 
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
     return threadIdx.x % NumThreadsPerWarp;
   #else
     return 0;
@@ -133,7 +134,7 @@ int canonical_lane_idx() {
 /// Threads within the warp must be converged.
 CUTLASS_DEVICE
 int canonical_warp_idx_sync() { 
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
     return __shfl_sync(0xffffffff, threadIdx.x / NumThreadsPerWarp, 0);
   #else
     return 0;
@@ -144,7 +145,7 @@ int canonical_warp_idx_sync() {
 /// As it doesn't sync the warp, it faster and allows forward progress
 CUTLASS_DEVICE
 int canonical_warp_idx() { 
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
     return threadIdx.x / NumThreadsPerWarp;
   #else
     return 0;
@@ -155,7 +156,7 @@ int canonical_warp_idx() {
 /// Threads within the warp must be converged.
 CUTLASS_DEVICE
 int canonical_warp_group_idx() {
-  #if defined(__CUDA_ARCH__)
+  #if defined(__HGGC_ARCH__)
     return __shfl_sync(0xffffffff, threadIdx.x / NumThreadsPerWarpGroup, 0);
   #else
     return 0;

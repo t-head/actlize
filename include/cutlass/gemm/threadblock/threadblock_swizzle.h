@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
     \brief Implements several possible threadblock-swizzling functions mapping blockIdx to 
       GEMM problems.
@@ -105,7 +107,7 @@ struct GemmIdentityThreadblockSwizzle {
       implicit_gemm_problem_size, tile_size, split_k_slices);
   }
 
-  /// Computes CUDA grid dimensions given a size in units of logical tiles
+  /// Computes HGGC grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
     int tile = 1 << get_log_tile(tiled_shape);
@@ -179,7 +181,7 @@ struct GemmHorizontalThreadblockSwizzle {
       split_k_slices);
   }
 
-  /// Computes CUDA grid dimensions given a size in units of logical tiles
+  /// Computes HGGC grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
     return dim3(tiled_shape.n(), tiled_shape.m(), tiled_shape.k());
@@ -220,7 +222,7 @@ struct GemmBatchedIdentityThreadblockSwizzle {
       batch_count % (1 << 16));
   }
 
-  /// Computes CUDA grid dimensions given a size in units of logical tiles
+  /// Computes HGGC grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
     return dim3(tiled_shape.m(), tiled_shape.n(), tiled_shape.k());
@@ -297,7 +299,7 @@ struct GemmSplitKIdentityThreadblockSwizzle {
       return 0;
   }
 
-  /// Computes CUDA grid dimensions given a size in units of logical tiles
+  /// Computes HGGC grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
     int tile = 1 << get_log_tile(tiled_shape);
@@ -353,7 +355,7 @@ struct GemmSplitKHorizontalThreadblockSwizzle {
       partitions);
   }
 
-  /// Computes CUDA grid dimensions given a size in units of logical tiles
+  /// Computes HGGC grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
     return dim3(tiled_shape.n(), tiled_shape.m(), tiled_shape.k());
@@ -404,7 +406,7 @@ struct GemvBatchedStridedThreadblockDefaultSwizzle {
       (problem_size.batch() + tile_size.batch() - 1) / tile_size.batch());
   }
 
-  /// Computes CUDA grid dimensions given a size in units of logical tiles
+  /// Computes HGGC grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(BatchedGemmCoord tiled_shape) {
     return dim3(tiled_shape.n(), tiled_shape.batch(), tiled_shape.k());

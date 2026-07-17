@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
 
@@ -45,7 +47,6 @@
 #include "cutlass/gemm/gemm.h"
 
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/epilogue/threadblock/epilogue.h"
 #include "cutlass/epilogue/threadblock/epilogue_with_broadcast.h"
 #include "cutlass/epilogue/threadblock/epilogue_streamk_with_broadcast.h"
@@ -177,62 +178,6 @@ struct DefaultStreamkEpilogueWithBroadcastTensorOp {
     OutputOp,
     typename Base::Padding,
     Base::kFragmentsPerIteration
-  >;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
-/// Defines sensible defaults for epilogues for VoltaTensorOps.
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename ElementOutput,
-  typename ElementTensor,
-  typename ElementVector,
-  typename OutputOp,
-  int ElementsPerAccess
->
-struct DefaultEpilogueWithBroadcastVoltaTensorOp {
-
-  /// Use defaults related to the existing epilogue
-  using Base = DefaultEpilogueVoltaTensorOp<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    OutputOp,
-    ElementsPerAccess
-  >;
-
-  //
-  // Stores the result z = (y = GEMM(A, B, C), broadcast)
-  //
-  using OutputTileIterator = cutlass::epilogue::threadblock::PredicatedTileIterator<
-    typename Base::OutputTileThreadMap,
-    ElementOutput
-  >;
-
-  //
-  // Additional tensor tile iterator - stores t = Elementwise(z)
-  //
-  using TensorTileIterator = cutlass::epilogue::threadblock::PredicatedTileIterator<
-    typename Base::OutputTileThreadMap,
-    ElementTensor
-  >;
-
-  /// Define the epilogue
-  using Epilogue = EpilogueWithBroadcast<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    OutputTileIterator,
-    TensorTileIterator,
-    ElementVector,
-    typename Base::AccumulatorFragmentIterator,
-    typename Base::WarpTileIterator,
-    typename Base::SharedLoadIterator,
-    OutputOp,
-    typename Base::Padding
   >;
 };
 

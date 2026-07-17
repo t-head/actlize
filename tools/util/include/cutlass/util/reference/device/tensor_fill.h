@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /* \file
   \brief Defines device-side elementwise operations on TensorView. Note, the operations defined
     in this header are not specialized for any particular data layout and are therefore not
@@ -37,7 +39,7 @@
 
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
 
 // Standard Library includes
 #include <utility>
@@ -48,8 +50,8 @@
 
 #endif
 
-// CUDA includes
-#include <curand_kernel.h>
+// device includes
+#include "cutlass/util/reference/device/acrand/acrand_kernel.h"
 
 // Cutlass includes
 #include "cutlass/cutlass.h"
@@ -76,26 +78,26 @@ namespace detail {
 
 template <typename FloatType>
 CUTLASS_DEVICE
-FloatType random_normal_float(curandState_t *state) {
-  return curand_normal(state);
+FloatType random_normal_float(acrandState_t *state) {
+  return acrand_normal(state);
 }
 
 template <>
 CUTLASS_DEVICE
-double random_normal_float<double>(curandState_t *state) {
-  return curand_normal_double(state);
+double random_normal_float<double>(acrandState_t *state) {
+  return acrand_normal_double(state);
 }
 
 template <typename FloatType>
 CUTLASS_DEVICE
-FloatType random_uniform_float(curandState_t *state) {
-  return curand_uniform(state);
+FloatType random_uniform_float(acrandState_t *state) {
+  return acrand_uniform(state);
 }
 
 template <>
 CUTLASS_DEVICE
-double random_uniform_float<double>(curandState_t *state) {
-  return curand_uniform_double(state);
+double random_uniform_float<double>(acrandState_t *state) {
+  return acrand_uniform_double(state);
 }
 
 template <typename Element>
@@ -148,7 +150,7 @@ struct RandomGaussianFunc {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -160,7 +162,7 @@ struct RandomGaussianFunc {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -235,7 +237,7 @@ struct RandomGaussianFunc<complex<Real>> {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -247,7 +249,7 @@ struct RandomGaussianFunc<complex<Real>> {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -359,7 +361,7 @@ void TensorFillRandomGaussian(
   int bits = -1,                          ///< If non-negative, specifies number of fractional bits that
                                           ///  are not truncated to zero. Permits reducing precision of
                                           ///  data.
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using RandomFunc = detail::RandomGaussianFunc<Element>;
   using Func = detail::TensorFillRandomGaussianFunc<Element, Layout>;
@@ -386,7 +388,7 @@ void BlockFillRandomGaussian(
   int bits = -1,                              ///< If non-negative, specifies number of fractional bits that
                                               ///  are not truncated to zero. Permits reducing precision of
                                               ///  data.
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using RandomFunc = detail::RandomGaussianFunc<Element>;
 
@@ -462,7 +464,7 @@ struct RandomUniformFunc {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -474,7 +476,7 @@ struct RandomUniformFunc {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -564,7 +566,7 @@ struct RandomUniformFunc<complex<Real>> {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -576,7 +578,7 @@ struct RandomUniformFunc<complex<Real>> {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -695,7 +697,7 @@ void TensorFillRandomUniform(
   int bits = -1,                          ///< If non-negative, specifies number of fractional bits that
                                           ///  are not truncated to zero. Permits reducing precision of
                                           ///  data.
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using RandomFunc = detail::RandomUniformFunc<Element>;
   using Func = detail::TensorFillRandomUniformFunc<Element, Layout>;
@@ -724,7 +726,7 @@ void BlockFillRandomUniform(
   int bits = -1,                          ///< If non-negative, specifies number of fractional bits that
                                           ///  are not truncated to zero. Permits reducing precision of
                                           ///  data.
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using RandomFunc = detail::RandomUniformFunc<Element>;
 
@@ -788,7 +790,7 @@ struct RandomSparseMetaFunc {
   Params params;
 
   /// RNG state object
-  curandState_t rng_state;
+  acrandState_t rng_state;
 
   //
   // Methods
@@ -800,7 +802,7 @@ struct RandomSparseMetaFunc {
 
     uint64_t gtid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curand_init(params.seed, gtid, 0, &rng_state);
+    acrand_init(params.seed, gtid, 0, &rng_state);
   }
 
   /// Compute random value and update RNG state
@@ -908,7 +910,7 @@ void TensorFillRandomSparseMeta(
   TensorView<Element, Layout> view,       ///< destination tensor
   uint64_t seed,                          ///< seed for RNG
   int MetaSizeInBits = 2,                 ///< meta data size
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using RandomFunc = detail::RandomSparseMetaFunc<Element>;
   using Func = detail::TensorFillRandomUniformFunc<Element, Layout>;
@@ -933,7 +935,7 @@ void BlockFillRandomSparseMeta(
   size_t capacity,
   uint64_t seed,                          ///< seed for RNG
   int MetaSizeInBits = 2,                 ///< meta data size
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using RandomFunc = detail::RandomSparseMetaFunc<Element>;
 
@@ -1256,7 +1258,7 @@ void TensorFillDiagonal(
   TensorView<Element, Layout> view,       ///< destination tensor
   Element diag = Element(1),              ///< value to write in the diagonal
   Element other = Element(0),             ///< value to write off the diagonal
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   typedef detail::TensorFillDiagonalFunc<Element, Layout> Func;
   typedef typename Func::Params Params;
@@ -1278,7 +1280,7 @@ void TensorFillPartial(
   TensorView<Element, Layout> view,       ///< destination tensor
   Element element,
   FillMode fill_mode,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   typedef detail::TensorFillPartialFunc<Element, Layout> Func;
   typedef typename Func::Params Params;
@@ -1300,7 +1302,7 @@ void TensorClearPartial(
   Element element,
   FillMode fill_mode,
   int alignment,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   typedef detail::TensorClearPartialFunc<Element, Layout> Func;
   typedef typename Func::Params Params;
@@ -1322,7 +1324,7 @@ template <
 void TensorFill(
   TensorView<Element, Layout> view,         ///< destination tensor
   Element val = Element(0),                 ///< value to uniformly fill it with
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   TensorFillDiagonal(view, val, val, stream);
 }
@@ -1335,7 +1337,7 @@ template <
   typename Layout>                ///< Layout function
 void TensorFillIdentity(
   TensorView<Element, Layout> view,                 ///< destination tensor
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   TensorFillDiagonal(view, Element(1), Element(0), stream);
 }
@@ -1436,7 +1438,7 @@ template <
 void TensorUpdateDiagonal(
   TensorView<Element, Layout> view,                 ///< destination tensor
   Element diag = Element(1),
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   typedef detail::TensorUpdateDiagonalFunc<Element, Layout> Func;
   typedef typename Func::Params Params;
@@ -1545,7 +1547,7 @@ template <
 void TensorUpdateOffDiagonal(
   TensorView<Element, Layout> view,      ///< destination tensor
   Element other = Element(1),
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   typedef detail::TensorUpdateOffDiagonalFunc<Element, Layout> Func;
   typedef typename Func::Params Params;
@@ -1670,7 +1672,7 @@ void TensorFillLinear(
   TensorView<Element, Layout> view,      ///< destination tensor
   Array<Element, Layout::kRank> const & v,
   Element s = Element(0),
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using Func = detail::TensorFillLinearFunc<Element, Layout>;
   using Params = typename Func::Params;
@@ -1694,7 +1696,7 @@ void TensorFillRandom(
   TensorView<Element, Layout> view,       ///< destination tensor
   uint64_t seed,
   Distribution dist,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using Real = typename RealType<Element>::Type;
 
@@ -1753,7 +1755,7 @@ void BlockFillRandom(
   size_t capacity,
   uint64_t seed,
   Distribution dist,
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using Real = typename RealType<Element>::Type;
 
@@ -1872,7 +1874,7 @@ template <
 void TensorCopyDiagonalIn(
   TensorView<Element, Layout> view,   ///< destination tensor
   Element const *ptr,                        ///< dense buffer of elements
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using Func = detail::TensorCopyDiagonalInFunc<Element, Layout>;
   using Params = typename Func::Params;
@@ -1979,7 +1981,7 @@ template <
 void TensorCopyDiagonalOut(
   Element *ptr,                               ///< dense buffer of elements
   TensorView<Element, Layout> view,      ///< source tensor
-  cudaStream_t stream = nullptr) {
+  hggcStream_t stream = nullptr) {
 
   using Func = detail::TensorCopyDiagonalOutFunc<Element, Layout>;
   using Params = typename Func::Params;

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -31,30 +32,30 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
+#include <hggc_runtime.h>
 
 struct GPU_Clock
 {
   GPU_Clock() {
-    cudaEventCreate(&start_);
-    cudaEventCreate(&stop_);
-    cudaEventRecord(start_);
+    hggcEventCreate(&start_);
+    hggcEventCreate(&stop_);
+    hggcEventRecord(start_);
   }
 
   ~GPU_Clock() {
-    cudaEventDestroy(start_);
-    cudaEventDestroy(stop_);
+    hggcEventDestroy(start_);
+    hggcEventDestroy(stop_);
   }
 
   void start() {
-    cudaEventRecord(start_);
+    hggcEventRecord(start_);
   }
 
   float milliseconds() {
-    cudaEventRecord(stop_);
-    cudaEventSynchronize(stop_);
+    hggcEventRecord(stop_);
+    hggcEventSynchronize(stop_);
     float time;
-    cudaEventElapsedTime(&time, start_, stop_);
+    hggcEventElapsedTime(&time, start_, stop_);
     return time;
   }
 
@@ -63,5 +64,5 @@ struct GPU_Clock
   }
 
  private:
-  cudaEvent_t start_, stop_;
+  hggcEvent_t start_, stop_;
 };

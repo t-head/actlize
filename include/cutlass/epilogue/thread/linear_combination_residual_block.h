@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -52,7 +53,7 @@ template <typename ElementOutput_, typename ElementAccumulator_,
           template <typename T> class ActivationOp_,
           template <typename T> class BinaryOp1_,
           template <typename T> class UnaryOp_,
-          template <typename T> class BinaryOp2_ = detail::NoOp,
+          template <typename T> class BinaryOp2_ = cutlass::epilogue::thread::detail::NoOp,
           bool StoreT_ = false,
           typename ElementVector_ = ElementC_>
 class LinearCombinationResidualBlock {

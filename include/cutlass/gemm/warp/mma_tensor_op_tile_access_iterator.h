@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,8 +29,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-    \brief Defines iterators used by warp-level matrix multiply operations targeting Tensor Cores.
+    \brief Defines iterators used by warp-level matrix multiply operations targeting Tensor cells.
 */
 
 #pragma once
@@ -41,13 +43,13 @@
 #include "cutlass/tensor_ref.h"
 #include "cutlass/matrix_shape.h"
 
-#include "cutlass/arch/memory_sm75.h"
+#include "cutlass/arch/memory_ppu.h"
 #include "cutlass/gemm/gemm.h"
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/layout/tensor.h"
 #include "cutlass/layout/pitch_linear.h"
-#include "cutlass/layout/tensor_op_multiplicand_sm80.h"
+#include "cutlass/layout/tensor_op_multiplicand_ppu0010.h"
 
 #include "cutlass/platform/platform.h"
 #include "cutlass/fast_math.h"

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,10 +29,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include "cutlass/detail/dependent_false.hpp"
 #include "cutlass/epilogue/fusion/callbacks.hpp"
+#include "cute/util/type_traits.hpp"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,6 +76,9 @@ struct CollectiveBuilder {
 // helper sub-builder for epilogue fusion callbacks (for internal use by CollectiveBuilder only)
 namespace detail {
 
+using cute::enable_if_t;
+using cute::is_base_of_v;
+
 // callbacks builder with operation tag
 template<
   class DispatchPolicy,
@@ -113,5 +119,6 @@ struct CallbacksBuilder<
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "builders/sm90_builder.inl"
+// cutlass3 change: original cutlass3 use relative path here, and some other place use absolute path
+#include "cutlass/epilogue/collective/builders/ppu_builder.inl"
 /////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,9 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
-#include "cuda_runtime.h"
+#include "hggc_runtime.h"
 #include <iostream>
 
 /**
@@ -48,13 +50,13 @@
 
 
 /**
- * Panic wrapper for unwinding CUDA runtime errors
+ * Panic wrapper for unwinding device runtime errors
  */
-#define CUDA_CHECK(status)                                              \
+#define CUTLASS_PPU_CHECK(status)                                              \
   {                                                                     \
-    cudaError_t error = status;                                         \
-    if (error != cudaSuccess) {                                         \
-      std::cerr << "Got bad cuda status: " << cudaGetErrorString(error) \
+    hggcError_t error = status;                                         \
+    if (error != hggcSuccess) {                                         \
+      std::cerr << "Got bad hggc status: " << hggcGetErrorString(error) \
                 << " at line: " << __LINE__ << std::endl;               \
       exit(EXIT_FAILURE);                                               \
     }                                                                   \
@@ -66,43 +68,43 @@
  */
 struct GpuTimer
 {
-    cudaStream_t _stream_id;
-    cudaEvent_t _start;
-    cudaEvent_t _stop;
+    hggcStream_t _stream_id;
+    hggcEvent_t _start;
+    hggcEvent_t _stop;
 
     /// Constructor
     GpuTimer() : _stream_id(0)
     {
-        CUDA_CHECK(cudaEventCreate(&_start));
-        CUDA_CHECK(cudaEventCreate(&_stop));
+        CUTLASS_PPU_CHECK(hggcEventCreate(&_start));
+        CUTLASS_PPU_CHECK(hggcEventCreate(&_stop));
     }
 
     /// Destructor
     ~GpuTimer()
     {
-        CUDA_CHECK(cudaEventDestroy(_start));
-        CUDA_CHECK(cudaEventDestroy(_stop));
+        CUTLASS_PPU_CHECK(hggcEventDestroy(_start));
+        CUTLASS_PPU_CHECK(hggcEventDestroy(_stop));
     }
 
     /// Start the timer for a given stream (defaults to the default stream)
-    void start(cudaStream_t stream_id = 0)
+    void start(hggcStream_t stream_id = 0)
     {
         _stream_id = stream_id;
-        CUDA_CHECK(cudaEventRecord(_start, _stream_id));
+        CUTLASS_PPU_CHECK(hggcEventRecord(_start, _stream_id));
     }
 
     /// Stop the timer
     void stop()
     {
-        CUDA_CHECK(cudaEventRecord(_stop, _stream_id));
+        CUTLASS_PPU_CHECK(hggcEventRecord(_stop, _stream_id));
     }
 
     /// Return the elapsed time (in milliseconds)
     float elapsed_millis()
     {
         float elapsed = 0.0;
-        CUDA_CHECK(cudaEventSynchronize(_stop));
-        CUDA_CHECK(cudaEventElapsedTime(&elapsed, _start, _stop));
+        CUTLASS_PPU_CHECK(hggcEventSynchronize(_stop));
+        CUTLASS_PPU_CHECK(hggcEventElapsedTime(&elapsed, _start, _stop));
         return elapsed;
     }
 };

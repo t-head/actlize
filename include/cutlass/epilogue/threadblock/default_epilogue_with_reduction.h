@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
 
   \brief Epilogue for threadblock scoped GEMMs using Tensor Ops.
@@ -46,7 +48,6 @@
 #include "cutlass/gemm/gemm.h"
 
 #include "cutlass/epilogue/threadblock/default_epilogue_tensor_op.h"
-#include "cutlass/epilogue/threadblock/default_epilogue_volta_tensor_op.h"
 #include "cutlass/epilogue/threadblock/epilogue.h"
 #include "cutlass/epilogue/threadblock/epilogue_with_reduction.h"
 
@@ -76,61 +77,6 @@ struct DefaultEpilogueWithReductionTensorOp {
 
   /// Use defaults related to the existing epilogue
   using Base = DefaultEpilogueTensorOp<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    OutputOp,
-    ElementsPerAccess
-  >;
-
-  /// Additional tensor tile iterator
-  using TensorTileIterator = cutlass::epilogue::threadblock::PredicatedTileIterator<
-    typename Base::OutputTileThreadMap,
-    typename OutputOp::ElementTensor
-  >;
-
-  using OutputTileIterator = cutlass::epilogue::threadblock::PredicatedTileIterator<
-    typename Base::OutputTileThreadMap,
-    ElementOutput,
-    ScatterD,
-    PermuteDLayout
-  >;
-
-  /// Define the epilogue
-  using Epilogue = EpilogueWithReduction<
-    Shape,
-    WarpMmaTensorOp,
-    PartitionsK,
-    OutputTileIterator,
-    TensorTileIterator,
-    typename WarpMmaTensorOp::ElementC,
-    typename Base::AccumulatorFragmentIterator,
-    typename Base::WarpTileIterator,
-    typename Base::SharedLoadIterator,
-    typename Base::OutputOp,
-    ReductionOp,
-    typename Base::Padding
-  >;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
-/// Defines sensible defaults for epilogues for TensorOps.
-template <
-  typename Shape,
-  typename WarpMmaTensorOp,
-  int PartitionsK,
-  typename ElementOutput,
-  typename OutputOp,
-  typename ReductionOp,
-  int ElementsPerAccess,
-  bool ScatterD = false,
-  typename PermuteDLayout = layout::NoPermute
->
-struct DefaultEpilogueWithReductionVoltaTensorOp {
-
-  /// Use defaults related to the existing epilogue
-  using Base = DefaultEpilogueVoltaTensorOp<
     Shape,
     WarpMmaTensorOp,
     PartitionsK,

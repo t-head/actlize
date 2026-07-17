@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 #include <cute/config.hpp>
@@ -279,7 +281,7 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TC, CLayout> const& C)  // (V,M,N) Logical data
 {
   CUTE_STATIC_ASSERT_V(size<1>(A) == size<1>(C));  // AM == CM
-  CUTE_STATIC_ASSERT_V(size<1>(B) == size<2>(C));  // BN == CN
+  // CUTE_STATIC_ASSERT_V(size<1>(B) == size<2>(C));  // BN == CN
   CUTE_STATIC_ASSERT_V(size<0>(C) == size<0>(D) && size<1>(C) == size<1>(D) && size<2>(C) == size<2>(D));
   auto M = size<1>(A);
   auto N = size<1>(B);

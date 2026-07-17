@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
   \brief GETT device reference code
 */
@@ -123,7 +125,7 @@ gett(
     ElementC const* ptr_C, StrideC stride_c_mnl,
     ElementD      * ptr_D, StrideD stride_d_mnl,
     ElementEpilogue alpha, ElementEpilogue beta,
-    cudaStream_t stream = 0) {
+    hggcStream_t stream = 0) {
   using namespace cute;
 
   static_assert(cute::rank(ProblemShapeMNKL{}) == 4);

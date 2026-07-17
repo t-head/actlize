@@ -1,4 +1,5 @@
 /***************************************************************************************************
+ * Copyright (c) 2022-2026, T-HEAD (SHANGHAI) SEMICONDUCTOR CO., LTD. All rights reserved. 
  * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -28,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 #pragma once
 
 /*
@@ -40,8 +42,8 @@
          C++11 compatibility is enforced by this unit test: `cutlass_test_unit_core_cpp11`.
 */
 
-#if !defined(__CUDACC_RTC__)
-#include "cuda_runtime.h"
+#if !defined(__HGGCCC_RTC__)
+#include "hggc_runtime.h"
 
 #include "cutlass/trace.h"
 #endif
@@ -53,29 +55,29 @@ struct KernelHardwareInfo {
   // Data members
   //
   int device_id = 0;
-  int sm_count  = 0;
+  int cu_count  = 0;
 
   //
   // Methods
   //
 
-#if !defined(__CUDACC_RTC__)
+#if !defined(__HGGCCC_RTC__)
   static inline int
   query_device_multiprocessor_count(int device_id = 0) {
-    cudaError_t result = cudaGetDevice(&device_id);
-    if (result != cudaSuccess) {
+    hggcError_t result = hggcGetDevice(&device_id);
+    if (result != hggcSuccess) {
       CUTLASS_TRACE_HOST(
-        "  cudaGetDevice() returned error "
-        << cudaGetErrorString(result));
+        "  hggcGetDevice() returned error "
+        << hggcGetErrorString(result));
       return 0;
     }
     int multiprocessor_count;
-    result = cudaDeviceGetAttribute(&multiprocessor_count,
-      cudaDevAttrMultiProcessorCount, device_id);
-    if (result != cudaSuccess) {
+    result = hggcDeviceGetAttribute(&multiprocessor_count,
+      hggcDevAttrMultiProcessorCount, device_id);
+    if (result != hggcSuccess) {
       CUTLASS_TRACE_HOST(
-        "  cudaDeviceGetAttribute() returned error "
-        << cudaGetErrorString(result));
+        "  hggcDeviceGetAttribute() returned error "
+        << hggcGetErrorString(result));
       return 0;
     }
     return multiprocessor_count;
