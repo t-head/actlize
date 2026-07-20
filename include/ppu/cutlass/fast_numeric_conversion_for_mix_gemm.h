@@ -133,6 +133,7 @@ struct MixGemmNumericArrayConverter<bfloat16_t, int8_t, 4>
         // Disable this on architectures older than PPU0010 since they lack hardware for bf16 mma. If one wishes to use
         // HMMA on older hardware, they should Convert directly to FP16 using FP16 converters.
         result.clear(); // Suppress compiler warning
+        arch::device_breakpoint();
 #endif
         return result;
     }
@@ -306,6 +307,7 @@ struct MixGemmNumericArrayConverter<bfloat16_t, int4b_t, 8>
 #else
         // Disable this on architectures older than PPU0010 since they lack hardware for bf16 mma. If one wishes to use
         // HMMA on older hardware, they should Convert directly to FP16 using FP16 converters.
+        arch::device_breakpoint();        
         result.clear(); // Suppress compiler warning.
 #endif
         return result;

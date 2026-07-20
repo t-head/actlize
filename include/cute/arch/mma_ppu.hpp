@@ -64,6 +64,20 @@ struct PPU_DP4A
   }
 };
 
+struct PPU_DP2A
+{
+  using DRegisters = int32_t[1];
+  using ARegisters = uint32_t[1];
+  using BRegisters = uint32_t[1];
+  using CRegisters = int32_t[1];
+
+  // Register asm fma
+  CUTE_HOST_DEVICE static void
+  fma(int32_t& d, uint32_t const& a, uint32_t const& b, int32_t const& c)
+  {
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_DP2A without CUTE_ARCH_MMA_PPU0010_ENABLED");
+  }
+};
 
 } // namespace cute
 
@@ -96,11 +110,7 @@ struct PPU_8x8x4_F16F16F16F16_TN
       uint32_t const& b0, uint32_t const& b1,
       uint32_t const& c0, uint32_t const& c1, uint32_t const& c2, uint32_t const& c3)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F16F16F16F16_TN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -120,11 +130,7 @@ struct PPU_8x8x4_F16F16F16F16_NT
       uint32_t const& b0, uint32_t const& b1,
       uint32_t const& c0, uint32_t const& c1, uint32_t const& c2, uint32_t const& c3)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F16F16F16F16_NT without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -144,11 +150,7 @@ struct PPU_8x8x4_F16F16F16F16_NN
       uint32_t const& b0, uint32_t const& b1,
       uint32_t const& c0, uint32_t const& c1, uint32_t const& c2, uint32_t const& c3)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F16F16F16F16_NN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -168,11 +170,7 @@ struct PPU_8x8x4_F16F16F16F16_TT
       uint32_t const& b0, uint32_t const& b1,
       uint32_t const& c0, uint32_t const& c1, uint32_t const& c2, uint32_t const& c3)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F16F16F16F16_TT without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -198,11 +196,7 @@ struct PPU_8x8x4_F32F16F16F32_TN
       float    const& c0, float    const& c1, float const& c2, float const& c3,
       float    const& c4, float    const& c5, float const& c6, float const& c7)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F32F16F16F32_TN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -224,11 +218,7 @@ struct PPU_8x8x4_F32F16F16F32_NT
       float    const& c0, float    const& c1, float const& c2, float const& c3,
       float    const& c4, float    const& c5, float const& c6, float const& c7)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F32F16F16F32_NT without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -250,11 +240,7 @@ struct PPU_8x8x4_F32F16F16F32_NN
       float    const& c0, float    const& c1, float const& c2, float const& c3,
       float    const& c4, float    const& c5, float const& c6, float const& c7)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F32F16F16F32_NN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -276,11 +262,7 @@ struct PPU_8x8x4_F32F16F16F32_TT
       float    const& c0, float    const& c1, float const& c2, float const& c3,
       float    const& c4, float    const& c5, float const& c6, float const& c7)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x4_F32F16F16F32_TT without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 
 };
@@ -370,7 +352,7 @@ struct PPU_8x8x16_S32S8S8S32_TN
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32S8S8S32_TN on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32"    
@@ -799,7 +781,7 @@ struct PPU_8x8x16_S32S8S8S32_TNV2
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32S8S8S32_TNV2 on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32 "    
@@ -836,7 +818,7 @@ struct PPU_8x8x16_S32S8S8S32_TN_SATURATE
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32S8S8S32_TN_SATURATE on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32.satfinite "    
@@ -1057,7 +1039,7 @@ struct PPU_8x8x16_S32S8U8S32_TN
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32S8U8S32_TN on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.s8.u8.s32 "    
@@ -1094,7 +1076,7 @@ struct PPU_8x8x16_S32S8U8S32_TN_SATURATE
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32S8U8S32_TN_SATURATE on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.s8.u8.s32.satfinite "    
@@ -1315,7 +1297,7 @@ struct PPU_8x8x16_S32U8S8S32_TN
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32U8S8S32_TN on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.u8.s8.s32 "    
@@ -1352,7 +1334,7 @@ struct PPU_8x8x16_S32U8S8S32_TN_SATURATE
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32U8S8S32_TN_SATURATE on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.u8.s8.s32.satfinite "    
@@ -1573,7 +1555,7 @@ struct PPU_8x8x16_S32U8U8S32_TN
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32U8U8S32_TN on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.u8.u8.s32 "    
@@ -1610,7 +1592,7 @@ struct PPU_8x8x16_S32U8U8S32_TN_SATURATE
   {
 #if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
-    assert(0);
+    CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x16_S32U8U8S32_TN_SATURATE on PPU0010");
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
 asm volatile(
     "ppu.tc02.mma.sync.aligned.m8n8k16.row.col.s32.u8.u8.s32.satfinite "    
@@ -1829,11 +1811,7 @@ struct PPU_8x8x32_S32S4S4S32_TN
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32S4S4S32_TN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -1853,11 +1831,7 @@ struct PPU_8x8x32_S32S4S4S32_TN_SATURATE
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32S4S4S32_TN_SATURATE without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2061,11 +2035,7 @@ struct PPU_8x8x32_S32S4U4S32_TN
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32S4U4S32_TN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2085,11 +2055,7 @@ struct PPU_8x8x32_S32S4U4S32_TN_SATURATE
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32S4U4S32_TN_SATURATE without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2293,11 +2259,7 @@ struct PPU_8x8x32_S32U4S4S32_TN
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32U4S4S32_TN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2317,11 +2279,7 @@ struct PPU_8x8x32_S32U4S4S32_TN_SATURATE
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32U4S4S32_TN_SATURATE without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2525,11 +2483,7 @@ struct PPU_8x8x32_S32U4U4S32_TN
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32U4U4S32_TN without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2549,11 +2503,7 @@ struct PPU_8x8x32_S32U4U4S32_TN_SATURATE
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x32_S32U4U4S32_TN_SATURATE without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 
@@ -2759,11 +2709,7 @@ struct PPU_8x8x128_S32U1U1S32_TN_XORPOPC
       uint32_t const& b0,
       uint32_t const& c0, uint32_t const& c1)
   {
-#if defined(CUTE_ARCH_MMA_B1_XOR_PPU0010_ENABLED)
-    assert(0);
-#else
     CUTE_RUNTIME_ASSERT("Attempting to use PPU_8x8x128_S32U1U1S32_TN_XORPOPC without CUTE_ARCH_MMA_PPU0010_ENABLED");
-#endif
   }
 };
 

@@ -238,9 +238,10 @@ public:
     }
 
     // Check Symmetric kernel modes (Lower and Upper - for diagonal CTAs, None for rest CTAs)
-    // if ((kBlasMode == BlasMode::kSymmetric || kBlasMode == BlasMode::kHermitian) && 
-    //     fill_mode == cutlass::FillMode::kInvalid) {
-    // }
+    if ((kBlasMode == BlasMode::kSymmetric || kBlasMode == BlasMode::kHermitian) && 
+        fill_mode == cutlass::FillMode::kInvalid) {
+      arch::device_breakpoint();
+    }
 
     // Starting address of the matrix
     matrix_start_addr =  reinterpret_cast<size_t>(pointer); 

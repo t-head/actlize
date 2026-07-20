@@ -115,18 +115,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-    unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-    unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-    unsigned const *C = reinterpret_cast<unsigned const *>(&c);
-    unsigned *D = reinterpret_cast<unsigned *>(&d);
-
-assert(0);
-
-#else
     assert(0);
-#endif
   }
 };
 
@@ -168,18 +157,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-    unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-    unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-    unsigned const *C = reinterpret_cast<unsigned const *>(&c);
-    unsigned *D = reinterpret_cast<unsigned *>(&d);
-
-assert(0);
-
-#else
     assert(0);
-#endif
   }
 };
 
@@ -221,18 +199,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-    unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-    unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-    unsigned const *C = reinterpret_cast<unsigned const *>(&c);
-    unsigned *D = reinterpret_cast<unsigned *>(&d);
-
     assert(0);
-
-#else
-    assert(0);
-#endif
   }
 };
 
@@ -274,18 +241,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-    unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-    unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-    unsigned const *C = reinterpret_cast<unsigned const *>(&c);
-    unsigned *D = reinterpret_cast<unsigned *>(&d);
-
     assert(0);
-
-#else
-    assert(0);
-#endif
   }
 };
 
@@ -334,18 +290,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-  unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-  unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-  float const *C = reinterpret_cast<float const *>(&c);
-  float *D = reinterpret_cast<float *>(&d);
-
-  assert(0);
-
-#else
     assert(0);
-#endif
   }
 };
 
@@ -388,18 +333,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-  unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-  unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-  float const *C = reinterpret_cast<float const *>(&c);
-  float *D = reinterpret_cast<float *>(&d);
-
-  assert(0);
-
-#else
     assert(0);
-#endif
   }
 };
 
@@ -442,18 +376,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-  unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-  unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-  float const *C = reinterpret_cast<float const *>(&c);
-  float *D = reinterpret_cast<float *>(&d);
-
-  assert(0);
-
-#else
     assert(0);
-#endif
   }
 };
 
@@ -496,18 +419,7 @@ struct Mma<
     FragmentC const &c
   ) {
 
-#if defined(CUTLASS_ARCH_MMA_PPU0010_ENABLED)
-
-  unsigned const *A = reinterpret_cast<unsigned const *>(&a);
-  unsigned const *B = reinterpret_cast<unsigned const *>(&b);
-  float const *C = reinterpret_cast<float const *>(&c);
-  float *D = reinterpret_cast<float *>(&d);
-
-  assert(0);
-
-#else
     assert(0);
-#endif
   }
 };
 

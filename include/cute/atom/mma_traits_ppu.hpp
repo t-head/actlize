@@ -58,6 +58,21 @@ struct MMA_Traits<PPU_DP4A>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+template <>
+struct MMA_Traits<PPU_DP2A>
+{
+  using ValTypeD = int32_t;
+  using ValTypeA = int16_t;
+  using ValTypeB = int16_t;
+  using ValTypeC = int32_t;
+
+  using Shape_MNK = Shape<_1,_1,_2>;
+  using ThrID   = Layout<_1>;
+  using ALayout = Layout<Shape<_1,_2>>;
+  using BLayout = Layout<Shape<_1,_2>>;
+  using CLayout = Layout<Shape<_1,_1>>;
+};
+
 } // namespace cute
 
 
