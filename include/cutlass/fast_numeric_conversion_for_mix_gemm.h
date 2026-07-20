@@ -131,6 +131,7 @@ struct MixGemmNumericArrayConverter<bfloat16_t, int8_t, 4>
         }
 #else
         result.clear(); // Suppress compiler warning
+        arch::device_breakpoint();
 #endif
         return result;
     }
@@ -301,6 +302,7 @@ struct MixGemmNumericArrayConverter<bfloat16_t, int4b_t, 8>
             asm("ppu.fma.rtte.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[ii]) : "r"(h[ii]), "r"(BF16_ONE), "r"(BF16_BIAS));
         }
 #else
+        arch::device_breakpoint();
         result.clear(); // Suppress compiler warning.
 #endif
         return result;

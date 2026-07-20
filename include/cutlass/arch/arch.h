@@ -77,6 +77,10 @@ struct PPU0015 {
   static int const kMinComputeCapability = 89;
 };
 
+CUTLASS_DEVICE
+void device_breakpoint() {
+  __brkpt();
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
