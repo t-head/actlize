@@ -421,7 +421,7 @@ asm volatile(
         "ppu.tc01.ldmatrix.sync.aligned.m16n16.x1.trans.shared.b16 {%0, %1, %2, %3}, [%4];"     : "=r"(x), "=r"(y), "=r"(z), "=r"(w) : "r"(addr));
     #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
     asm volatile(
-        "ppu.tc02.ldmatrix.sync.aligned.m16n16.x1.trans.shared.b16 {%0, %1, %2, %3}, [%4];"     : "=r"(x), "=r"(y), "=r"(z), "=r"(w) : "r"(addr));
+        "ppu.tc02.ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%0, %2, %1, %3}, [%4];"     : "=r"(x), "=r"(y), "=r"(z), "=r"(w) : "r"(addr));
     #endif
             reinterpret_cast<int4 &>(D) = make_int4(x, y, z, w);
           #else
