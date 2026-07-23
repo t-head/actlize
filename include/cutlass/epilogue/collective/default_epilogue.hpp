@@ -415,6 +415,16 @@ public:
     }
     // source is not needed, avoid load
     else {
+#if defined(__HGGC_ARCH__) && __HGGC_ARCH__ == 100
+      // PPU0010: default path
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < size(accumulators); ++i) {
+        if (elem_less(tCcD(i), make_coord(get<0>(residue_mnk), get<1>(residue_mnk)))) {
+          tCgD(i) = epilogue_op(accumulators(i));
+        }
+      }
+#else
+      // PPU0015: original optimized path with rank-3 accumulator layout
       CUTLASS_PRAGMA_UNROLL
       for (int warp_m = 0; warp_m < size<1>(tCgD); ++warp_m) {
         CUTLASS_PRAGMA_UNROLL
@@ -452,6 +462,7 @@ public:
           }
         }
       }
+#endif
     }
   }
 
