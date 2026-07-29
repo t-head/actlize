@@ -356,6 +356,12 @@ struct Sigmoid {
 
   CUTLASS_HOST_DEVICE
   T operator()(T const &value) const {
+#if defined(__HGGC_ARCH__)
+    if constexpr (std::is_same_v<T, float>) {
+      // __ppu_sgmdf only support f32 dtype.
+      return T(__ppu_sgmdf(value));
+    }
+#endif
     return T(1) / (T(1) + fast_exp(-value));
   }
 };
@@ -368,6 +374,17 @@ struct Sigmoid<Array<T, N>> {
   Array<T, N> operator()(Array<T, N> const& z) const {
     plus<Array<T, N>> add;
 
+#if defined(__HGGC_ARCH__)
+  if constexpr (std::is_same_v<T, float>) {
+    Array<T, N> y;
+    Sigmoid<T> sigmoid_op;
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < int(z.size()); ++i) {
+      y[i] = sigmoid_op(z[i]);
+    }
+    return y;
+  }
+#endif
 #if defined(CUTLASS_USE_TANH_FOR_SIGMOID)
     multiplies<Array<T, N>> mul;
     fast_tanh_op<Array<T, N>> tanh;
