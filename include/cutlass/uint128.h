@@ -114,7 +114,11 @@ struct uint128_t {
 
   CUTLASS_HOST_DEVICE
   static void exception() {
+#if defined(__HGGC_ARCH__)
+  __brkpt();
+#else
   throw std::runtime_error("Not yet implemented.");
+#endif
   }
 
   /// Add
