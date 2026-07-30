@@ -404,35 +404,6 @@ struct ImplicitGemmConvolutionFusion {
   CUTLASS_DEVICE
   void operator()(Params const &params, SharedStorage &shared_storage) {
 
-    // int block_idx1 = (blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x;
-    // int warp_offset = (block_idx1 * blockDim.x + threadIdx.x) / 32;
-    // long Pc0;
-    // asm("s.savepc %0, 0x00" : "=s"(Pc0));
-    // if (warp_offset < 50) {
-    //   __ppu_prefetch_KI((void*)(Pc0 * 8 + warp_offset * 128));
-    // }
-
-    // only use block.y to prefetch corresponding A matrix
-    // void const *global_ptr = reinterpret_cast<void const*>(params.ptr_A);
-    // int block_idx2 = blockIdx.y;
-    // int wave_idx = blockIdx.y / 128;
-    // int idx_in_wave = (blockIdx.y % 128) * blockDim.x + threadIdx.x;
-    // int wave_offset = 668 * 14 * 14; // 668 batch per wave
-    // int channel_size = params.problem_size.C * sizeof(ElementA);
-    // if (blockIdx.x == 0 && threadIdx.x < Mma::Shape::kM) {
-    //   __ppu_prefetch_nonebulk_LLC(const_cast<void*>(static_cast<const void*>(static_cast<const char*>(global_ptr) + (wave_idx * wave_offset + idx_in_wave) * channel_size)));
-
-    // }
-
-    // int thread_off = ((blockIdx.y * gridDim.x) + blockIdx.x) * 256;
-    // __ppu_prefetch_nonebulk_LLC(const_cast<void*>(static_cast<const void*>(static_cast<const char*>(global_ptr) + thread_off * 1024)));
-
-    // void const *global_ptr = reinterpret_cast<void const*>(params.ptr_A);
-    // int thread_offset = (blockIdx.y % 288) * 128 + threadIdx.x;
-    // int wave_idx = blockIdx.y / 288;
-    // __ppu_prefetch_nonebulk_LLC(const_cast<void*>(static_cast<const void*>(static_cast<const char*>(global_ptr) + wave_idx * 147440 * 256 + thread_offset * 256)));
-
-
     // Compute threadblock location
     ThreadblockSwizzle threadblock_swizzle;
 
