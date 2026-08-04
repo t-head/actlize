@@ -119,7 +119,7 @@ protected:
     // Release pattern using acq_rel fence + relaxed modifier.  (The fence also releases data
     // that was weakly-written by other threads prior to the last syncthreads)
     asm volatile ("ppu.fence.acq_rel.gpu;\n");
-    asm volatile ("ppu.red.relaxed.gpu.global.add.s32 [%0], %1;\n" : : "l"(ptr), "r"(val));
+    asm volatile ("ppu.atom.global.add.s32 _, [%0], %1;\n" : : "l"(ptr), "r"(val));
 
 #else
     __threadfence();
