@@ -125,7 +125,7 @@ public:
     CUTLASS_HOST_DEVICE
     Params(Layout const &layout, cutlass::conv::Conv2dProblemSize const &problem_size): 
       PredicatedTileIteratorDirect2dConvParams(
-        layout.stride(0) * int(sizeof(AccessType)) / kElementsPerAccess,
+        LongIndex(layout.stride(0)) * int(sizeof(AccessType)) / kElementsPerAccess,
         {ThreadBlockOutputShape::kH, ThreadBlockOutputShape::kW},
         problem_size
       ) 

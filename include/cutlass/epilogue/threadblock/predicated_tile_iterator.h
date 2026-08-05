@@ -116,7 +116,7 @@ public:
     CUTLASS_HOST_DEVICE
     Params(Layout const &layout):
       PredicatedTileIteratorParams(
-        layout.stride(0) * int(sizeof(AccessType)) / kElementsPerAccess,
+        LongIndex(layout.stride(0)) * int(sizeof(AccessType)) / kElementsPerAccess,
         make_OutputTileThreadMapDesc<ThreadMap>()
       )
     {
@@ -527,7 +527,7 @@ public:
     CUTLASS_HOST_DEVICE
     Params(Layout const &layout):
       PredicatedTileIteratorParams(
-        layout.stride(0) * int(sizeof(AccessType)) / kElementsPerAccess,
+        LongIndex(layout.stride(0)) * int(sizeof(AccessType)) / kElementsPerAccess,
         make_OutputTileThreadMapDesc<ThreadMap>()
       )
     {
@@ -944,7 +944,7 @@ public:
     CUTLASS_HOST_DEVICE
     Params(Layout const &layout):
       PredicatedTileIteratorParams(
-        layout.stride(0) * int(sizeof(AccessType)) / kElementsPerAccess,
+        LongIndex(layout.stride(0)) * int(sizeof(AccessType)) / kElementsPerAccess,
         make_OutputTileThreadMapDesc<ThreadMap>()
       )
     {
@@ -1302,7 +1302,7 @@ public:
     CUTLASS_HOST_DEVICE
     Params(Layout const &layout) {
 
-      initialize(layout.stride(0) * int(sizeof(AccessType)) / kElementsPerAccess);
+      initialize(LongIndex(layout.stride(0)) * int(sizeof(AccessType)) / kElementsPerAccess);
     }
   };
 
