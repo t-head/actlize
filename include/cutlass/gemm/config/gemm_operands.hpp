@@ -93,7 +93,7 @@ struct GetMmaInst<Arch, float, float, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x8_F32F32F32F32_TN, 
+    PPU0015_16x16x8_F32F32F32F32_TN,
     void
   >;
 };
@@ -102,7 +102,7 @@ template <typename Arch>
 struct GetMmaInst<Arch, cutlass::tfloat32_t, cutlass::tfloat32_t, float> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x8_F32TF32TF32F32_TN, 
+    PPU0015_16x16x8_F32TF32TF32F32_TN,
     PPU0010_16x16x8_F32TF32TF32F32_TN
   >;
 };
@@ -111,7 +111,7 @@ template <typename Arch>
 struct GetMmaInst<Arch, cutlass::half_t, cutlass::half_t, float> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x16_F32F16F16F32_TN, 
+    PPU0015_16x16x16_F32F16F16F32_TN,
     PPU0010_16x16x16_F32F16F16F32_TN
   >;
 };
@@ -120,7 +120,7 @@ template <typename Arch>
 struct GetMmaInst<Arch, cutlass::half_t, cutlass::half_t, cutlass::half_t> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x16_F16F16F16F16_TN, 
+    PPU0015_16x16x16_F16F16F16F16_TN,
     PPU0010_16x16x16_F16F16F16F16_TN
   >;
 };
@@ -129,7 +129,7 @@ template <typename Arch>
 struct GetMmaInst<Arch, cutlass::bfloat16_t, cutlass::bfloat16_t, float> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x16_F32BF16BF16F32_TN, 
+    PPU0015_16x16x16_F32BF16BF16F32_TN,
     PPU0010_16x16x16_F32BF16BF16F32_TN
   >;
 };
@@ -139,7 +139,7 @@ struct GetMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e4m3_t, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E4M3E4M3F32_TN, 
+    PPU0015_16x16x32_F32E4M3E4M3F32_TN,
     void
   >;
 };
@@ -149,7 +149,7 @@ struct GetMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e5m2_t, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E4M3E5M2F32_TN, 
+    PPU0015_16x16x32_F32E4M3E5M2F32_TN,
     void
   >;
 };
@@ -159,7 +159,7 @@ struct GetMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e4m3_t, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E5M2E4M3F32_TN, 
+    PPU0015_16x16x32_F32E5M2E4M3F32_TN,
     void
   >;
 };
@@ -169,7 +169,7 @@ struct GetMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e5m2_t, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E5M2E5M2F32_TN, 
+    PPU0015_16x16x32_F32E5M2E5M2F32_TN,
     void
   >;
 };
@@ -179,7 +179,7 @@ struct GetMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e4m3_t, cutlass::h
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E4M3E4M3F16_TN, 
+    PPU0015_16x16x32_F16E4M3E4M3F16_TN,
     void
   >;
 };
@@ -189,7 +189,7 @@ struct GetMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e5m2_t, cutlass::h
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E4M3E5M2F16_TN, 
+    PPU0015_16x16x32_F16E4M3E5M2F16_TN,
     void
   >;
 };
@@ -199,7 +199,7 @@ struct GetMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e4m3_t, cutlass::h
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using cute = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E5M2E4M3F16_TN, 
+    PPU0015_16x16x32_F16E5M2E4M3F16_TN,
     void
   >;
 };
@@ -209,7 +209,7 @@ struct GetMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e5m2_t, cutlass::h
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E5M2E5M2F16_TN, 
+    PPU0015_16x16x32_F16E5M2E5M2F16_TN,
     void
   >;
 };
@@ -218,7 +218,7 @@ template <typename Arch>
 struct GetMmaInst<Arch, int8_t, int8_t, int32_t> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_S32S8S8S32_TN, 
+    PPU0015_16x16x32_S32S8S8S32_TN,
     PPU0010_16x16x32_S32S8S8S32_TN
   >;
 };
@@ -231,7 +231,7 @@ struct GetAiuMmaInst<Arch, float, float, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x8_F32F32F32F32_TN, 
+    PPU0015_16x16x8_F32F32F32F32_TN,
     void
   >;
 };
@@ -240,7 +240,7 @@ template <typename Arch>
 struct GetAiuMmaInst<Arch, cutlass::tfloat32_t, cutlass::tfloat32_t, float> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x8_F32TF32TF32F32_TN, 
+    PPU0015_16x16x8_F32TF32TF32F32_TN,
     PPU0010_16x16x8_F32TF32TF32F32_TN
   >;
 };
@@ -249,7 +249,7 @@ template <typename Arch>
 struct GetAiuMmaInst<Arch, cutlass::half_t, cutlass::half_t, float> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x16_F32F16F16F32_TN, 
+    PPU0015_16x16x16_F32F16F16F32_TN,
     PPU0010_16x16x16_F32F16F16F32_TN
   >;
 };
@@ -258,7 +258,7 @@ template <typename Arch>
 struct GetAiuMmaInst<Arch, cutlass::half_t, cutlass::half_t, cutlass::half_t> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x16_F16F16F16F16_TN, 
+    PPU0015_16x16x16_F16F16F16F16_TN,
     PPU0010_16x16x16_F16F16F16F16_TN
   >;
 };
@@ -267,7 +267,7 @@ template <typename Arch>
 struct GetAiuMmaInst<Arch, cutlass::bfloat16_t, cutlass::bfloat16_t, float> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x16_F32BF16BF16F32_TN, 
+    PPU0015_16x16x16_F32BF16BF16F32_TN,
     PPU0010_16x16x16_F32BF16BF16F32_TN
   >;
 };
@@ -277,7 +277,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e4m3_t, float> 
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E4M3E4M3F32_TN, 
+    PPU0015_16x16x32_F32E4M3E4M3F32_TN,
     void
   >;
 };
@@ -287,7 +287,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e5m2_t, float> 
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E4M3E5M2F32_TN, 
+    PPU0015_16x16x32_F32E4M3E5M2F32_TN,
     void
   >;
 };
@@ -297,7 +297,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e4m3_t, float> 
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E5M2E4M3F32_TN, 
+    PPU0015_16x16x32_F32E5M2E4M3F32_TN,
     void
   >;
 };
@@ -307,7 +307,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e5m2_t, float> 
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F32E5M2E5M2F32_TN, 
+    PPU0015_16x16x32_F32E5M2E5M2F32_TN,
     void
   >;
 };
@@ -317,7 +317,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e4m3_t, cutlass
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E4M3E4M3F16_TN, 
+    PPU0015_16x16x32_F16E4M3E4M3F16_TN,
     void
   >;
 };
@@ -327,7 +327,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e4m3_t, cutlass::float_e5m2_t, cutlass
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E4M3E5M2F16_TN, 
+    PPU0015_16x16x32_F16E4M3E5M2F16_TN,
     void
   >;
 };
@@ -337,7 +337,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e4m3_t, cutlass
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E5M2E4M3F16_TN, 
+    PPU0015_16x16x32_F16E5M2E4M3F16_TN,
     void
   >;
 };
@@ -347,7 +347,7 @@ struct GetAiuMmaInst<Arch, cutlass::float_e5m2_t, cutlass::float_e5m2_t, cutlass
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_F16E5M2E5M2F16_TN, 
+    PPU0015_16x16x32_F16E5M2E5M2F16_TN,
     void
   >;
 };
@@ -356,7 +356,7 @@ template <typename Arch>
 struct GetAiuMmaInst<Arch, int8_t, int8_t, int32_t> {
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x32_S32S8S8S32_TN, 
+    PPU0015_16x16x32_S32S8S8S32_TN,
     PPU0010_16x16x32_S32S8S8S32_TN
   >;
 };
@@ -366,7 +366,7 @@ struct GetAiuMmaInst<Arch, cutlass::float4_t, cutlass::float4_t, float> {
   // PPU_ARCH == 1.5, only for build on PPU1.0, should never be run on PPU1.0
   using type = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_16x16x64_F32F4F4F32_TN, 
+    PPU0015_16x16x64_F32F4F4F32_TN,
     void
   >;
 };
@@ -477,7 +477,7 @@ template <
         Shape<Int<WarpOnM() * 16>, BlockN>{}));
 
   using EpilogueTile = decltype(shape(coalesce(make_layout(shape(SmemLayoutO{})), Step<_1, _1>{})));
-  
+
   static constexpr int EpiThreadN = platform::min(ThreadNum, BlockN() / Alignment);
   static constexpr int EpiThreadM = ThreadNum / EpiThreadN;
   using GmemLayoutAtom = Layout<Shape <Int<EpiThreadM>, Int<EpiThreadN>>,
@@ -562,7 +562,7 @@ template <
 
   using SmemCopyAtom = Copy_Atom<SmemCopyOp, Element>;
   using SmemAtomStride = typename platform::conditional<
-    split_on_k_10500,
+    split_on_k_10500 or not Swzl,
     Stride<Int<CUBE_W>, _1>,
     Stride<_1, Int<CUBE_H>>
   >::type;
