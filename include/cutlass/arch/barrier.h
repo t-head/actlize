@@ -315,7 +315,7 @@ public:
         :
         : "r"(smem_addr), "r"(cta_id), "r"(pred));
 #elif defined(__HGGC_ARCH__)
-    asm volatile ("brkpt;\n" ::);
+    __brkpt();
 #endif
   }
 
@@ -421,7 +421,7 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
         :
         : "r"(smem_addr), "r"(cta_id), "r"(pred), "r"(transaction_bytes));
 #elif defined(__HGGC_ARCH__)
-    asm volatile ("brkpt;\n" ::);
+    __brkpt();
 #endif
   }
 

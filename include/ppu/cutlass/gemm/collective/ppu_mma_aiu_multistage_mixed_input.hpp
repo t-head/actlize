@@ -887,7 +887,7 @@ private:
     }
   }
 
-  /// Utilities for transforming the A operand prior to issuing tensorcore math.
+  /// Utilities for transforming the A operand prior to issuing tensor cell math.
   template <class EngineIn,
             class EngineOut,
             class TensorLayout,
