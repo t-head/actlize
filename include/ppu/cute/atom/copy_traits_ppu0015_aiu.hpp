@@ -132,4 +132,47 @@ struct Copy_Traits<PPU0015_TSM_LD_SWZL<Element, CUBE_H, CUBE_W, Swap, Trans, Ins
   }
 };
 
+template <typename Element, int CUBE_H, int CUBE_W, int BlockH, int BlockW, bool Swap, bool Trans, int InstNum, bool Cvt, int OddTile>
+struct Copy_Traits<PPU0015_TSM_LD_SWZL_CVT<Element, CUBE_H, CUBE_W, BlockH, BlockW, Swap, Trans, InstNum, Cvt, OddTile>>
+{
+  // Logical thread id to thread idx (warp)
+  using ThrID = Layout<_32>;
+
+  // Map from (src-thr,src-val) to bit
+  using SrcLayout = Layout<Shape < _32,_128>,
+                           Stride<_128,  _1>>;
+  // Map from (dst-thr,dst-val) to bit
+  using DstLayout = Layout<Shape <_32,Shape <_32,   _4>>,
+                           Stride<_32,Stride< _1,_1024>>>;
+
+  // Reference map from (thr,val) to bit
+  using RefLayout = DstLayout;
+
+  void *smem_base_;
+
+  template <class Coord, int... Is>
+  CUTE_HOST_DEVICE constexpr
+  void
+  copy_unpack_(void *dst_ptr, void* src_ptr,
+               Coord const& src_coord, seq<Is...>) const
+  {
+    PPU0015_TSM_LD_SWZL_CVT<Element, CUBE_H, CUBE_W, BlockH, BlockW, Swap, Trans, InstNum, Cvt, OddTile>::copy(dst_ptr, src_ptr, get<Is>(src_coord)...);
+  }
+
+  template <class TS, class SLayout,
+          class TD, class DLayout>
+  CUTE_HOST_DEVICE friend constexpr
+  void
+  copy_unpack(Copy_Traits        const& traits,
+              Tensor<TS,SLayout> const& src,
+              Tensor<TD,DLayout>      & dst)
+  {
+    if constexpr (is_mix_iterator<typename TS::iterator>::value) {
+      traits.copy_unpack_(cute::raw_pointer_cast(dst.data()), src.data().ptr_.get(), src.data().coord_, tuple_seq<decltype(src.data().coord_)>{});
+    } else {
+      traits.copy_unpack_(cute::raw_pointer_cast(dst.data()), traits.smem_base_, src.data().coord_, tuple_seq<decltype(src.data().coord_)>{});
+    }
+  }
+};
+
 } // namespace cute

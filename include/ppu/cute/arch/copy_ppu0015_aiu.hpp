@@ -326,4 +326,104 @@ struct PPU0015_TSM_LD_SWZL {
   }
 };
 
+// CVT variant: pair-interleaved 16x64-cube layout for TSM group conflict elimination.
+// Data is stored as cube pairs (cube 2i / 2i+1 interleaved); cube_in_stage addresses the pair-interleaved slot.
+template <typename Element, int CUBE_H, int CUBE_W, int BlockH, int BlockW, bool Swap, bool Trans, int InstNum, bool Cvt, int OddTile>
+struct PPU0015_TSM_LD_SWZL_CVT;
+
+// Trans=false specialization
+template <typename Element, int CUBE_H, int CUBE_W, int BlockH, int BlockW, bool Swap, int InstNum, bool CvtQ, int OddTile>
+struct PPU0015_TSM_LD_SWZL_CVT<Element, CUBE_H, CUBE_W, BlockH, BlockW, Swap, false, InstNum, CvtQ, OddTile> {
+
+  static_assert(sizeof(Element) == 2 && CUBE_H == 16 && CUBE_W == 64);
+  static_assert(BlockH % CUBE_H == 0 && BlockW % (2*CUBE_W) == 0);
+
+  static constexpr int row_stride = 8 * CUBE_W * sizeof(Element) / 16;
+  static constexpr int col_stride = CUBE_H * CUBE_W * sizeof(Element) / 16;
+  static constexpr int swzl_mode = 0;
+
+  CUTE_HOST_DEVICE static void
+  copy(void *frag_ptr, void *smem_base, int coord_w, int coord_h, int cube_in_stage = 0, int stage = 0)
+  {
+#if defined(__HGGC_ARCH__) && ACOMPUTE_VERSION >= 10500
+
+    Element *stage_base = reinterpret_cast<Element*>(smem_base);
+    int stg = cube_in_stage + stage * InstNum;
+    stage_base += BlockH * CUBE_W * (stg & ~1);
+
+    int lbo, sbo;
+    if constexpr (CvtQ) {
+      lbo = row_stride;
+      sbo = col_stride;
+      if constexpr (!Swap) { // Q
+        lbo += - (cube_in_stage & 1) | 1;
+      } else { // K
+        sbo += - (cube_in_stage & 1) | 1;
+      }
+      // lbo = Swap ? row_stride : row_stride + ( -(cube_in_stage & 1) | 1);
+      // sbo = Swap ? col_stride + ( -(cube_in_stage & 1) | 1) : col_stride;
+      stage_base += (stg & 1) << 3;
+      stage_base += coord_h * BlockW + coord_w;
+    } else {
+      if (stg == OddTile) {
+        lbo = Swap ? row_stride : 1;
+        sbo = Swap ? 1 : row_stride;
+        stage_base += (stg & 1) * CUBE_H * CUBE_W;
+        stage_base += coord_h * (stg == 8 ? CUBE_W : BlockW) + coord_w;
+      } else {
+        lbo = Swap ? row_stride : col_stride;
+        sbo = Swap ? col_stride : row_stride;
+        stage_base += (stg & 1) << 3;
+        stage_base += coord_h * BlockW + coord_w;
+      }
+    }
+    int tsm_add = reinterpret_cast<uintptr_t>(stage_base) / 16;
+    int *vreg = reinterpret_cast<int *>(frag_ptr);
+
+    PPU0015_TSM_LD_SWZL_IMPL<Element, false, false>()(vreg, tsm_add, lbo, sbo, swzl_mode);
+#else
+    CUTE_RUNTIME_ASSERT("Support for TSM_LD_SWZL has not been enabled for PPU0015_TSM_LD_SWZL_CVT");
+#endif
+  }
+};
+
+// Trans=true specialization
+template <typename Element, int CUBE_H, int CUBE_W, int BlockH, int BlockW, bool Swap, int InstNum, bool Cvt, int OddTile>
+struct PPU0015_TSM_LD_SWZL_CVT<Element, CUBE_H, CUBE_W, BlockH, BlockW, Swap, true, InstNum, Cvt, OddTile> {
+
+  static_assert(sizeof(Element) == 2 && CUBE_H == 16 && CUBE_W == 64);
+  static_assert(BlockH % CUBE_H == 0);
+  static_assert(Swap);
+
+  static constexpr int row_stride = 8 * CUBE_W * sizeof(Element) / 16;
+  static constexpr int LBO = (Cvt) ? (CUBE_H * CUBE_W >> 3) : 1;
+  static constexpr int SBO = row_stride;
+  static constexpr int swzl_mode = 0;
+
+  CUTE_HOST_DEVICE static void
+  copy(void *frag_ptr, void *smem_base, int coord_h, int coord_w, int cube_in_stage = 0, int stage = 0)
+  {
+#if defined(__HGGC_ARCH__) && ACOMPUTE_VERSION >= 10500
+
+    Element *stage_base = reinterpret_cast<Element*>(smem_base);
+    int stg = cube_in_stage + stage * InstNum;
+
+    if constexpr (Cvt) {
+      stage_base += BlockH * CUBE_W * (stg & ~1);
+      stage_base += (stg & 1) << 3;
+    } else {
+      stage_base += BlockH * CUBE_W * stg;
+    }
+    stage_base += coord_h * BlockW + coord_w;
+
+    int tsm_add = reinterpret_cast<uintptr_t>(stage_base) / 16;
+    int *vreg = reinterpret_cast<int *>(frag_ptr);
+
+    PPU0015_TSM_LD_SWZL_IMPL<Element, true, false>()(vreg, tsm_add, LBO, SBO, swzl_mode);
+#else
+    CUTE_RUNTIME_ASSERT("Support for TSM_LD_SWZL has not been enabled for PPU0015_TSM_LD_SWZL_CVT");
+#endif
+  }
+};
+
 } // namespace cute
