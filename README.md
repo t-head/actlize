@@ -33,7 +33,7 @@ The changes focused on enabling high-performance GEMM and convolution operations
 ### Key PPU-Specific Features
 
 #### PPU Instructions Support
-- PPU-specific MMA device intrinsics for FP32, TF32, FP16, BF16, INT8, FP8 and FP4 (include/cutlass/arch/mma_ppu.h)
+- PPU-specific MMA device intrinsics for FP32, TF32, FP16, BF16, INT8 (include/cutlass/arch/mma_ppu.h)
 - Optimized data movement patterns using PPU-specific AIU instructions (include/cutlass/arch/memory_aiu.h)
 
 #### PPU GEMM Support
@@ -82,7 +82,7 @@ From the `build/` directory, compile and run the example tests by building the t
 ```bash
 $ make cutlass_examples -j
 $ cd ..
-# examples/ut only support PPU1.0
+# examples/ut only support PPU001
 $ ./run.sh
 ```
 
