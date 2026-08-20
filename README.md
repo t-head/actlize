@@ -33,19 +33,19 @@ The changes focused on enabling high-performance GEMM operations on PPU hardware
 
 ### Key PPU-Specific Features
 
-- PPU1.0/1.5 Hardware Capabilities
+- PPU001/0015 Hardware Capabilities
   - AIU load/tsm load swizzle operations
-  - PPU1.0/1.5-specific MMA traits
+  - PPU001/0015-specific MMA traits
 
 - Collective Kernels
   - Normal GEMM with PPU collectives
   - Array, group, and StreamK GEMM kernels with multi-stage pipeline
 
 - Data Type Support
-  - TF32/FP16/BF16/INT8 Tensor OP GEMM for PPU1.0/1.5
+  - TF32/FP16/BF16/INT8 Tensor OP GEMM for PPU001/0015
   - Mixed datatype input GEMM
-  - FP8 GEMM for PPU1.5
-  - FP4 GEMM for PPU1.5
+  - FP8 GEMM for PPU0015
+  - FP4 GEMM for PPU0015
 
 - Epilogue & Activation
   - PPU-optimized epilogue operations
@@ -68,7 +68,7 @@ Create a build directory within the ACTLIZE project, then run CMake.
 
 ```bash
 $ mkdir build && cd build
-# examples/ut only support PPU1.0
+# examples/ut only support PPU001
 $ cmake .. -DCUTLASS_PPU_ARCHS=ppu0010
 $ make -j8
 ```
