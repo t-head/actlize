@@ -9,7 +9,7 @@ originally developed by NVIDIA, re-engineered for PPU architectures.
 
 
 **Key Adaptations:**
-- Full support for PPU 1.0 and PPU 1.5 architectures
+- Full support for ppu001 and ppu0015 architectures
 - PPU-specific tensor op mma operators, as well as data movement operators such as aiu ld and tsm ld swizzle (include/cute)
 - PPU-optimized collective builder and epilogue APIs for kernels (include/cutlass)
 
@@ -20,16 +20,16 @@ originally developed by NVIDIA, re-engineered for PPU architectures.
 
 **PPU-Specific Features:**
 
-- **PPU 1.0 and PPU 1.5 Support:** Full GEMM support across both architectures
-  - PPU 1.0: FP16, BF16, TF32, INT8 tensor operations
-  - PPU 1.5: Newly supported FP8, FP4 tensor operations with EVT support
+- **PPU001(810e, ..) and PPU0015(M890, ..) Support:** Full GEMM support across both architectures
+  - PPU001: FP16, BF16, TF32, INT8 tensor operations
+  - PPU0015: Newly supported FP8, FP4 tensor operations with EVT support
 
 - **PPU-Specific Kernels:**
-  - Tensor operation GEMM with 16x16x16 instruction shapes
+  - Tensor operation GEMM with 16x16 instruction shapes
   - INT8 quantized inference kernels
   - Mixed precision GEMM (fp16/bf16 x int8/int4)
-  - FP8 GEMM with epilogue fusion (PPU 1.5)
-  - FP4 GEMM with blockwise quantization (PPU 1.5)
+  - FP8 GEMM with epilogue fusion (ppu0015)
+  - FP4 GEMM with blockwise quantization (ppu0015)
 
 - **PPU Examples:**
   - [Basic Tensor Operation GEMM](./examples/08_ppu_basic_tensor_op_gemm)
@@ -44,7 +44,7 @@ originally developed by NVIDIA, re-engineered for PPU architectures.
 
 ### PPU Architecture Support
 
-| Feature | PPU 1.0 | PPU 1.5 |
+| Feature | PPU001 | PPU0015 |
 |---------|---------|---------|
 | Architecture Tag | `cutlass::arch::PPU0010` | `cutlass::arch::PPU0015` |
 | Required Toolchain | PPU SDK | PPU SDK |
@@ -104,10 +104,10 @@ This includes:
 ### PPU Architecture Tags
 
 ```cpp
-// PPU 1.0
+// ppu001
 using ArchTag = cutlass::arch::PPU0010;
 
-// PPU 1.5
+// ppu0015
 using ArchTag = cutlass::arch::PPU0015;
 ```
 
