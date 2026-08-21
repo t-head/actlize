@@ -43,7 +43,7 @@
 // then GCC 7.5 reports the following error;
 //
 // ... /include/cute/numeric/math.hpp:103:26: error:
-// inconsistent deduction for auto return type: ‘int’ and then ‘bool’
+// inconsistent deduction for auto return type: 'int' and then 'bool'
 //      if (u == 0) { return t; }
 //                           ^
 // Note that common_type_t<C<42>, C<1>>::value_type might still be bool.
