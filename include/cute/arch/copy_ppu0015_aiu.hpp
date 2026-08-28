@@ -298,11 +298,13 @@ struct PPU0015_TSM_LD_SWZL_DISPATCH<Element, CUBE_H, CUBE_W, LBO, SBO, false, In
   operator()(void *frag_ptr, void *smem_base, int coord_w, int coord_h, int stage, int cube_in_stage)
   {
 #if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 150
-    Element *stage_base = reinterpret_cast<Element*>(smem_base);
-    stage_base += CUBE_H * CUBE_W * (cube_in_stage + stage * InstNum);
-    // static constexpr int alignment = 16 / sizeof(Element);
-    stage_base += coord_h * CUBE_W + coord_w;
-    int tsm_add = reinterpret_cast<uintptr_t>(stage_base) / 16;
+    // Take the 32-bit shared byte address first so the offset math stays in the
+    // 32-bit shared window; generic-pointer arithmetic followed by uintptr_t/16
+    // forces the whole chain into 64-bit scalar ops.
+    uint32_t const base = cute::cast_smem_ptr_to_uint(smem_base);
+    uint32_t const offs = uint32_t(CUBE_H * CUBE_W * (cube_in_stage + stage * InstNum)
+                                   + coord_h * CUBE_W + coord_w) * uint32_t(sizeof(Element));
+    int tsm_add = int((base + offs) >> 4);
     int *vreg = reinterpret_cast<int *>(frag_ptr);
     PPU0015_TSM_LD_SWZL_IMPL<Element, false, Swap32>()(vreg, tsm_add, LBO, SBO, SwzlMode);
 #else
@@ -318,10 +320,10 @@ struct PPU0015_TSM_LD_SWZL_DISPATCH<Element, CUBE_H, CUBE_W, LBO, SBO, true, Ins
   operator()(void *frag_ptr, void *smem_base, int coord_h, int coord_w, int stage, int cube_in_stage)
   {
 #if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 150
-    Element *stage_base = reinterpret_cast<Element*>(smem_base);
-    stage_base += CUBE_H * CUBE_W * (cube_in_stage + stage * InstNum);
-    stage_base += coord_h * CUBE_W + coord_w;
-    int tsm_add = reinterpret_cast<uintptr_t>(stage_base) / 16;
+    uint32_t const base = cute::cast_smem_ptr_to_uint(smem_base);
+    uint32_t const offs = uint32_t(CUBE_H * CUBE_W * (cube_in_stage + stage * InstNum)
+                                   + coord_h * CUBE_W + coord_w) * uint32_t(sizeof(Element));
+    int tsm_add = int((base + offs) >> 4);
     int *vreg = reinterpret_cast<int *>(frag_ptr);
     PPU0015_TSM_LD_SWZL_IMPL<Element, true, Swap32>()(vreg, tsm_add, LBO, SBO, SwzlMode);
 #else
@@ -367,11 +369,10 @@ struct PPU0015_TSM_LD_SWZL_DISPATCH_SmemStageStride<Element, CUBE_H, CUBE_W, LBO
   operator()(void *frag_ptr, void *smem_base, int coord_w, int coord_h, int stage, int cube_in_stage)
   {
 #if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 150
-    Element *stage_base = reinterpret_cast<Element*>(smem_base);
-    stage_base += CUBE_H * CUBE_W * cube_in_stage + stage * SmemLayoutStageStride;
-    // static constexpr int alignment = 16 / sizeof(Element);
-    stage_base += coord_h * CUBE_W + coord_w;
-    int tsm_add = reinterpret_cast<uintptr_t>(stage_base) / 16;
+    uint32_t const base = cute::cast_smem_ptr_to_uint(smem_base);
+    uint32_t const offs = uint32_t(CUBE_H * CUBE_W * cube_in_stage + stage * SmemLayoutStageStride
+                                   + coord_h * CUBE_W + coord_w) * uint32_t(sizeof(Element));
+    int tsm_add = int((base + offs) >> 4);
     int *vreg = reinterpret_cast<int *>(frag_ptr);
     PPU0015_TSM_LD_SWZL_IMPL<Element, false, Swap32>()(vreg, tsm_add, LBO, SBO, SwzlMode);
 #else
@@ -387,10 +388,10 @@ struct PPU0015_TSM_LD_SWZL_DISPATCH_SmemStageStride<Element, CUBE_H, CUBE_W, LBO
   operator()(void *frag_ptr, void *smem_base, int coord_h, int coord_w, int stage, int cube_in_stage)
   {
 #if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 150
-    Element *stage_base = reinterpret_cast<Element*>(smem_base);
-    stage_base += CUBE_H * CUBE_W * cube_in_stage + stage * SmemLayoutStageStride;
-    stage_base += coord_h * CUBE_W + coord_w;
-    int tsm_add = reinterpret_cast<uintptr_t>(stage_base) / 16;
+    uint32_t const base = cute::cast_smem_ptr_to_uint(smem_base);
+    uint32_t const offs = uint32_t(CUBE_H * CUBE_W * cube_in_stage + stage * SmemLayoutStageStride
+                                   + coord_h * CUBE_W + coord_w) * uint32_t(sizeof(Element));
+    int tsm_add = int((base + offs) >> 4);
     int *vreg = reinterpret_cast<int *>(frag_ptr);
     PPU0015_TSM_LD_SWZL_IMPL<Element, true, Swap32>()(vreg, tsm_add, LBO, SBO, SwzlMode);
 #else
