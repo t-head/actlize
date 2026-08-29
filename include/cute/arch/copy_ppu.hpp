@@ -77,7 +77,7 @@ struct PPU_U32x1_LDSM_N
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_src);
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile (
-    "ppu.tc01.ex.ldmatrix.sync.aligned.x1.m8n8.shared.b16 {%0}, [%1];\n"    
+    "ppu.tc01.ldmatrix.sync.aligned.x1.m8n8.shared.b16 {%0}, [%1];\n"
         : "=r"(dst)
         :  "r"(smem_int_ptr));
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
@@ -105,7 +105,7 @@ struct PPU_U32x2_LDSM_N
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_src);
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile (
-    "ppu.tc01.ex.ldmatrix.sync.aligned.x2.m8n8.shared.b16 {%0, %1}, [%2];\n"    
+    "ppu.tc01.ldmatrix.sync.aligned.x2.m8n8.shared.b16 {%0, %1}, [%2];\n"
         : "=r"(dst0), "=r"(dst1)
         :  "r"(smem_int_ptr));
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
@@ -133,7 +133,7 @@ struct PPU_U32x4_LDSM_N
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_src);
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile (
-    "ppu.tc01.ex.ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"    
+    "ppu.tc01.ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst0), "=r"(dst1), "=r"(dst2), "=r"(dst3)
         :  "r"(smem_int_ptr));
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
@@ -161,7 +161,7 @@ struct PPU_U16x2_LDSM_T
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_src);
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile (
-    "ppu.tc01.ex.ldmatrix.sync.aligned.x1.trans.m8n8.shared.b16 {%0}, [%1];\n"    
+    "ppu.tc01.ldmatrix.sync.aligned.x1.trans.m8n8.shared.b16 {%0}, [%1];\n"
         : "=r"(dst)
         :  "r"(smem_int_ptr));
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
@@ -189,7 +189,7 @@ struct PPU_U16x4_LDSM_T
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_src);
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile (
-    "ppu.tc01.ex.ldmatrix.sync.aligned.x2.trans.m8n8.shared.b16 {%0, %1}, [%2];\n"    
+    "ppu.tc01.ldmatrix.sync.aligned.x2.trans.m8n8.shared.b16 {%0, %1}, [%2];\n"
         : "=r"(dst0), "=r"(dst1)
         :  "r"(smem_int_ptr));
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
@@ -217,7 +217,7 @@ struct PPU_U16x8_LDSM_T
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_src);
 #if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile (
-    "ppu.tc01.ex.ldmatrix.sync.aligned.x4.trans.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"    
+    "ppu.tc01.ldmatrix.sync.aligned.x4.trans.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst0), "=r"(dst1), "=r"(dst2), "=r"(dst3)
         :  "r"(smem_int_ptr));
 #elif (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 150)
@@ -283,6 +283,7 @@ copy_ldsm_trans(uint128_t const* const smem_ptr,
 }
 
 } // end namespace cute
+
 
 
 
@@ -446,4 +447,3 @@ cp_async_wait(Int<N>)
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // end namespace cute
-
