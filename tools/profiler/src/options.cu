@@ -95,7 +95,7 @@ Options::Device::Device(cutlass::CommandLine const &cmdline) {
   for (size_t device_index = 0; device_index < devices.size(); device_index++) {
     int device = devices[device_index];
 
-    result = hggcGetDeviceProperties(&properties[device_index], device);
+    result = acGetDeviceProperties(&properties[device_index], device);
 
     if (result != hggcSuccess) {
       throw std::runtime_error("hggcGetDeviceProperties() failed for given device");
@@ -159,8 +159,8 @@ void Options::Device::print_usage(std::ostream &out) const {
   else {
 
     for (int idx = 0; idx < device_count; ++idx) {
-      hggcDeviceProp prop;
-      result = hggcGetDeviceProperties(&prop, idx);
+      acDeviceProp prop;
+      result = acGetDeviceProperties(&prop, idx);
       if (result != hggcSuccess) {
         out << "      <could not obtain device properties for device " << idx << ">" << std::endl;
         break;
@@ -168,7 +168,7 @@ void Options::Device::print_usage(std::ostream &out) const {
       else {
         out << "    [" << idx << "] - "
           << prop.name << " - CU " << prop.major << "." << prop.minor << ", "
-          << prop.multiProcessorCount << " CUs @ " << (prop.clockRate / 1000.0) << " MHz, "
+          << prop.multiProcessorCount << " CUs @ " << (prop.clockRateKHz / 1000.0) << " MHz, "
           << "L2 cache: " << (prop.l2CacheSize >> 20) << " MB, Global Memory: " << (prop.totalGlobalMem >> 30) << " GB"
           << std::endl;
       }
@@ -219,7 +219,7 @@ void Options::Device::print_options(std::ostream &out, int indent) const {
   }
   out
     << "\n"
-    << indent_str(indent) << "clock: " << int(double(properties[0].clockRate) / 1000.0) << "\n"
+    << indent_str(indent) << "clock: " << int(double(properties[0].clockRateKHz) / 1000.0) << "\n"
     << indent_str(indent) << "compute-capability: " << compute_capability(0) << "\n";
 }
 

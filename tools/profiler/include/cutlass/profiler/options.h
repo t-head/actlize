@@ -42,6 +42,7 @@
 
 #include <hggc_runtime.h>
 
+#include "cutlass/ac_device_properties.h"
 #include "cutlass/util/command_line.h"
 #include "cutlass/util/distribution.h"
 #include "cutlass/library/library.h"
@@ -91,7 +92,7 @@ public:
     int num_devices;
 
     /// Device properties
-    std::vector<hggcDeviceProp> properties;
+    std::vector<acDeviceProp> properties;
 
     /// Total memory allocation on each device
     size_t maximum_capacity;
