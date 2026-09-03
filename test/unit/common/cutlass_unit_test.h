@@ -43,13 +43,15 @@
 
 #include <hggc_runtime.h>
 
+#include "cutlass/ac_device_properties.h"
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Gets a device
-hggcDeviceProp GetHggcDevice();
+acDeviceProp GetHggcDevice();
 
 /// Prints device properties
-std::ostream &operator<<(std::ostream &out, hggcDeviceProp const &device);
+std::ostream &operator<<(std::ostream &out, acDeviceProp const &device);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

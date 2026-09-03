@@ -37,7 +37,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Gets a device
-hggcDeviceProp GetHggcDevice() {
+acDeviceProp GetHggcDevice() {
 
   hggcError_t err;
 
@@ -49,21 +49,26 @@ hggcDeviceProp GetHggcDevice() {
     exit(1);
   }
 
-  hggcDeviceProp deviceProperties;
-  err = hggcGetDeviceProperties(&deviceProperties, hggcDeviceId);
+  acDeviceProp deviceProperties;
+  err = acGetDeviceProperties(&deviceProperties, hggcDeviceId);
+  if (hggcSuccess != err) {
+    std::cerr << "*** Error: Could not get device properties for PPU " << hggcDeviceId << " ["
+              << hggcGetErrorString(err) << "]" << std::endl;
+    exit(1);
+  }
 
   return deviceProperties;
 }
 
 /// Prints device properties
-std::ostream &operator<<(std::ostream &out, hggcDeviceProp const &deviceProperties) {
+std::ostream &operator<<(std::ostream &out, acDeviceProp const &deviceProperties) {
 
   int deviceMajorMinor = deviceProperties.major * 10 + deviceProperties.minor;
   if (deviceMajorMinor) {
-    int32_t clock_MHz = deviceProperties.clockRate / 1000;
     out << "PPU(compute_"
       << deviceMajorMinor << ", "
-      << deviceProperties.multiProcessorCount << " CUs @ " << clock_MHz << " MHz)";
+      << deviceProperties.multiProcessorCount << " CUs @ "
+      << deviceProperties.clockRateKHz / 1000 << " MHz)";
   }
   else {
     out << "No device.";
