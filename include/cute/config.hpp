@@ -32,6 +32,8 @@
 
 #pragma once
 
+#include "cutlass/detail/helper_macros.hpp"
+
 #if defined(__HGGCCC__)
 #  define CUTE_HOST_DEVICE __forceinline__ __host__ __device__
 #  define CUTE_DEVICE      __forceinline__          __device__
@@ -67,7 +69,7 @@
 #endif
 
 // __grid_constant__ was introduced in HGGC 11.7.
-#if ((__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 7)))
+#if ((COMPILE_VER_MAJOR >= 12) || ((COMPILE_VER_MAJOR == 11) && (COMPILE_VER_MINOR >= 7)))
 #  define CUTE_GRID_CONSTANT_SUPPORTED
 #endif
 

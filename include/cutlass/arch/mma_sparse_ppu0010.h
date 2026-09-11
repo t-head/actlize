@@ -48,7 +48,7 @@
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if ((__HGGCCC_VER_MAJOR__ > 11) || (__HGGCCC_VER_MAJOR__ == 11 && __HGGCCC_VER_MINOR__ >= 1))
+#if ((COMPILE_VER_MAJOR > 11) || (COMPILE_VER_MAJOR == 11 && COMPILE_VER_MINOR >= 1))
 
 #define CUTLASS_ARCH_SPARSE_MMA_PPU0010_SUPPORTED 1
 
