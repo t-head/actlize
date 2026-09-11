@@ -48,7 +48,7 @@
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if ((COMPILE_VER_MAJOR > 11) || (COMPILE_VER_MAJOR == 11 && COMPILE_VER_MINOR >= 1))
+#if (((HGGCRT_VERSION / 1000) > 11) || ((HGGCRT_VERSION / 1000) == 11 && ((HGGCRT_VERSION % 1000) / 10) >= 1))
 
 #define CUTLASS_ARCH_SPARSE_MMA_PPU0010_SUPPORTED 1
 

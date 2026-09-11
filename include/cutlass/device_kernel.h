@@ -36,10 +36,8 @@
 
 #pragma once
 
-#include "cutlass/detail/helper_macros.hpp"
-
 // __grid_constant__ was introduced in HGGC 11.7.
-#if ((COMPILE_VER_MAJOR >= 12) || ((COMPILE_VER_MAJOR == 11) && (COMPILE_VER_MINOR >= 7)))
+#if (((HGGCRT_VERSION / 1000) >= 12) || (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 7)))
 #  define CUTLASS_GRID_CONSTANT_SUPPORTED
 #endif
 

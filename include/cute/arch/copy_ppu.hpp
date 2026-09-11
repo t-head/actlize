@@ -34,7 +34,6 @@
 
 #include <cute/config.hpp>
 #include <cute/arch/copy.hpp>
-#include "cutlass/detail/helper_macros.hpp"
 
 // Config
 #if defined(__clang__) && defined(__HGGC__)
@@ -47,7 +46,7 @@
 
 // HGGCCC (PPU SDK hgcc compiler) supports ldmatrix from version 11+
 #if defined(__HGGCCC__) || defined(__HGGCCC_RTC__)
-  #define CUTE_ARCH_HGGCCC_SUPPORTS_LDSM (COMPILE_VER_MAJOR >= 11)
+  #define CUTE_ARCH_HGGCCC_SUPPORTS_LDSM ((HGGCRT_VERSION / 1000) >= 11)
 #endif
 
 #if ! defined(CUTE_ARCH_LDSM_SUPPORTED)

@@ -60,8 +60,6 @@
 
 #define CUTLASS_HOST __host__
 #define CUTLASS_GLOBAL __global__ static
-#define COMPILE_VER_MAJOR (HGGCRT_VERSION / 1000)
-#define COMPILE_VER_MINOR ((HGGCRT_VERSION % 1000) / 10)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -62,8 +62,8 @@ struct global_load;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if (((COMPILE_VER_MAJOR == 11) && (COMPILE_VER_MINOR >= 4)) || \
-     (COMPILE_VER_MAJOR > 11)) &&                                  \
+#if ((((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 4)) || \
+     ((HGGCRT_VERSION / 1000) > 11)) &&                                  \
     defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100)
   #define CUTLASS_ENABLE_L2_PREFETCH 1
 #else
