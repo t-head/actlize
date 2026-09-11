@@ -871,7 +871,7 @@ double fast_exp(double x) {
 
 CUTLASS_HOST_DEVICE
 half_t fast_exp(half_t x) {
-  #if defined(__HGGC_ARCH__) && (__HGGCCC_VER_MAJOR__ >= 10) && (__HGGC_ARCH__ >= 100)
+  #if defined(__HGGC_ARCH__) && HGGCRT_VERSION >= 10000 && (__HGGC_ARCH__ >= 100)
       return (half_t)(::hexp(x.to_half()));
   #else
       return (half_t)(fast_exp(float(x)));
@@ -899,7 +899,7 @@ double fast_log(double x) {
 CUTLASS_HOST_DEVICE
 float fast_tanh(float x) {
   #if defined(__HGGC_ARCH__)
-    #if (__HGGCCC_VER_MAJOR__ >= 11) && (__HGGC_ARCH__ >= 100)
+    #if HGGCRT_VERSION >= 11000 && (__HGGC_ARCH__ >= 100)
       float y;
       asm volatile ( "ppu.tanh.approx.f32 %0, %1; " : "=f"(y) : "f"(x));
       return y;
@@ -922,7 +922,7 @@ double fast_tanh(double x) {
 
 CUTLASS_HOST_DEVICE
 half_t fast_tanh(half_t x) {
-  #if defined(__HGGC_ARCH__) && (__HGGCCC_VER_MAJOR__ >= 11) && (__HGGC_ARCH__ >= 100)
+  #if defined(__HGGC_ARCH__) && HGGCRT_VERSION >= 11000 && (__HGGC_ARCH__ >= 100)
 
   asm volatile ( "ppu.tanh.approx.f16 %0, %1;" : "=h"(x.raw()) : "h"(x.raw()));
   return x;
@@ -942,7 +942,7 @@ struct fast_exp_op {
   }
 };
 
-#if defined(__HGGC_ARCH__) && (__HGGCCC_VER_MAJOR__ >= 10) && (__HGGC_ARCH__ >= 100)
+#if defined(__HGGC_ARCH__) && HGGCRT_VERSION >= 10000 && (__HGGC_ARCH__ >= 100)
 template <int N>
 struct fast_exp_op<Array<half_t, N>> {
   CUTLASS_DEVICE
@@ -997,7 +997,7 @@ struct fast_tanh_op {
   }
 };
 
-#if defined(__HGGC_ARCH__) && (__HGGCCC_VER_MAJOR__ >= 11) && (__HGGC_ARCH__ >= 100)
+#if defined(__HGGC_ARCH__) && HGGCRT_VERSION >= 11000 && (__HGGC_ARCH__ >= 100)
 template <int N>
 struct fast_tanh_op<Array<half_t, N>> {
   CUTLASS_DEVICE

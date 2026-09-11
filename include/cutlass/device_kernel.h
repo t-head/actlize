@@ -40,7 +40,7 @@
 #include <cutlass/platform/platform.h> // uint64_t
 
 // __grid_constant__ was introduced in device 11.7.
-#if ((__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 7))) && !CUTLASS_CLANG_PPU
+#if HGGCRT_VERSION >= 11070 && !CUTLASS_CLANG_PPU
 #  define CUTLASS_GRID_CONSTANT_SUPPORTED
 #endif
 
