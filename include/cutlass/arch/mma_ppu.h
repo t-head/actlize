@@ -4734,13 +4734,13 @@ struct Mma<
 #include "cutlass/layout/matrix.h"
 #include "cutlass/numeric_types.h"
 
-#if ((__HGGCCC_VER_MAJOR__ > 10) || (__HGGCCC_VER_MAJOR__ == 10 && __HGGCCC_VER_MINOR__ >= 1))
+#if (((HGGCRT_VERSION / 1000) > 10) || ((HGGCRT_VERSION / 1000) == 10 && ((HGGCRT_VERSION % 1000) / 10) >= 1))
 #define CUTLASS_ARCH_MMA_PPU0010_SUPPORTED
 #endif
 
 #if (defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100))
 
-#if ((__HGGCCC_VER_MAJOR__ > 10) || (__HGGCCC_VER_MAJOR__ == 10 &&__HGGCCC_VER_MINOR__ >= 1))
+#if (((HGGCRT_VERSION / 1000) > 10) || ((HGGCRT_VERSION / 1000) == 10 &&((HGGCRT_VERSION % 1000) / 10) >= 1))
 #define CUTLASS_ARCH_MMA_PPU0010_ENABLED
 #endif
 
