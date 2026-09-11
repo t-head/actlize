@@ -46,7 +46,7 @@
 
 // HGGCCC (PPU SDK hgcc compiler) supports ldmatrix from version 11+
 #if defined(__HGGCCC__) || defined(__HGGCCC_RTC__)
-  #define CUTE_ARCH_HGGCCC_SUPPORTS_LDSM (__HGGCCC_VER_MAJOR__ >= 11)
+  #define CUTE_ARCH_HGGCCC_SUPPORTS_LDSM (HGGCRT_VERSION >= 11000)
 #endif
 
 #if ! defined(CUTE_ARCH_LDSM_SUPPORTED)

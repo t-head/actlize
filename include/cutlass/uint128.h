@@ -58,7 +58,7 @@
 #include "cutlass/cutlass.h"
 
 /// Optionally enable GCC's built-in type
-#if (defined(__x86_64) || defined (__aarch64__)) && !(defined(__HGGC_ARCH__) && ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ <= 4))) && defined(__GNUC__)
+#if (defined(__x86_64) || defined (__aarch64__)) && !(defined(__HGGC_ARCH__) && HGGCRT_VERSION >= 11000 && HGGCRT_VERSION < 11050) && defined(__GNUC__)
 #define CUTLASS_UINT128_NATIVE
 #endif
 
