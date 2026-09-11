@@ -78,7 +78,7 @@ struct alignas(2) bfloat16_t {
     #if defined(__HGGC_ARCH__)
     storage = __ppu_bfloat16_raw(__float2bfloat16(x)).x;
 
-    #elif defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && (__HGGCCC_VER_MAJOR__ >= 11)
+    #elif defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && HGGCRT_VERSION >= 11000
     asm("ppu.cvt.rtte.bf16.f32 %0, %1;\n" : "=h"(storage) : "f"(x));
 
     #else

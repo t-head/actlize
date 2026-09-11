@@ -38,19 +38,19 @@
 
 #pragma once
 
-#if (__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 8))
+#if HGGCRT_VERSION >= 11080
 #define PPU_FP8_ENABLED 1
 #endif
 
 #if defined(__HGGC_ARCH__)
 #  if (__HGGC_ARCH__ >= 150)
-#    if (__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 8))
+#    if HGGCRT_VERSION >= 11080
 #      define PPU_FP8_CVT_ENABLED 1
-#    endif // (__HGGCCC_VER_MAJOR__ >= 12) || ((__HGGCCC_VER_MAJOR__ == 11) && (__HGGCCC_VER_MINOR__ >= 8))
+#    endif // HGGCRT_VERSION >= 11080
 #  elif (__HGGC_ARCH__ == 150)
-#    if (__HGGCCC_VER_MAJOR__ > 12) || ((__HGGCCC_VER_MAJOR__ == 12) && (__HGGCCC_VER_MINOR__ >= 1))
+#    if HGGCRT_VERSION >= 12010
 #      define PPU_FP8_CVT_ENABLED 1
-#    endif // (__HGGCCC_VER_MAJOR__ > 12) || ((__HGGCCC_VER_MAJOR__ == 12) && (__HGGCCC_VER_MINOR__ >= 1))
+#    endif // HGGCRT_VERSION >= 12010
 #  endif // (__HGGC_ARCH__ >= 150)
 #endif // defined(__HGGC_ARCH__)
 
