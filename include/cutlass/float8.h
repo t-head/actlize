@@ -48,15 +48,15 @@
 #pragma once
 
 // FP8 types are available starting HGGC 11.8+
-#if ((HGGCRT_VERSION / 1000) >= 12) || (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 8))
+#if HGGCRT_VERSION >= 11080
 #define HGGC_FP8_ENABLED 1
 #endif
 
 #if defined(__HGGC_ARCH__)
 #  if (__HGGC_ARCH__ >= 150)
-#    if ((HGGCRT_VERSION / 1000) >= 12) || (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 8))
+#    if HGGCRT_VERSION >= 11080
 #      define HGGC_PTX_FP8_CVT_ENABLED 1
-#    endif // (__HGGCC_VER_MAJOR__ >= 12) || ((__HGGCC_VER_MAJOR__ == 11) && (__HGGCC_VER_MINOR__ >= 8))
+#    endif // HGGCRT_VERSION >= 11080
 #  endif // (__HGGC_ARCH__ >= 150)
 #endif // defined(__HGGC_ARCH__)
 

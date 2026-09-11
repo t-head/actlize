@@ -37,7 +37,7 @@
 #pragma once
 
 // __grid_constant__ was introduced in HGGC 11.7.
-#if (((HGGCRT_VERSION / 1000) >= 12) || (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 7)))
+#if HGGCRT_VERSION >= 11070
 #  define CUTLASS_GRID_CONSTANT_SUPPORTED
 #endif
 

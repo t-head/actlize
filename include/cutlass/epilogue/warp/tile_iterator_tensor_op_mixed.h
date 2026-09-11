@@ -46,7 +46,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // This is an optimization available on HGGC 11.2 and beyond that eliminates branches in the epilogue.
-#define CUTLASS_EPILOGUE_WARP_TILE_ITERATOR_TENSOR_OP_MIXED_OPTIMIZATION_ENABLED (((HGGCRT_VERSION / 1000) * 10 + ((HGGCRT_VERSION % 1000) / 10)) >= 112)
+#define CUTLASS_EPILOGUE_WARP_TILE_ITERATOR_TENSOR_OP_MIXED_OPTIMIZATION_ENABLED (HGGCRT_VERSION >= 11020)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
