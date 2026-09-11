@@ -67,7 +67,7 @@
 #endif
 
 // __grid_constant__ was introduced in device 11.7.
-#if (((HGGCRT_VERSION / 1000) >= 12) || (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 7)))
+#if HGGCRT_VERSION >= 11070
 #  define CUTE_GRID_CONSTANT_SUPPORTED
 #endif
 

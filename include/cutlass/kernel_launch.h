@@ -99,7 +99,7 @@ Status kernel_launch(
     device_kernel<GemmKernel><<<grid_dims, block_dims, smem_size, device_stream>>>(kernel_params);
   }
   else {
-#if (((HGGCRT_VERSION / 1000) >= 12) || (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 8)))
+#if HGGCRT_VERSION >= 11080
     if constexpr (GemmKernel::ArchTag::kMinComputeCapability < 90) {
       CUTLASS_TRACE_HOST("  Programmatic dependent launch (PDL) is only supported for PPU0015.");
       return Status::kInvalid;

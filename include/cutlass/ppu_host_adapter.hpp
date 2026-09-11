@@ -55,13 +55,11 @@
 
 // RTC doesn't need definitions for these host classes
 
-#if (((HGGCRT_VERSION / 1000) >= 12) ||                               \
-    (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 8))) \
-    && !defined(__HGGCCC_RTC__)
+#if HGGCRT_VERSION >= 11080 && !defined(__HGGCCC_RTC__)
 #define PPU_HOST_ADAPTER_LAUNCH_ATTRIBUTES_ENABLED
 #endif
 
-#if (((HGGCRT_VERSION / 1000) >= 12) && !defined(__HGGCCC_RTC__))
+#if HGGCRT_VERSION >= 12000 && !defined(__HGGCCC_RTC__)
 #define PPU_HOST_ADAPTER_TENSORMAP_ENABLED
 #endif
 
@@ -95,8 +93,7 @@ namespace cutlass {
 
 #if !defined(__HGGCCC_RTC__)
 
-#if (((HGGCRT_VERSION / 1000) >= 12) ||                               \
-    (((HGGCRT_VERSION / 1000) == 11) && (((HGGCRT_VERSION % 1000) / 10) >= 6)))
+#if HGGCRT_VERSION >= 11060
 #include <hggc_runtime_api.h>
 #endif // in open_source: (__HGGCCC_VERSION__ >= 11.8)
 
@@ -114,8 +111,7 @@ namespace cutlass {
 
 #else // defined(CUTLASS_ENABLE_DIRECT_PPU_DRIVER_CALL)
 
-#if (((HGGCRT_VERSION / 1000) >= 13) ||                               \
-    (((HGGCRT_VERSION / 1000) == 12) && (((HGGCRT_VERSION % 1000) / 10) >= 5))) \
+#if HGGCRT_VERSION >= 12050
 
 #define CUTLASS_PPU_DRIVER_WRAPPER_DECL(func, ver)             \
   template <typename... Args>                                   \
@@ -157,7 +153,7 @@ namespace cutlass {
 
 #endif // defined(CUTLASS_ENABLE_DIRECT_PPU_DRIVER_CALL)
 
-#if ((HGGCRT_VERSION / 1000) >= 12)
+#if HGGCRT_VERSION >= 12000
 CUTLASS_PPU_DRIVER_WRAPPER_DECL(hgTensorMapEncodeTiled, 12000);
 CUTLASS_PPU_DRIVER_WRAPPER_DECL(hgTensorMapEncodeIm2col, 12000);
 #endif

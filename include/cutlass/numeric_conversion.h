@@ -1104,9 +1104,7 @@ struct NumericArrayConverter<cutlass::bfloat16_t, float, N, Round> {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Conditional guards to enable partial specialization for packed integers
-#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && \
-    (((HGGCRT_VERSION / 1000) > 10) ||                     \
-     (((HGGCRT_VERSION / 1000) >= 10) && (((HGGCRT_VERSION % 1000) / 10) >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && HGGCRT_VERSION >= 10020
 
 /// Partial specialization for Array<int8_t, 1> <= Array<int, 1>
 template <
@@ -2943,9 +2941,7 @@ struct NumericArrayConverter<uint4b_t, float, N, Round> {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && \
-    (((HGGCRT_VERSION / 1000) > 10) ||                     \
-     (((HGGCRT_VERSION / 1000) >= 10) && (((HGGCRT_VERSION % 1000) / 10) >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && HGGCRT_VERSION >= 10020
 
 /// Partial specialization for Array<int4b_t, 8> <= Array<int, 8>
 template <

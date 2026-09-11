@@ -37,7 +37,7 @@
 #pragma once
 
 #include <cutlass/arch/memory_ppu.h>
-#if (defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 100 && ((HGGCRT_VERSION / 1000) >= 12))
+#if defined(__HGGC_ARCH__) && __HGGC_ARCH__ >= 100 && HGGCRT_VERSION >= 12000
 #define PPU_BARRIER_ENABLED 1
 #else
 #define PPU_BARRIER_ENABLED 0

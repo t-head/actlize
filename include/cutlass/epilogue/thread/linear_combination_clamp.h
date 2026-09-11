@@ -280,7 +280,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Conditional guards to enable partial specialization for packed integers
-#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && (((HGGCRT_VERSION / 1000) > 10) || (((HGGCRT_VERSION / 1000) >= 10) && (((HGGCRT_VERSION % 1000) / 10) >= 2)))
+#if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && HGGCRT_VERSION >= 10020
 
 /// Applies a linear combination operator to an array of elements then clamps the output before
 /// converting to the output element type.
