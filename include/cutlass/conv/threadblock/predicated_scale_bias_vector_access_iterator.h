@@ -276,7 +276,7 @@ class PredicatedScaleBiasVectorAccessIterator<ThreadblockShape_,
   bool valid() {
     uint32_t enabled = 0;
 
-#if (__HGGCCC_VER_MAJOR__ < 11)
+#if ((HGGCRT_VERSION / 1000) < 11)
     enabled = threadIdx.x < kThreads * 2;
 #else
     asm volatile(

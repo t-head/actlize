@@ -44,7 +44,7 @@
 
 #if defined(__HGGCCC__) || defined(__HGGCCC_RTC__)
   // __cvta_generic_to_shared added in device 11+
-  #if __HGGCCC_VER_MAJOR__ >= 11
+  #if (HGGCRT_VERSION / 1000) >= 11
     #define CUTE_PPU_SUPPORTS_CVTA_GENERIC_TO_SHARED 1
   #endif
 #endif

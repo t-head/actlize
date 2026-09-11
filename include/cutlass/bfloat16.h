@@ -117,7 +117,7 @@ public:
   CUTLASS_HOST_DEVICE
   explicit bfloat16_t(float x) {
 
-    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && (__HGGCCC_VER_MAJOR__ >= 11)
+    #if defined(__HGGC_ARCH__) && (__HGGC_ARCH__ >= 100) && ((HGGCRT_VERSION / 1000) >= 11)
 
     asm("ppu.cvt.rtte.bf16.f32 %0, %1;\n" : "=h"(storage) : "f"(x));
 
