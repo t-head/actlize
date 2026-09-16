@@ -259,10 +259,10 @@ struct PPU0010_16x16x32_S32S8S8S32_TN
 asm volatile(
     "ppu.tc01.mma.sync.aligned.m16n16k32.row.col.s32.s8.s8.s32  {%0,%1,%2,%3,%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, "
         "{%16,%17,%18,%19,%20,%21,%22,%23};\n"
-        : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3), "=f"(d4), "=f"(d5), "=f"(d6), "=f"(d7)
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3), "=r"(d4), "=r"(d5), "=r"(d6), "=r"(d7)
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3),
           "r"(b0), "r"(b1), "r"(b2), "r"(b3),
-          "f"(c0), "f"(c1), "f"(c2), "f"(c3), "f"(c4), "f"(c5), "f"(c6), "f"(c7));
+          "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
       CUTE_INVALID_CONTROL_PATH("Attempting to use PPU0010_16x16x32_S32S8S8S32_TN without device ARCH");
 #endif
@@ -289,10 +289,10 @@ struct PPU0010_16x16x32_S32S8U8S32_TN
 asm volatile(
     "ppu.tc01.mma.sync.aligned.m16n16k32.row.col.s32.s8.u8.s32  {%0,%1,%2,%3,%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, "
         "{%16,%17,%18,%19,%20,%21,%22,%23};\n"
-        : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3), "=f"(d4), "=f"(d5), "=f"(d6), "=f"(d7)
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3), "=r"(d4), "=r"(d5), "=r"(d6), "=r"(d7)
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3),
           "r"(b0), "r"(b1), "r"(b2), "r"(b3),
-          "f"(c0), "f"(c1), "f"(c2), "f"(c3), "f"(c4), "f"(c5), "f"(c6), "f"(c7));
+          "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
       CUTE_INVALID_CONTROL_PATH("Attempting to use PPU0010_16x16x32_S32S8U8S32_TN without device ARCH");
 #endif
@@ -319,10 +319,10 @@ struct PPU0010_16x16x32_S32U8S8S32_TN
 asm volatile(
     "ppu.tc01.mma.sync.aligned.m16n16k32.row.col.s32.u8.s8.s32  {%0,%1,%2,%3,%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, "
         "{%16,%17,%18,%19,%20,%21,%22,%23};\n"
-        : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3), "=f"(d4), "=f"(d5), "=f"(d6), "=f"(d7)
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3), "=r"(d4), "=r"(d5), "=r"(d6), "=r"(d7)
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3),
           "r"(b0), "r"(b1), "r"(b2), "r"(b3),
-          "f"(c0), "f"(c1), "f"(c2), "f"(c3), "f"(c4), "f"(c5), "f"(c6), "f"(c7));
+          "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
       CUTE_INVALID_CONTROL_PATH("Attempting to use PPU0010_16x16x32_S32U8S8S32_TN without device ARCH");
 #endif
@@ -349,10 +349,10 @@ struct PPU0010_16x16x32_S32U8U8S32_TN
 asm volatile(
     "ppu.tc01.mma.sync.aligned.m16n16k32.row.col.s32.u8.u8.s32  {%0,%1,%2,%3,%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, "
         "{%16,%17,%18,%19,%20,%21,%22,%23};\n"
-        : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3), "=f"(d4), "=f"(d5), "=f"(d6), "=f"(d7)
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3), "=r"(d4), "=r"(d5), "=r"(d6), "=r"(d7)
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3),
           "r"(b0), "r"(b1), "r"(b2), "r"(b3),
-          "f"(c0), "f"(c1), "f"(c2), "f"(c3), "f"(c4), "f"(c5), "f"(c6), "f"(c7));
+          "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
       CUTE_INVALID_CONTROL_PATH("Attempting to use PPU0010_16x16x32_S32U8U8S32_TN without device ARCH");
 #endif
