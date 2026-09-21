@@ -1,0 +1,40 @@
+./examples/15_ppu_cute_gemm/15_ppu_cute_gemm --m=256 --n=256 --k=64 --iterations=1
+./examples/08_ppu_basic_tensor_op_gemm/08_ppu_basic_tensor_op_gemm --m=256 --n=256 --k=64 --iterations=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=128 --n=128 --k=2048 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=128 --n=128 --k=4608 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=128 --n=128 --k=256 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=1024 --n=1024 --k=1024 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2048 --k=1024 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=4096 --n=4096 --k=512 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=4096 --n=4096 --k=1024 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=4096 --n=4096 --k=2048 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=1024 --n=1024 --k=4096 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2048 --k=4096 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2176 --k=4096 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=1024 --n=1024 --k=30528 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2176 --k=4096 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2560 --k=4096 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2688 --k=4096 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=1024 --n=1152 --k=256 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=1024 --n=1280 --k=256 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=1024 --n=2048 --k=256 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2048 --k=256 --l=1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2048 --k=256 --l=1 --beta=0.1
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=2048 --n=2048 --k=256 --l=2
+./test/unit/cute/ppu/cutlass_test_unit_cute_ppu_aiu_load
+./test/unit/cute/ppu/cutlass_test_unit_cute_ppu_aiu_load --gtest_filter=PPU0010_CuTe_PPU.Aiu_Load_Swizzle_Vreg_FP16_Trans0
+./test/unit/cute/ppu/cutlass_test_unit_cute_ppu_aiu_load --gtest_filter=PPU0010_CuTe_PPU.Aiu_Load_Swizzle_Vreg_FP32_Trans0
+./test/unit/cute/ppu/cutlass_test_unit_cute_ppu_aiu_load --gtest_filter=PPU0010_CuTe_PPU.Aiu_Load_Swizzle_Vreg_INT8_Trans0
+./examples/16_ppu_mixed_dtype_gemm/16_ppu_mixed_dtype_gemm --m=2048 --n=2048 --k=2048 --mode=0 --iterations=0                   # Direct conversion
+./examples/16_ppu_mixed_dtype_gemm/16_ppu_mixed_dtype_gemm --m=4096 --n=5120 --k=8192 --g=8192 --mode=1 --iterations=0                # Per Column scaling
+./examples/16_ppu_mixed_dtype_gemm/16_ppu_mixed_dtype_gemm --m=4096 --n=5120 --k=8192 --g=8192 --mode=2 --iterations=0                # Per Column scaling
+./examples/16_ppu_mixed_dtype_gemm/16_ppu_mixed_dtype_gemm --m=2048 --n=5120 --k=8192 --g=512 --mode=1 --iterations=0                 # Group-wise scaling
+./examples/16_ppu_mixed_dtype_gemm/16_ppu_mixed_dtype_gemm --m=2048 --n=5120 --k=8192 --g=256 --mode=2 --iterations=0                 # Group-wise scaling with zero-point
+./examples/16_ppu_mixed_dtype_gemm/16_ppu_mixed_dtype_gemm --alpha=0.5 --beta=0.7 --mode=2 --iterations=0                             # Alpha and Beta with default shapes
+./examples/14_ppu_int8_gemm_with_blockwise_quant/14_ppu_int8_gemm_with_groupwise_quant --m=1 --n=256 --k=1024
+./examples/14_ppu_int8_gemm_with_blockwise_quant/14_ppu_int8_gemm_with_blockwise_quant --m=8 --n=128 --k=1024
+./test/unit/gemm_ppu/device/cutlass_test_unit_gemm_device_tensorop_f32_ppu0010_3x | tee run.log
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm --m=256 --n=256 --k=64 --l=1
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm --m=256 --n=256 --k=64 --l=2
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm --m=128 --n=128 --k=64 --l=4
+./examples/11_ppu_grouped_gemm/11_ppu_grouped_gemm --m=0 --n=0 --k=0 --groups=10 --alpha=2 --beta=0.707
