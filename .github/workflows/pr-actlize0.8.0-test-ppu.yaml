@@ -3,10 +3,10 @@ name: actlize0.8.0 checkin     # Workflow name shown on the Actions page
 # Triggers
 on:
   pull_request:
-    branches: [v0.8.0]                                     # PRs targeting v0.8.0
+    branches: [v0.8.0, feature/add-ci-0.8.0]                                     # PRs targeting v0.8.0
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [v0.8.0]                                     # Re-run after merge into v0.8.0
+    branches: [v0.8.0, feature/add-ci-0.8.0]                                     # Re-run after merge into v0.8.0
   workflow_dispatch:                                       # Allow manual trigger (web/API)
 
 permissions:                    # Token permissions
@@ -16,7 +16,7 @@ permissions:                    # Token permissions
   statuses: write
 
 concurrency:
-  group: ci-ppu-actlize080-${{ github.event.pull_request.number || github.ref }}
+  group: ci-ppu-actlize080-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true                 # A new run cancels the old one
 
 env:
@@ -25,7 +25,7 @@ env:
 jobs:
   build-test:
     name: Build & Test
-    runs-on: ubuntu-latest
+    runs-on: k8s-runner-group-cpu-thead
     container:
       image: ghcr.io/actions/actions-runner:latest
     timeout-minutes: 360
@@ -84,6 +84,7 @@ jobs:
 
             info = {
                 "docker_image": "${{ env.SAIL_IMAGE }}",
+                "hostname": command_output(["hostname"]),
                 "python_version": sys.version,
                 "ppu_sdk": os.environ.get("PPU_SDK", ""),
                 "ppu_home": os.environ.get("PPU_HOME", ""),
@@ -108,10 +109,13 @@ jobs:
         run: |
           NAS_RESULT_DIR="/wl_nas/devops/actlize-ci/0.8.0/${{ github.run_id }}/${{ github.run_attempt }}"
           XML_FILE="$NAS_RESULT_DIR/test-results.xml"
+          ENV_FILE="$NAS_RESULT_DIR/env_info.json"
 
           if [[ ! -f "$XML_FILE" ]]; then
+            # Fail the step so a missing report is not silently treated as success.
+            echo "::error::JUnit report NOT found: $XML_FILE"
             echo "JUnit report not found: $XML_FILE" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            exit 1
           fi
 
-          python3 .github/workflows/scripts/display-test-summary.py "$XML_FILE"
+          python3 .github/workflows/scripts/display-test-summary.py "$XML_FILE" --env-info "$ENV_FILE"

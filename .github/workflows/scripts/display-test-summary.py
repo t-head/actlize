@@ -2,7 +2,7 @@
 """Parse JUnit XML test results and generate a Markdown summary.
 
 Usage:
-    python3 display_test_summary.py <path-to-test-results.xml>
+    python3 display_test_summary.py <path-to-test-results.xml> [--env-info <path>]
 
 If the environment variable GITHUB_STEP_SUMMARY is set, the Markdown
 summary is appended to that file (for GitHub Actions).  Otherwise it is
@@ -10,6 +10,8 @@ printed to stdout, which is useful for local debugging.
 """
 
 import argparse
+import html
+import json
 import os
 import sys
 import xml.etree.ElementTree as ET
@@ -53,7 +55,13 @@ def parse_test_results(xml_path):
     }
 
 
-def generate_markdown_summary(stats):
+def parse_env_info(json_path):
+    """Load runtime environment information from JSON."""
+    with open(json_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def generate_markdown_summary(stats, env_info=None):
     """Render the parsed statistics as a Markdown string.
 
     Uses an HTML table layout for each section.  All inner content is pure
@@ -93,8 +101,20 @@ def generate_markdown_summary(stats):
                  f"<td>{stats['time']:.1f}s</td>"
                  '</tr>')
     lines.append('</table>')
-    # ---- Test-case details (below overview) ----
-    lines.append('<h3>Test Details</h3>')
+    # <details> without the `open` attribute renders as a closed drawer.
+    if env_info is not None:
+        lines.append('<details>')
+        lines.append(f"<summary><b>Env Details ({len(env_info)})</b></summary>")
+        lines.append('<table>')
+        lines.append('<tr><th>Item</th><th>Value</th></tr>')
+        for key, value in env_info.items():
+            safe_key = html.escape(str(key))
+            safe_value = html.escape(str(value))
+            lines.append(f"<tr><td><code>{safe_key}</code></td><td><pre>{safe_value}</pre></td></tr>")
+        lines.append('</table>')
+        lines.append('</details>')
+    lines.append('<details>')
+    lines.append(f"<summary><b>Test Details ({len(stats['testcases'])})</b></summary>")
     lines.append('<table>')
     lines.append('<tr><th>Test Case</th><th>Time</th><th>Status</th></tr>')
     for tc in stats["testcases"]:
@@ -106,6 +126,7 @@ def generate_markdown_summary(stats):
             status = "❌ Failed"
         lines.append(f"<tr><td>{tc['name']}</td><td>{tc['time']:.1f}s</td><td>{status}</td></tr>")
     lines.append('</table>')
+    lines.append('</details>')
     return "\n".join(lines) + "\n"
 
 
@@ -116,6 +137,10 @@ def main():
     parser.add_argument(
         "xml_file",
         help="Path to the test-results.xml file",
+    )
+    parser.add_argument(
+        "--env-info",
+        help="Optional path to env_info.json",
     )
     args = parser.parse_args()
 
@@ -129,7 +154,18 @@ def main():
         print(f"❌ Failed to parse XML: {e}", file=sys.stderr)
         sys.exit(1)
 
-    markdown = generate_markdown_summary(stats)
+    env_info = None
+    if args.env_info:
+        if not os.path.exists(args.env_info):
+            print(f"❌ File not found: {args.env_info}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            env_info = parse_env_info(args.env_info)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"❌ Failed to parse environment info: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    markdown = generate_markdown_summary(stats, env_info)
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:

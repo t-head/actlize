@@ -3,10 +3,10 @@ name: actlize1.0.0 checkin     # Workflow name shown on the Actions page
 # Triggers
 on:
   pull_request:
-    branches: [v1.0.0]                                     # PRs targeting v1.0.0
+    branches: [v1.0.0, feature/add-ci-1.0.0]                                     # PRs targeting v1.0.0
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [v1.0.0]                                     # Re-run after merge into v1.0.0
+    branches: [v1.0.0, feature/add-ci-1.0.0]                                     # Re-run after merge into v1.0.0
   workflow_dispatch:                                       # Allow manual trigger (web/API)
 
 permissions:                    # Token permissions
@@ -16,7 +16,7 @@ permissions:                    # Token permissions
   statuses: write
 
 concurrency:
-  group: ci-ppu-actlize100-${{ github.event.pull_request.number || github.ref }}
+  group: ci-ppu-actlize100-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true                 # A new run cancels the old one
 
 env:
@@ -25,19 +25,21 @@ env:
 jobs:
   build-test:
     name: Build & Test (${{ matrix.runner }})
-    runs-on: ubuntu-latest
+    runs-on: k8s-runner-group-cpu-thead
     container:
       image: ghcr.io/actions/actions-runner:latest
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        # Pair each runner with its dedicated caselist.
+        # Pair each runner with its dedicated caselist and PPU SDK build arg.
         include:
           - runner: ZW-M890P
             caselist: caselist1.0.0_btv1.5.list
+            ppu_type: "10500"
           - runner: OAM-810E
             caselist: caselist1.0.0_btv1.0.list
+            ppu_type: "10000"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,7 +49,7 @@ jobs:
         id: ppu-test
         uses: t-head/ppu-scheduler-action@main
         with:
-          image: reg.docker.alibaba-inc.com/ai-tmp/pytorch:2.10.0-ubuntu24.04-hggcrt3-py312-ppu202609181903
+          image: ${{ env.SAIL_IMAGE }}
           nnodes: 0
           nproc_per_node: 1
           node_selector: "board-type=${{ matrix.runner }}"
@@ -66,7 +68,7 @@ jobs:
             export HGGC_ENABLE_COMPRESS=1
             export NVCC_APPEND_FLAGS="-Xfatbin -compress-all"
             echo "START TO BUILD"
-            bash ./build.sh
+            bash ./build.sh ${{ matrix.ppu_type }}
             echo "START TO TEST CASES"
             set +e
             python .github/workflows/scripts/ci_actlize_ut.py \
@@ -90,6 +92,7 @@ jobs:
 
             info = {
                 "docker_image": "${{ env.SAIL_IMAGE }}",
+                "hostname": command_output(["hostname"]),
                 "python_version": sys.version,
                 "ppu_sdk": os.environ.get("PPU_SDK", ""),
                 "ppu_home": os.environ.get("PPU_HOME", ""),
@@ -109,26 +112,47 @@ jobs:
             exit "$TEST_EXIT_CODE"
           cleanup_policy: on_success
 
-  summary:
-    name: Test summary
-    needs: build-test          # Wait until every parallel build-test matrix job finishes
-    if: always()               # Summarize even when some runner failed
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/actions/actions-runner:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Print test summary
+      - name: Test summary (${{ matrix.runner }})
+        if: always()               # Summarize even when build/test failed on this runner
         shell: bash
         run: |
-          # Aggregate the JUnit report from every runner produced by the matrix jobs.
-          for runner in ZW-M890P OAM-810E; do
-            NAS_RESULT_DIR="/wl_nas/devops/actlize-ci/1.0.0/${{ github.run_id }}/${{ github.run_attempt }}/${runner}"
-            XML_FILE="$NAS_RESULT_DIR/test-results.xml"
-            echo "## Runner: ${runner}" >> "$GITHUB_STEP_SUMMARY"
-            if [[ ! -f "$XML_FILE" ]]; then
-              echo "JUnit report not found: $XML_FILE" >> "$GITHUB_STEP_SUMMARY"
-              continue
-            fi
-            python3 .github/workflows/scripts/display-test-summary.py "$XML_FILE"
-          done
+          # Summarize the JUnit report produced by this matrix runner.
+          runner="${{ matrix.runner }}"
+          # Resolve the NAS result base directory, preferring /wl_nas/devops
+          # then /mnt/wl_nas/devops, and finally any directory named devops.
+          if [[ -d "/wl_nas/devops" ]]; then
+            NAS_BASE="/wl_nas/devops"
+          elif [[ -d "/mnt/wl_nas/devops" ]]; then
+            NAS_BASE="/mnt/wl_nas/devops"
+          else
+            NAS_BASE=$(find / -type d -name "devops" 2>/dev/null | head -n 1)
+          fi
+          if [[ -z "$NAS_BASE" ]]; then
+            echo "::error::Could not locate a devops directory for runner ${runner}"
+            echo "Could not locate a devops directory for runner ${runner}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          NAS_RESULT_DIR="${NAS_BASE}/actlize-ci/1.0.0/${{ github.run_id }}/${{ github.run_attempt }}/${runner}"
+          XML_FILE="$NAS_RESULT_DIR/test-results.xml"
+          ENV_FILE="$NAS_RESULT_DIR/env_info.json"
+          RUN_ID_DIR="${NAS_BASE}/actlize-ci/1.0.0/${{ github.run_id }}"
+          echo "## Runner: ${runner}" >> "$GITHUB_STEP_SUMMARY"
+          # Verbosely log the resolved locations and list everything under the
+          # run-id dir so missing/misplaced JUnit reports are easy to diagnose.
+          echo "=================================================="
+          echo "[${runner}] NAS_BASE       = ${NAS_BASE}"
+          echo "[${runner}] RUN_ID_DIR     = ${RUN_ID_DIR}"
+          echo "[${runner}] NAS_RESULT_DIR = ${NAS_RESULT_DIR}"
+          echo "[${runner}] XML_FILE       = ${XML_FILE}"
+          echo "[${runner}] ENV_FILE       = ${ENV_FILE}"
+          echo "[${runner}] Listing all files under ${RUN_ID_DIR}:"
+          find "$RUN_ID_DIR" 2>/dev/null || echo "  (run-id dir does not exist: ${RUN_ID_DIR})"
+          echo "=================================================="
+          if [[ ! -f "$XML_FILE" ]]; then
+            # Fail the step so a missing report is not silently treated as success.
+            echo "::error::JUnit report NOT found: $XML_FILE"
+            echo "JUnit report not found: $XML_FILE" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "JUnit report FOUND, full path: $XML_FILE"
+          python3 .github/workflows/scripts/display-test-summary.py "$XML_FILE" --env-info "$ENV_FILE"
