@@ -25,7 +25,7 @@ env:
 jobs:
   build-test:
     name: Build & Test (${{ matrix.runner }})
-    runs-on: ubuntu-latest
+    runs-on: k8s-runner-group-cpu-thead
     container:
       image: ghcr.io/actions/actions-runner:latest
     timeout-minutes: 360
