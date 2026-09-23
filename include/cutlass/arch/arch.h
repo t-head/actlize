@@ -79,7 +79,10 @@ struct PPU0015 {
 
 CUTLASS_DEVICE
 void device_breakpoint() {
+#if defined(__HGGC_ARCH__)
+  // __brkpt is only declared for device side.
   __brkpt();
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
