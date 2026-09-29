@@ -1,0 +1,32 @@
+./examples/08_ppu_basic_tensor_op_gemm/08_ppu_basic_tensor_op_gemm --m=256 --n=256 --k=64 --iterations=1
+
+./examples/09_ppu_gemm_with_collective_builder/09_collective_builder --m=128 --n=128 --k=64 --l=1
+
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm --m=256 --n=256 --k=64 --l=1
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm --m=256 --n=256 --k=64 --l=2
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm --m=128 --n=128 --k=64 --l=4
+
+./examples/10_ppu_ptr_array_batched_gemm/10_ppu_ptr_array_batched_gemm ---m=128 --n=128 --k=128 --groups=4 --alpha=2 --beta=0.707
+
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm --m=128 --n=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm --n=128 --m=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_amax --m=128 --n=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_amax --n=128 --m=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_bias_aux_gelu --m=128 --n=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_bias_aux_gelu --n=128 --m=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_aux_relu --m=128 --n=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_aux_relu --n=128 --m=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_dgelu_dbias --m=128 --n=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_dgelu_dbias --n=128 --m=256 --k=128
+./examples/100_ppu0015_fp8_gemm/100_ppu0015_fp8_gemm_RCR --m=128 --n=256 --k=128
+./examples/102_ppu0015_gemm_evt/102_ppu0015_gemm_evt
+./examples/102_ppu0015_gemm_evt/102_ppu0015_gemm_evt_amax
+./examples/102_ppu0015_gemm_evt/102_ppu0015_gemm_evt_aux
+./examples/103_ppu0015_gemm_array/103_ppu0015_gemm_array --m=32 --n=32 --k=32 --l=2
+
+./examples/12_ppu_gemm_with_schedule/12_ppu_gemm_with_schedule --m=256 --n=256 --k=64 --l=1
+
+# power test
+./examples/101_ppu0015_fp4_gemm/101_ppu0015_fp4_gemm --m=1280 --n=2048 --k=4096
+./examples/13_ppu_gemm_with_schedule_multistream/13_ppu_gemm_with_schedule_multistream --m=1024 --n=2048 --k=1024
+./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=8 --n=128 --k=1024
