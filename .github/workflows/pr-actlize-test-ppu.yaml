@@ -1,0 +1,132 @@
+name: actlize UT checkin     # Workflow name shown on the Actions page
+
+# Triggers
+on:
+  workflow_call:                                           # Called by ci-actlize.yaml with per-branch settings
+    inputs:
+      version:
+        description: 'actlize version shown in job names and summaries (0.5.0 / 0.8.0 / 1.0.0)'
+        required: false
+        type: string
+        default: '0.5.0'
+      matrix:
+        description: 'JSON list of {runner, caselist[, ppu_type]} entries, one job per entry'
+        required: false
+        type: string
+        default: '[{"runner": "OAM-810E", "caselist": "caselist0.5.0.list"}]'
+  workflow_dispatch:                                       # Allow manual trigger (web/API)
+    inputs:
+      version:
+        description: 'actlize version shown in job names and summaries (0.5.0 / 0.8.0 / 1.0.0)'
+        required: false
+        type: string
+        default: '0.5.0'
+      matrix:
+        description: 'JSON list of {runner, caselist[, ppu_type]} entries, one job per entry'
+        required: false
+        type: string
+        default: '[{"runner": "OAM-810E", "caselist": "caselist0.5.0.list"}]'
+
+permissions:                    # Token permissions
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: ci-ppu-actlize-ut-${{ inputs.version }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true                 # A new run cancels the old one
+
+env:
+  SAIL_IMAGE: download.t-head.cn/docker_release/pytorch:sdk2.2.0-2.10.0-ubuntu24.04-hggcrt3-py312-20261005
+
+jobs:
+  actlize-build-test:
+    name: Build & Test ${{ inputs.version }} (${{ matrix.runner }})
+    runs-on: k8s-runner-group-cpu-thead
+    container:
+      image: ghcr.io/actions/actions-runner:latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each entry pairs a runner with its caselist and optional PPU SDK build arg.
+        include: ${{ fromJson(inputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the base..head diff below resolves both ends.
+          fetch-depth: 0
+      - name: Build and Test on PPU
+        id: ppu-test
+        uses: t-head/ppu-scheduler-action@main
+        with:
+          image: ${{ env.SAIL_IMAGE }}
+          nnodes: 0
+          nproc_per_node: 1
+          node_selector: "board-type=${{ matrix.runner }}"
+          namespace: ppu-sched
+          timeout_minutes: 300
+          command: |
+            cd /workspace/source
+            # Fix: image bakes in PIP_INDEX_URL pointing to unreachable internal server
+            unset PIP_INDEX_URL
+            # Fix: image bakes in git insteadOf redirecting github.com to unreachable internal gerrit
+            git config --global --unset-all url.https://ai-gerrit.eng.t-head.cn/Public/Github/.insteadOf 2>/dev/null || true
+            # PPU SDK and torch are pre-installed in the docker image
+            source /usr/local/PPU_SDK/envsetup.sh
+            pip install junit-xml
+            echo "START TO BUILD actlize ${{ inputs.version }}"
+            # An empty ppu_type builds every PPU arch.
+            bash ./build.sh ${{ matrix.ppu_type }}
+            echo "START TO TEST CASES"
+            set +e
+            python .github/workflows/scripts/ci_actlize_ut.py \
+              --caselist .github/workflows/scripts/${{ matrix.caselist }} \
+              --build-dir build
+            TEST_EXIT_CODE=$?
+            # Record the runtime environment alongside the JUnit report.
+            python3 .github/workflows/scripts/generate-env-info.py \
+              --docker-image "${{ env.SAIL_IMAGE }}" \
+              --output env_info.json
+            # Keep results per runner so the parallel matrix jobs do not collide.
+            # Same layout for every actlize branch; run_id already makes it unique.
+            NAS_RESULT_DIR="/mnt/wl_nas/devops/actlize-ci/${{ github.run_id }}/${{ github.run_attempt }}/${{ matrix.runner }}"
+            mkdir -p "$NAS_RESULT_DIR"
+            cp build/test-results.xml "$NAS_RESULT_DIR/" 2>/dev/null || true
+            cp env_info.json "$NAS_RESULT_DIR/" 2>/dev/null || true
+            exit "$TEST_EXIT_CODE"
+          cleanup_policy: on_success
+
+      - name: Test summary (${{ matrix.runner }})
+        if: always()               # Summarize even when build/test failed on this runner
+        shell: bash
+        run: |
+          runner="${{ matrix.runner }}"
+          # Prefer /wl_nas/devops, then /mnt/wl_nas/devops, then any directory named devops.
+          if [[ -d "/wl_nas/devops" ]]; then
+            NAS_BASE="/wl_nas/devops"
+          elif [[ -d "/mnt/wl_nas/devops" ]]; then
+            NAS_BASE="/mnt/wl_nas/devops"
+          else
+            NAS_BASE=$(find / -type d -name "devops" 2>/dev/null | head -n 1)
+          fi
+          if [[ -z "$NAS_BASE" ]]; then
+            echo "::error::Could not locate a devops directory for runner ${runner}"
+            echo "Could not locate a devops directory for runner ${runner}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          RUN_ID_DIR="${NAS_BASE}/actlize-ci/${{ github.run_id }}"
+          NAS_RESULT_DIR="${RUN_ID_DIR}/${{ github.run_attempt }}/${runner}"
+          XML_FILE="$NAS_RESULT_DIR/test-results.xml"
+          ENV_FILE="$NAS_RESULT_DIR/env_info.json"
+          echo "## actlize ${{ inputs.version }} Runner: ${runner}" >> "$GITHUB_STEP_SUMMARY"
+          echo "[${runner}] NAS_RESULT_DIR = ${NAS_RESULT_DIR}"
+          if [[ ! -f "$XML_FILE" ]]; then
+            # Fail the step so a missing report is not silently treated as success.
+            echo "[${runner}] Listing all files under ${RUN_ID_DIR}:"
+            find "$RUN_ID_DIR" 2>/dev/null || echo "  (run-id dir does not exist: ${RUN_ID_DIR})"
+            echo "::error::JUnit report NOT found: $XML_FILE"
+            echo "JUnit report not found: $XML_FILE" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          python3 .github/workflows/scripts/display-test-summary.py "$XML_FILE" --env-info "$ENV_FILE"
