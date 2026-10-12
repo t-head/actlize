@@ -1,0 +1,85 @@
+name: actlize checkin     # Workflow name (shown on the Actions page)
+
+# Triggers
+on:
+  workflow_dispatch:                                       # Manual trigger from the web/API
+  pull_request:
+    branches: ['v0.5.0_v0.2.0_release', 'v0.8.0_v0.2.0_release', 'v1.0.0_v0.2.0_release']         # The target branch selects the actlize version to run
+    types: [opened, synchronize, reopened]
+  # push:
+  #   branches: ['feature/add-ci-workflow']                                       # Uncomment for debugging
+
+permissions:                    # Token permissions
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: ci-ppu-actlize-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true                 # A new run cancels the old one
+
+jobs:
+  
+  # Stage 1: Secret pre-check (org-level reusable workflow)
+  precheck:
+    name: Pre-check
+    uses: t-head/.github/.github/workflows/user-precheck.yml@main
+  # TODO: add smoketest if necessary
+
+  # Stage 2: AI code review
+  ai-code-review:
+    name: AI Code Review (Copilot Gate)
+    needs: precheck
+    uses: t-head/.github/.github/workflows/ai-code-review.yml@main
+    secrets: inherit
+
+  # Stage 3: Human review gate
+  human-review:
+    name: Human Review Gate
+    # TODO: change to ai-code-review
+    needs: precheck
+    uses: t-head/.github/.github/workflows/human-review.yml@main
+    secrets: inherit
+
+  # Stage 4: actlize UT; version, runner and caselist are passed per branch
+  # ppu_type is both the PPU SDK argument of build.sh (10500 -> ppu0015, 10000 -> ppu0010) and the key into casecmd.json
+  actlize-ut-tests-ppu:
+    name: actlize 1.0.0 UT Tests PPU
+    needs: precheck
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
+    uses: ./.github/workflows/pr-actlize-test-ppu.yaml
+    with:
+      version: '1.0.0'
+      matrix: >-
+        [{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"},
+         {"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]
+    secrets: inherit
+
+  deepgemm-with-actlize100-tests:
+    name: DeepGEMM with actlize 1.0.0 Tests
+    needs: precheck
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
+    uses: t-head/DeepGEMM-for-sail/.github/workflows/deepgemm-ut-test-ppu.yml@main
+    with:
+      source_mode: 'actlize1.0.0'
+    secrets: inherit
+
+  fa274-with-actlize100:
+    name: FA 2.7.4 with actlize 1.0.0 Tests
+    needs: precheck
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
+    uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
+    with:
+      version: v2.7.4
+      source_mode: 'actlize1.0.0'
+    secrets: inherit
+
+  fa282-with-actlize100:
+    name: FA 2.8.2 with actlize 1.0.0 Tests
+    needs: precheck
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
+    uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
+    with:
+      version: v2.8.2
+      source_mode: 'actlize1.0.0'
+    secrets: inherit
