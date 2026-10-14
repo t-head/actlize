@@ -65,7 +65,8 @@ jobs:
     name: FA 2.7.2 with actlize 0.8.0 Tests
     needs: precheck
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v0.8.0')
-    uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa272-test-ppu.yaml@v2.8.2
+    uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
     with:
+      version: v2.7.2
       source_mode: 'actlize0.8.0'
     secrets: inherit
