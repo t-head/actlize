@@ -365,14 +365,16 @@ public:
     Tensor mD_crd = make_identity_tensor(make_shape(M,N));                                                     // (M,N)
     Tensor cD_mn = local_tile(mD_crd, take<0,2>(blk_shape_MNK), make_coord(m_coord, n_coord));          // (CTA_M,CTA_N)
     using EpilogueTile = decltype(shape(coalesce(make_layout(shape(SmemLayout{})), Step<_1, _1>{})));
-    Tensor tRS_cD_mn = thread_r2s.partition_S(flat_divide(cD_mn, EpilogueTile{}));     // (R2S,R2S_M,R2S_N,EPI_M,EPI_N)
+    // The visitor partitions its gmem operands with `tiled_s2r`, 
+    // so the coordinate tensor handed to it must use the same thread/value map. 
+    Tensor tCcD_mn = tD.partition_S(flat_divide(cD_mn, EpilogueTile{}));              // (S2R,S2R_M,S2R_N,EPI_M,EPI_N)
 
     // Relative coordinate tensors (static)
     Tensor cD_ = make_counting_tensor(cD_mn.layout());                                                  // (CTA_M,CTA_N)
-    Tensor tRS_cD = make_counting_tensor(tRS_cD_mn.layout());                          // (R2S,R2S_M,R2S_N,EPI_M,EPI_N)
+    Tensor tCcD = make_counting_tensor(tCcD_mn.layout());                              // (S2R,S2R_M,S2R_N,EPI_M,EPI_N)
     // Subtract the global "bottom right" corner from the local "top left" corner to get the max relative coordinate
     auto residue_cD = make_coord(M,N) - cD_mn(_0{});                                                           // (m,n)
-    auto residue_tRS_cD = make_coord(M,N) - tRS_cD_mn(_0{});
+    auto residue_tCcD = make_coord(M,N) - tCcD_mn(_0{});
 
 #if SAIL_EPILOGUE_OPT >= 2
     using MmaAccType = typename FrgEngine::value_type;
@@ -390,8 +392,8 @@ public:
                       tiled_s2r,
                       cD,
                       residue_cD,
-                      tRS_cD,
-                      residue_tRS_cD,
+                      tCcD,
+                      residue_tCcD,
                       evt_c_tensor,
                       thread_idx
                     };
