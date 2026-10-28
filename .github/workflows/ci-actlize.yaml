@@ -52,7 +52,7 @@ jobs:
       version: '1.0.0'
       matrix: >-
         [{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"},
-         {"runner": "ZW-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]
+         {"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]
     secrets: inherit
 
   deepgemm-with-actlize100-tests:

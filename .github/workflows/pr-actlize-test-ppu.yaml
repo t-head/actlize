@@ -13,7 +13,7 @@ on:
         description: 'JSON list of {runner, caselist[, ppu_type]} entries, one job per entry'
         required: false
         type: string
-        default: '[{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"}, {"runner": "ZW-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
+        default: '[{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"}, {"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
   workflow_dispatch:                                       # Allow manual trigger (web/API)
     inputs:
       version:
@@ -25,7 +25,7 @@ on:
         description: 'JSON list of {runner, caselist[, ppu_type]} entries, one job per entry'
         required: false
         type: string
-        default: '[{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"}, {"runner": "ZW-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
+        default: '[{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"}, {"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
 
 permissions:                    # Token permissions
   contents: read
