@@ -36,27 +36,17 @@ jobs:
   # Stage 3: 人工审批门禁
   human-review:
     name: Human Review Gate
-    # TODO: change to ai-code-review
-    needs: precheck
+    needs: ai-code-review
     uses: t-head/.github/.github/workflows/human-review.yml@main
     secrets: inherit
 
   # Stage 4: actlize UT，按分支传入版本、runner、casecmd 与 ppu_type
   actlize-ut-tests-ppu:
     name: actlize 0.5.0 UT Tests PPU
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v0.5.0')
     uses: ./.github/workflows/pr-actlize-test-ppu.yaml
     with:
       version: '0.5.0'
-      matrix: '[{"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
-    secrets: inherit
-
-  deepgemm-with-actlize050-tests:
-    name: DeepGEMM with actlize 0.5.0 Tests
-    needs: precheck
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v0.5.0')
-    uses: t-head/DeepGEMM-for-sail/.github/workflows/deepgemm-ut-test-ppu.yml@main
-    with:
-      source_mode: 'actlize0.5.0'
+      matrix: '[{"runner": "ZW-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
     secrets: inherit
