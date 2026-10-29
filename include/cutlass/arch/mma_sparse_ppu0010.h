@@ -45,6 +45,7 @@
 #include "mma.h"
 #include "cutlass/layout/matrix.h"
 #include "cutlass/numeric_types.h"
+#include "cute/config.hpp"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -115,7 +116,9 @@ struct SparseMma<
   void operator()(FragmentC &d, FragmentA const &a, FragmentB const &b,
                   FragmentC const &c, uint32_t const &E, int const id2) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
   uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
   uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -123,24 +126,20 @@ struct SparseMma<
   uint32_t *D = reinterpret_cast<uint32_t *>(&d);
 
   if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k32.row.col.f16.f16.f16.f16 {%0,%1}, "
         "{%2,%3,%4,%5}, {%6,%7,%8,%9}, {%10,%11}, %12, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]),
           "r"(B[2]), "r"(B[3]), "r"(C[0]), "r"(C[1]), "r"(E));
-#endif
   }
   else if (id2 == 1) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k32.row.col.f16.f16.f16.f16 {%0,%1}, "
         "{%2,%3,%4,%5}, {%6,%7,%8,%9}, {%10,%11}, %12, 0x1;\n"
         : "=r"(D[0]), "=r"(D[1])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]),
           "r"(B[2]), "r"(B[3]), "r"(C[0]), "r"(C[1]), "r"(E));
-#endif
   }
   else {
     assert(0);
@@ -202,7 +201,9 @@ struct SparseMma<
   void operator()(FragmentC &d, FragmentA const &a, FragmentB const &b,
                   FragmentC const &c, uint32_t const &E, int const id2) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
   uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
   uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -210,7 +211,6 @@ struct SparseMma<
   float *D = reinterpret_cast<float *>(&d);
 
   if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k32.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, "
         "{%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
@@ -218,10 +218,8 @@ asm volatile(
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]),
           "r"(B[2]), "r"(B[3]), "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]),
           "r"(E));
-#endif
   }
   else if (id2 == 1) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k32.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, "
         "{%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x1;\n"
@@ -229,7 +227,6 @@ asm volatile(
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]),
           "r"(B[2]), "r"(B[3]), "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]),
           "r"(E));
-#endif
   }
   else {
     assert(0);
@@ -286,7 +283,9 @@ struct SparseMma<gemm::GemmShape<16, 8, 32>, 32, bfloat16_t, layout::RowMajor,
   void operator()(FragmentC &d, FragmentA const &a, FragmentB const &b,
                   FragmentC const &c, uint32_t const &E, int const id2) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -294,23 +293,19 @@ struct SparseMma<gemm::GemmShape<16, 8, 32>, 32, bfloat16_t, layout::RowMajor,
     float *D = reinterpret_cast<float *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k32.row.col.f32.bf16.bf16.f32 "
         "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=f"(D[0]), "=f"(D[1]), "=f"(D[2]), "=f"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]), "r"(E));
-#endif
     } else if (id2 == 1) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k32.row.col.f32.bf16.bf16.f32 "
         "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x1;\n"
         : "=f"(D[0]), "=f"(D[1]), "=f"(D[2]), "=f"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]), "r"(E));
-#endif
     } else {
     assert(0);
     }
@@ -366,7 +361,9 @@ struct SparseMma<gemm::GemmShape<16, 8, 16>, 32, tfloat32_t, layout::RowMajor,
   void operator()(FragmentC &d, FragmentA const &a, FragmentB const &b,
                   FragmentC const &c, uint32_t const &E, int const id2) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -374,23 +371,19 @@ struct SparseMma<gemm::GemmShape<16, 8, 16>, 32, tfloat32_t, layout::RowMajor,
     float *D = reinterpret_cast<float *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k16.row.col.f32.tf32.tf32.f32 "
         "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=f"(D[0]), "=f"(D[1]), "=f"(D[2]), "=f"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]), "r"(E));
-#endif
     } else if (id2 == 1) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k16.row.col.f32.tf32.tf32.f32 "
         "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x1;\n"
         : "=f"(D[0]), "=f"(D[1]), "=f"(D[2]), "=f"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]), "r"(E));
-#endif
     } else {
     assert(0);
     }
@@ -462,7 +455,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -471,14 +466,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -544,7 +537,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -553,14 +548,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.s8.u8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -626,7 +619,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -635,14 +630,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.u8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -708,7 +701,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -717,14 +712,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.u8.u8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -796,7 +789,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -805,14 +800,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.s8.s8.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -878,7 +871,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -887,14 +882,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.s8.u8.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -960,7 +953,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -969,14 +964,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.u8.s8.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1042,7 +1035,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1051,14 +1046,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k64.row.col.s32.u8.u8.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1130,7 +1123,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1139,14 +1134,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.s4.s4.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1212,7 +1205,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1221,14 +1216,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.s4.u4.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1294,7 +1287,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1303,14 +1298,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.u4.s4.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1376,7 +1369,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1385,14 +1380,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.u4.u4.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1464,7 +1457,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1473,14 +1468,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.s4.s4.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1546,7 +1539,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1555,14 +1550,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.s4.u4.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1628,7 +1621,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1637,14 +1632,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.u4.s4.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
@@ -1710,7 +1703,9 @@ struct SparseMma<
     int const id2
   ) const {
 
-#if defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
+#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ != 100)
+    CUTE_INVALID_CONTROL_PATH("Sparse MMA is not supported on this architecture\n");
+#elif defined(CUTLASS_ARCH_SPARSE_MMA_PPU0010_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const *B = reinterpret_cast<uint32_t const *>(&b);
@@ -1719,14 +1714,12 @@ struct SparseMma<
     int *D = reinterpret_cast<int *>(&d);
 
     if (id2 == 0) {
-#if (defined __HGGC_ARCH__) && (__HGGC_ARCH__ == 100)
 asm volatile(
     "ppu.tc01.ex.mma.sp.sync.aligned.m16n8k128.row.col.s32.u4.u4.s32.satfinite {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
         "{%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
         : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]), "r"(B[2]), "r"(B[3]),
           "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]), "r"(E));
-#endif
     }
     else
     assert(0);
