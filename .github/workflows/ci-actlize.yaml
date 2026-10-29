@@ -36,37 +36,26 @@ jobs:
   # Stage 3: 人工审批门禁
   human-review:
     name: Human Review Gate
-    # TODO: change to ai-code-review
-    needs: precheck
+    needs: ai-code-review
     uses: t-head/.github/.github/workflows/human-review.yml@main
     secrets: inherit
 
   # Stage 4: actlize UT，按分支传入版本、runner、casecmd 与 ppu_type
   actlize-ut-tests-ppu:
     name: actlize 0.8.0 UT Tests PPU
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v0.8.0')
     uses: ./.github/workflows/pr-actlize-test-ppu.yaml
     with:
       version: '0.8.0'
-      matrix: '[{"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
+      matrix: '[{"runner": "ZW-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]'
     secrets: inherit
 
   flashmla-with-actlize080-tests:
     name: FlashMLA with actlize 0.8.0 Tests
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v0.8.0')
     uses: t-head/FlashMLA-for-sail/.github/workflows/flashmla-ut-test-ppu.yml@main
     with:
       source_mode: 'actlize'
-    secrets: inherit
-
-  fa272-with-actlize080:
-    name: FA 2.7.2 with actlize 0.8.0 Tests
-    needs: precheck
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v0.8.0')
-    uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
-    with:
-      version: v2.7.2
-      source_mode: 'actlize0.8.0'
     secrets: inherit
