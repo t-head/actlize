@@ -36,8 +36,7 @@ jobs:
   # Stage 3: 人工审批门禁
   human-review:
     name: Human Review Gate
-    # TODO: change to ai-code-review
-    needs: precheck
+    needs: ai-code-review
     uses: t-head/.github/.github/workflows/human-review.yml@main
     secrets: inherit
 
@@ -45,28 +44,38 @@ jobs:
   # ppu_type 同时是 build.sh 的 PPU SDK 参数（10500 → ppu0015，10000 → ppu0010）和 casecmd.json 的 key
   actlize-ut-tests-ppu:
     name: actlize 1.0.0 UT Tests PPU
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
     uses: ./.github/workflows/pr-actlize-test-ppu.yaml
     with:
       version: '1.0.0'
       matrix: >-
         [{"runner": "ZW-M890P", "caselist": "casecmd.json", "ppu_type": "10500"},
-         {"runner": "OAM-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]
+         {"runner": "ZW-810E", "caselist": "casecmd.json", "ppu_type": "10000"}]
     secrets: inherit
 
   deepgemm-with-actlize100-tests:
     name: DeepGEMM with actlize 1.0.0 Tests
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
     uses: t-head/DeepGEMM-for-sail/.github/workflows/deepgemm-ut-test-ppu.yml@main
     with:
       source_mode: 'actlize1.0.0'
     secrets: inherit
 
+  fa272-with-actlize100:
+    name: FA 2.7.2 with actlize 1.0.0 Tests
+    needs: human-review
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
+    uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
+    with:
+      version: v2.7.2
+      source_mode: 'actlize1.0.0'
+    secrets: inherit
+
   fa274-with-actlize100:
     name: FA 2.7.4 with actlize 1.0.0 Tests
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
     uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
     with:
@@ -76,7 +85,7 @@ jobs:
 
   fa282-with-actlize100:
     name: FA 2.8.2 with actlize 1.0.0 Tests
-    needs: precheck
+    needs: human-review
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'v1.0.0')
     uses: t-head/flash-attention-for-sail/.github/workflows/pr-fa-test-ppu.yaml@v2.8.2
     with:
