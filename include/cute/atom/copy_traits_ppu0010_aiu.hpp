@@ -62,7 +62,18 @@ struct Copy_Traits<PPU0010_AIU_LOAD<NumBitsPerAIU, Element, Trans, Swzl>>
   copy_unpack_(void *dst_ptr, const void *src_ptr,
                Coord const& src_coord, seq<Is...>) const
   {
-    PPU0010_AIU_LOAD<NumBitsPerAIU, Element, Trans, Swzl>::copy(dst_ptr, src_ptr, desc_, get<Is>(src_coord)...);
+    auto desc = desc_;
+    if constexpr (!Swzl) {
+      // The shared descriptor caps cube_w for swizzled copies. A linear
+      // copy spans all values in its atom, including widths below one word.
+      if constexpr (sizeof_bits<Element>::value == 4) {
+        // Packed 4-bit copies use the b8 instruction, whose width is in bytes.
+        desc.cube_w = NumBitsPerAIU::value / 8 / desc.cube_h;
+      } else {
+        desc.cube_w = NumBitsPerAIU::value / sizeof_bits<Element>::value / desc.cube_h;
+      }
+    }
+    PPU0010_AIU_LOAD<NumBitsPerAIU, Element, Trans, Swzl>::copy(dst_ptr, src_ptr, desc, get<Is>(src_coord)...);
   }
 
   template <class TS, class SLayout,

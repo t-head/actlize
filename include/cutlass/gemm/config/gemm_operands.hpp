@@ -509,8 +509,7 @@ template <
   typename Block_MN,
   typename Block_K,
   bool Swap,
-  int StageStride,
-  bool Swzl
+  int StageStride
 > struct DefaultGemm_AIU_Operand<
   Arch,
   Element,
@@ -519,7 +518,7 @@ template <
   Block_K,
   Swap,
   StageStride,
-  Swzl
+  true
 > {
   static constexpr int BlockContSize = Block_K{} * sizeof_bits<Element>::value / 8;
   static_assert(BlockContSize > 128 ? (BlockContSize % 128 == 0) : (BlockContSize % 32 == 0), "aiu_trans: block contiguous size should be multiple of 128B or 32B");
@@ -543,8 +542,8 @@ template <
   static constexpr int bits_per_aiu = CUBE_H * CUBE_W * sizeof_bits<Element>::value;
   using CopyInst = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_AIU_LOAD<cute::C<bits_per_aiu>, Element, false, CUBE_H, CUBE_W, Swzl>,
-    PPU0010_AIU_LOAD<cute::C<bits_per_aiu>, Element, false, Swzl>
+    PPU0015_AIU_LOAD<cute::C<bits_per_aiu>, Element, false, CUBE_H, CUBE_W, true>,
+    PPU0010_AIU_LOAD<cute::C<bits_per_aiu>, Element, false, true>
   >;
   using SmemCopyOp = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
@@ -562,7 +561,7 @@ template <
 
   using SmemCopyAtom = Copy_Atom<SmemCopyOp, Element>;
   using SmemAtomStride = typename platform::conditional<
-    split_on_k_10500 or not Swzl,
+    split_on_k_10500,
     Stride<Int<CUBE_W>, _1>,
     Stride<_1, Int<CUBE_H>>
   >::type;
@@ -579,8 +578,7 @@ template <
   typename Block_MN,
   typename Block_K,
   bool Swap,
-  int StageStride,
-  bool Swzl
+  int StageStride
 > struct DefaultGemm_AIU_Operand<
   Arch,
   Element,
@@ -589,7 +587,7 @@ template <
   Block_K,
   Swap,
   StageStride,
-  Swzl
+  true
 > {
 
   static constexpr int BlockContSize = Block_MN{} * sizeof(Element);
@@ -611,8 +609,8 @@ template <
 
   using CopyInst = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
-    PPU0015_AIU_LOAD<cute::C<bits_per_aiu>, Element, true, CUBE_H, CUBE_W, Swzl>,
-    PPU0010_AIU_LOAD<cute::C<bits_per_aiu>, Element, true, Swzl>
+    PPU0015_AIU_LOAD<cute::C<bits_per_aiu>, Element, true, CUBE_H, CUBE_W, true>,
+    PPU0010_AIU_LOAD<cute::C<bits_per_aiu>, Element, true, true>
   >;
   using SmemCopyOp = cute::conditional_t<
     cute::is_same_v<Arch, cutlass::arch::PPU0015>,
@@ -635,6 +633,52 @@ template <
 
 
 
+
+// Linear AIU copies the complete logical (M/N, K) tile. Swizzle cube
+// alignment and splitting do not apply; both PPU generations support linear.
+template <typename Arch, typename Element, bool Trans,
+          typename Block_MN, typename Block_K, bool Swap, int StageStride>
+struct DefaultGemm_AIU_Operand<Arch, Element, Trans, Block_MN, Block_K,
+                               Swap, StageStride, false> {
+  static_assert(Block_MN{} > 0 && Block_K{} > 0, "Linear AIU tile must be nonempty.");
+  static_assert(sizeof_bits<Element>::value == 8 || sizeof_bits<Element>::value == 16 ||
+                sizeof_bits<Element>::value == 32, "Linear AIU supports 8/16/32-bit elements.");
+  static constexpr int CUBE_H = Trans ? Block_K{} : Block_MN{};
+  static constexpr int CUBE_W = Trans ? Block_MN{} : Block_K{};
+  static constexpr int bits_per_aiu = Block_MN{} * Block_K{} * sizeof_bits<Element>::value;
+  using CopyInst = cute::conditional_t<
+      cute::is_same_v<Arch, arch::PPU0015>,
+      PPU0015_AIU_LOAD<Int<bits_per_aiu>, Element, Trans, CUBE_H, CUBE_W, false>,
+      PPU0010_AIU_LOAD<Int<bits_per_aiu>, Element, Trans, false>>;
+  using GmemTiledCopy = decltype(make_tiled_copy(
+      Copy_Atom<CopyInst, Element>{}, Layout<Shape<_1, _1>, Stride<_1, _1>>{},
+      Layout<Shape<Block_MN, Block_K>>{}));
+  using SmemLayoutAtom = Layout<Shape<Block_MN, Block_K>,
+      conditional_t<Trans, Stride<_1, Block_MN>, Stride<Block_K, _1>>>;
+  using SmemCopyAtom = Copy_Atom<DefaultCopy, Element>;
+};
+
+
+// Packed FP4 scales use transposed uint16_t linear operands. Their consumers
+// depend on 128B atoms to insert shared-memory padding between scale panels.
+// Preserve that contract while other linear operands copy the complete tile.
+template <typename Arch, typename Block_MN, typename Block_K,
+          bool Swap, int StageStride>
+struct DefaultGemm_AIU_Operand<Arch, uint16_t, true, Block_MN, Block_K,
+                               Swap, StageStride, false>
+    : DefaultGemm_AIU_Operand<Arch, uint16_t, true, Block_MN, Block_K,
+                              Swap, StageStride, true> {
+  using Base = DefaultGemm_AIU_Operand<Arch, uint16_t, true, Block_MN, Block_K,
+                                     Swap, StageStride, true>;
+  using CopyInst = cute::conditional_t<
+      cute::is_same_v<Arch, arch::PPU0015>,
+      PPU0015_AIU_LOAD<Int<Base::bits_per_aiu>, uint16_t, true,
+                      Base::CUBE_H, Base::CUBE_W, false>,
+      PPU0010_AIU_LOAD<Int<Base::bits_per_aiu>, uint16_t, true, false>>;
+  using GmemTiledCopy = decltype(make_tiled_copy(
+      Copy_Atom<CopyInst, uint16_t>{}, Layout<Shape<_1, _1>, Stride<_1, _1>>{},
+      Layout<Shape<Int<Base::CUBE_W>, Int<Base::CUBE_H>>>{}));
+};
 
 } // namespace config
 } // namespace gemm

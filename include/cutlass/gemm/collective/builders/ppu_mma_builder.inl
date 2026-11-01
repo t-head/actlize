@@ -344,9 +344,6 @@ struct CollectiveBuilder<
   static constexpr int ScaleNsPerTile = cute::ceil_div(Int<blockN>{}, Int<ScaleGranularityN>{});
   static constexpr int ScaleKsPerTile = cute::ceil_div(Int<blockK>{}, Int<ScaleGranularityK>{});
 
-  static constexpr int MaxAiuContElemSize = 128 / (sizeof_bits<ElementScale>::value / 8);     // 32
-  static constexpr int MinAiuContElemSize = 32 / (sizeof_bits<ElementScale>::value / 8);      // 8
-
   static_assert(blockK > ScaleGranularityK ? (blockK % ScaleGranularityK) == 0 : (ScaleGranularityK % blockK) == 0,
               "block scaling granularity must evenly divide tile shape along K.");
 
@@ -359,19 +356,11 @@ struct CollectiveBuilder<
   using DefaultOperandA = config::DefaultGemm_AIU_Operand<Arch, ElementA, TransA, Int<blockM>, Int<blockK>, false>;
   using DefaultOperandB = config::DefaultGemm_AIU_Operand<Arch, ElementB, TransB, Int<blockN>, Int<blockK>, true>;
 
-  static constexpr int SFBTileN = TransSFB ? cute::max(ScaleNsPerTile, MinAiuContElemSize) : ScaleNsPerTile;
-  static constexpr int SFBTileK = TransSFB ? ScaleKsPerTile : cute::max(ScaleKsPerTile, MinAiuContElemSize);
-
-#if 1
-  static constexpr int SFATileM = TransSFA ? cute::max(ScaleMsPerTile, MinAiuContElemSize) : ScaleMsPerTile;
-  static constexpr int SFATileK = TransSFA ? ScaleKsPerTile : cute::max(ScaleKsPerTile, MinAiuContElemSize);
-  using DefaultOperandSFA = config::DefaultGemm_AIU_Operand<Arch, ElementScale, TransSFA, Int<SFATileM>, Int<SFATileK>, false, 1, false>;
-#else
-  // TransSFA == true, scale_M % ScaleMsPerTile ==0, fold
+  // Linear scale loads use the compact logical tile on both PPU generations.
   using DefaultOperandSFA = config::DefaultGemm_AIU_Operand<
-      Arch, ElementScale, TransSFA, Int<MaxAiuContElemSize>, Int<ScaleMsPerTile / MaxAiuContElemSize>, false, 1, false>;
-#endif
-  using DefaultOperandSFB = config::DefaultGemm_AIU_Operand<Arch, ElementScale, TransSFB, Int<SFBTileN>, Int<SFBTileK>, true, 1, false>;
+      Arch, ElementScale, TransSFA, Int<ScaleMsPerTile>, Int<ScaleKsPerTile>, false, 1, false>;
+  using DefaultOperandSFB = config::DefaultGemm_AIU_Operand<
+      Arch, ElementScale, TransSFB, Int<ScaleNsPerTile>, Int<ScaleKsPerTile>, true, 1, false>;
 
 #else
   using DispatchPolicy = MainloopPPUCpAsync<3>;
