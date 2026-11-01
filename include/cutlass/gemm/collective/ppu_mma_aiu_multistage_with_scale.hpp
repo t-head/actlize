@@ -365,21 +365,25 @@ struct CollectiveMma<
     Tensor tSFBgSFB = gmem_thr_copy_SFB.partition_S(gSFB);
     Tensor tSFBsSFB = gmem_thr_copy_SFB.partition_D(sSFB);
 
-    auto copy_to_tsm = [&](int k_pipe_write, int k_scale_pipe_write, int k_idx, int warp_idx, bool scale_flag) {
-      if (warp_idx == 0) {
+    auto copy_to_tsm = [&](auto group_tag, auto producer_tag,
+                           int k_pipe_write, int k_scale_pipe_write, int k_idx, bool scale_flag) {
+      constexpr int WarpGroupId = decltype(group_tag)::value;
+      constexpr int ProducerWarpIdx = decltype(producer_tag)::value;
+      if constexpr (ProducerWarpIdx == 0) {
         copy(gmem_tiled_copy_A, tAgA(_,_,_,k_idx), tAsA(_,_,_,k_pipe_write));
         copy(gmem_tiled_copy_B, tBgB(_,_,_,k_idx), tBsB(_,_,_,k_pipe_write));
-      }
-      if constexpr (StageNumPerBlock > 1) {
-        if (scale_flag == false) {
-          return;
+      } else if constexpr (ProducerWarpIdx == 1 || ProducerWarpIdx == 2) {
+        if constexpr (StageNumPerBlock > 1) {
+          if (!scale_flag) {
+            return;
+          }
         }
-      }
-      int k_scale_idx = k_idx / StageNumPerBlock;
-      if (warp_idx == 1) {
-        copy(gmem_tiled_copy_SFA, tSFAgSFA(_,_,_,k_scale_idx), tSFAsSFA(_,_,_,k_scale_pipe_write));
-      } else if (warp_idx == 2) {
-        copy(gmem_tiled_copy_SFB, tSFBgSFB(_,_,_,k_scale_idx), tSFBsSFB(_,_,_,k_scale_pipe_write));
+        int k_scale_idx = k_idx / StageNumPerBlock;
+        if constexpr (ProducerWarpIdx == 1) {
+          copy(gmem_tiled_copy_SFA, tSFAgSFA(_,_,_,k_scale_idx), tSFAsSFA(_,_,_,k_scale_pipe_write));
+        } else {
+          copy(gmem_tiled_copy_SFB, tSFBgSFB(_,_,_,k_scale_idx), tSFBsSFB(_,_,_,k_scale_pipe_write));
+        }
       }
     };
 
@@ -387,7 +391,14 @@ struct CollectiveMma<
     CUTLASS_PRAGMA_UNROLL
     for (int k_pipe = 0; k_pipe < DispatchPolicy::Stages-1; ++k_pipe) {
       if (k_tile_count > 0) {
-        copy_to_tsm(k_pipe,  k_pipe / StageNumPerBlock, *k_tile_iter, warp_idx, k_pipe % StageNumPerBlock == 0);
+        // All three producers belong to physical group 0; preserve prologue dispatch.
+        if (warp_idx == 0) {
+          copy_to_tsm(Int<0>{}, Int<0>{}, k_pipe, k_pipe / StageNumPerBlock, *k_tile_iter, k_pipe % StageNumPerBlock == 0);
+        } else if (warp_idx == 1) {
+          copy_to_tsm(Int<0>{}, Int<1>{}, k_pipe, k_pipe / StageNumPerBlock, *k_tile_iter, k_pipe % StageNumPerBlock == 0);
+        } else if (warp_idx == 2) {
+          copy_to_tsm(Int<0>{}, Int<2>{}, k_pipe, k_pipe / StageNumPerBlock, *k_tile_iter, k_pipe % StageNumPerBlock == 0);
+        }
         ++k_tile_iter;
       }
       cp_async_fence();
@@ -489,137 +500,162 @@ struct CollectiveMma<
       }
     }
 
-    auto preprocess_scale = [&]() {
-      if constexpr (WarpInterleaving) {
-        __ppu_barrier_sync(5 + warp_group_id, NumThreadsPerCTA, 0); // group 0 wait bar 5, group 1 wait bar 6
-      }
-      clear(accumulation());
-      if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile == 1) {
-        tCrSFA(_0{}) = tCrSFA(_0{}) * tCrSFB(_0{});
-      }
-      if constexpr (ScaleMsPerTile  > 1 && ScaleNsPerTile == 1) {
-        ElementScale scale_b = tCrSFB(_0{});
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < size(filter_zeros(tCrSFA)); i++) {
-          filter_zeros(tCrSFA)(i) = filter_zeros(tCrSFA)(i) * scale_b;
+    // Specialize barrier IDs by group while preserving the shared loop body.
+    auto run_group = [&](auto group_tag, auto producer_tag) {
+      constexpr int WarpGroupId = decltype(group_tag)::value;
+      auto preprocess_scale = [&]() {
+        if constexpr (WarpInterleaving) {
+          __ppu_barrier_sync(5 + WarpGroupId, NumThreadsPerCTA, 0); // group 0 wait bar 5, group 1 wait bar 6
         }
-      }
-      if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile  > 1) {
-        ElementScale scale_a = tCrSFA(_0{});
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < size(filter_zeros(tCrSFB)); i++) {
-          filter_zeros(tCrSFB)(i) = filter_zeros(tCrSFB)(i) * scale_a;
+        clear(accumulation());
+        if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile == 1) {
+          tCrSFA(_0{}) = tCrSFA(_0{}) * tCrSFB(_0{});
         }
-      }
-    };
-
-    auto process_scale_and_copy = [&](int k_pipe_read, int k_idx = _0{}) {
-      if constexpr (WarpInterleaving) {
-        __ppu_barrier_arrive(6 - warp_group_id, NumThreadsPerCTA, 0);
-      }
-      // Block scale the accumulators with reg tensor `tCrSFA` and `tCrSFB`
-      if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile == 1) {
-        ElementScale scale_ab = tCrSFA(_0{});
-        accumulation.scale(scale_ab);
-      }
-      if constexpr (ScaleMsPerTile  > 1 && ScaleNsPerTile == 1) {
-        accumulation.scale(tCrSFA);
-      }
-      if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile  > 1) {
-        accumulation.scale(tCrSFB);
-      }
-      if constexpr (ScaleMsPerTile  > 1 && ScaleNsPerTile  > 1) {
-        accumulation.scale(tCrSFA, tCrSFB);
-      }
-
-      copy(tCsSFB(_,_,_,make_coord(k_idx, k_pipe_read)), tCrSFB);
-      copy(tCsSFA(_,_,_,make_coord(k_idx, k_pipe_read)), tCrSFA);
-    };
-    constexpr int ScaleLoadStep = int(DispatchPolicy::Stages % 2 == 0);
-
-    CUTLASS_PRAGMA_NO_UNROLL
-    while (k_tile_count > -(DispatchPolicy::Stages-1)) {
-      // Pipeline the outer products with a static for loop.
-      //
-      // Note, the for_each() function is required here to ensure `k_block` is of type Int<x>.
-      for_each(make_int_sequence<K_BLOCK_MAX>{}, [&] (auto k_block) {
-        if (k_block == K_BLOCK_MAX - 1) {
-          // Slice the smem_pipe_read smem
-          tCsA_p = tCsA(_,_,_,smem_pipe_read);
-          tCsB_p = tCsB(_,_,_,smem_pipe_read);
-
-          // Commit the smem for smem_pipe_read
-          cp_async_wait<DispatchPolicy::Stages-2>();
-          if constexpr (WarpInterleaving) {
-            __ppu_barrier_sync(3 + warp_group_id, NumThreadsPerCTA / 2, 0);   // warp group sync
-          } else {
-            __syncthreads();
+        if constexpr (ScaleMsPerTile  > 1 && ScaleNsPerTile == 1) {
+          ElementScale scale_b = tCrSFB(_0{});
+          CUTLASS_PRAGMA_UNROLL
+          for (int i = 0; i < size(filter_zeros(tCrSFA)); i++) {
+            filter_zeros(tCrSFA)(i) = filter_zeros(tCrSFA)(i) * scale_b;
           }
         }
-        if constexpr (StageNumPerBlock > 1) {
-          if ((k_block % K_BLOCK_GROUP == 0) && pipe_stage_step == 0) {
-            preprocess_scale();
-          }
-        } else {
-          if (k_block % K_BLOCK_GROUP == 0) {
-            preprocess_scale();
+        if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile  > 1) {
+          ElementScale scale_a = tCrSFA(_0{});
+          CUTLASS_PRAGMA_UNROLL
+          for (int i = 0; i < size(filter_zeros(tCrSFB)); i++) {
+            filter_zeros(tCrSFB)(i) = filter_zeros(tCrSFB)(i) * scale_a;
           }
         }
-        // Copy gmem to smem before computing gemm on each k-pipe
-        if (k_block == 0) {
+      };
+
+      auto process_scale_and_copy = [&](int k_pipe_read, int k_idx = _0{}) {
+        if constexpr (WarpInterleaving) {
+          __ppu_barrier_arrive(6 - WarpGroupId, NumThreadsPerCTA, 0);
+        }
+        // Block scale the accumulators with reg tensor `tCrSFA` and `tCrSFB`
+        if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile == 1) {
+          ElementScale scale_ab = tCrSFA(_0{});
+          accumulation.scale(scale_ab);
+        }
+        if constexpr (ScaleMsPerTile  > 1 && ScaleNsPerTile == 1) {
+          accumulation.scale(tCrSFA);
+        }
+        if constexpr (ScaleMsPerTile == 1 && ScaleNsPerTile  > 1) {
+          accumulation.scale(tCrSFB);
+        }
+        if constexpr (ScaleMsPerTile  > 1 && ScaleNsPerTile  > 1) {
+          accumulation.scale(tCrSFA, tCrSFB);
+        }
+
+        copy(tCsSFB(_,_,_,make_coord(k_idx, k_pipe_read)), tCrSFB);
+        copy(tCsSFA(_,_,_,make_coord(k_idx, k_pipe_read)), tCrSFA);
+      };
+      constexpr int ScaleLoadStep = int(DispatchPolicy::Stages % 2 == 0);
+
+      CUTLASS_PRAGMA_NO_UNROLL
+      while (k_tile_count > -(DispatchPolicy::Stages-1)) {
+        // Pipeline the outer products with a static for loop.
+        //
+        // Note, the for_each() function is required here to ensure `k_block` is of type Int<x>.
+        for_each(make_int_sequence<K_BLOCK_MAX>{}, [&] (auto k_block) {
+          if (k_block == K_BLOCK_MAX - 1) {
+            // Slice the smem_pipe_read smem
+            tCsA_p = tCsA(_,_,_,smem_pipe_read);
+            tCsB_p = tCsB(_,_,_,smem_pipe_read);
+
+            // Commit the smem for smem_pipe_read
+            cp_async_wait<DispatchPolicy::Stages-2>();
+            if constexpr (WarpInterleaving) {
+              __ppu_barrier_sync(3 + WarpGroupId, NumThreadsPerCTA / 2, 0);   // warp group sync
+            } else {
+              __syncthreads();
+            }
+          }
           if constexpr (StageNumPerBlock > 1) {
-            copy_to_tsm(smem_pipe_write, smem_scale_pipe_write, *k_tile_iter, warp_idx, pipe_stage_step == ScaleLoadStep);
-            if (pipe_stage_step == ScaleLoadStep) {
-              smem_scale_pipe_write = smem_scale_pipe_read;
-              smem_scale_pipe_read = (smem_scale_pipe_read + 1) % ScaleStages;
+            if ((k_block % K_BLOCK_GROUP == 0) && pipe_stage_step == 0) {
+              preprocess_scale();
             }
           } else {
-            copy_to_tsm(smem_pipe_write, smem_pipe_write, *k_tile_iter, warp_idx, true);
+            if (k_block % K_BLOCK_GROUP == 0) {
+              preprocess_scale();
+            }
           }
-          cp_async_fence();
+          // Copy gmem to smem before computing gemm on each k-pipe
+          if (k_block == 0) {
+            if constexpr (StageNumPerBlock > 1) {
+              copy_to_tsm(group_tag, producer_tag, smem_pipe_write, smem_scale_pipe_write, *k_tile_iter, pipe_stage_step == ScaleLoadStep);
+              if (pipe_stage_step == ScaleLoadStep) {
+                smem_scale_pipe_write = smem_scale_pipe_read;
+                smem_scale_pipe_read = (smem_scale_pipe_read + 1) % ScaleStages;
+              }
+            } else {
+              copy_to_tsm(group_tag, producer_tag, smem_pipe_write, smem_pipe_write, *k_tile_iter, true);
+            }
+            cp_async_fence();
 
-          // Advance the tile
-          --k_tile_count;
-          if (k_tile_count > 0) { ++k_tile_iter; }
+            // Advance the tile
+            --k_tile_count;
+            if (k_tile_count > 0) { ++k_tile_iter; }
 
-          // Advance the pipe -- Doing it here accounts for K_BLOCK_MAX = 1 (no rmem pipe)
-          smem_pipe_write = smem_pipe_read;
-          ++smem_pipe_read;
-          smem_pipe_read = (smem_pipe_read == DispatchPolicy::Stages) ? 0 : smem_pipe_read;
-        }
-        // Load A, B shmem->regs for k_block+1
-        auto k_block_next = (k_block + Int<1>{}) % K_BLOCK_MAX;  // static
-        copy(smem_tiled_copy_A, tCsA_p(_,_,k_block_next), tCrA_copy_view(_,_,k_block_next));
-        copy(smem_tiled_copy_B, tCsB_p(_,_,k_block_next), tCrB_copy_view(_,_,k_block_next));
+            // Advance the pipe -- Doing it here accounts for K_BLOCK_MAX = 1 (no rmem pipe)
+            smem_pipe_write = smem_pipe_read;
+            ++smem_pipe_read;
+            smem_pipe_read = (smem_pipe_read == DispatchPolicy::Stages) ? 0 : smem_pipe_read;
+          }
+          // Load A, B shmem->regs for k_block+1
+          auto k_block_next = (k_block + Int<1>{}) % K_BLOCK_MAX;  // static
+          copy(smem_tiled_copy_A, tCsA_p(_,_,k_block_next), tCrA_copy_view(_,_,k_block_next));
+          copy(smem_tiled_copy_B, tCsB_p(_,_,k_block_next), tCrB_copy_view(_,_,k_block_next));
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int k_loop = 0; k_loop < K_ATOM_PER_COPY; k_loop++) {
-          auto atom_idx = k_block * K_ATOM_PER_COPY + k_loop;
-          // Transform before compute
-          cute::transform(tCrA(_,_,atom_idx), TransformA{});
-          cute::transform(tCrB(_,_,atom_idx), TransformB{});
-          // gemm for one tiled_mma atom on K
-          cute::gemm(tiled_mma, tCrA(_,_,atom_idx), tCrB(_,_,atom_idx), accumulation());
+          CUTLASS_PRAGMA_UNROLL
+          for (int k_loop = 0; k_loop < K_ATOM_PER_COPY; k_loop++) {
+            auto atom_idx = k_block * K_ATOM_PER_COPY + k_loop;
+            // Transform before compute
+            cute::transform(tCrA(_,_,atom_idx), TransformA{});
+            cute::transform(tCrB(_,_,atom_idx), TransformB{});
+            // gemm for one tiled_mma atom on K
+            cute::gemm(tiled_mma, tCrA(_,_,atom_idx), tCrB(_,_,atom_idx), accumulation());
+          }
+          if constexpr (StageNumPerBlock > 1) {         // ctaK = 64
+            if ((k_block_next == 0) && (pipe_stage_step == 1)) {
+              process_scale_and_copy(smem_scale_pipe_read);
+            }
+          } else if constexpr(ScaleKsPerTile > 1) {
+            if (k_block_next % K_BLOCK_GROUP == 0) {    // ctaK = 256
+              process_scale_and_copy(smem_scale_pipe_read, k_block_next / K_BLOCK_GROUP * ScaleGranularityK);
+              smem_scale_pipe_read = smem_pipe_read;
+            }
+          } else {                                      // ctaK = 128
+            if (k_block_next == 0) {
+              process_scale_and_copy(smem_pipe_read);
+            }
+          }
+        }); // for_each
+        if constexpr (StageNumPerBlock > 1) {
+          ++pipe_stage_step;
+          pipe_stage_step = (pipe_stage_step == StageNumPerBlock) ? 0 : pipe_stage_step;
         }
-        if constexpr (StageNumPerBlock > 1) {         // ctaK = 64
-          if ((k_block_next == 0) && (pipe_stage_step == 1)) {
-            process_scale_and_copy(smem_scale_pipe_read);
-          }
-        } else if constexpr(ScaleKsPerTile > 1) {
-          if (k_block_next % K_BLOCK_GROUP == 0) {    // ctaK = 256
-            process_scale_and_copy(smem_scale_pipe_read, k_block_next / K_BLOCK_GROUP * ScaleGranularityK);
-            smem_scale_pipe_read = smem_pipe_read;
-          }
-        } else {                                      // ctaK = 128
-          if (k_block_next == 0) {
-            process_scale_and_copy(smem_pipe_read);
-          }
-        }
-      }); // for_each
-      if constexpr (StageNumPerBlock > 1) {
-        ++pipe_stage_step;
-        pipe_stage_step = (pipe_stage_step == StageNumPerBlock) ? 0 : pipe_stage_step;
       }
+    };
+
+    // Non-producer warps keep their original physical group; -1 disables gmem copies.
+    auto run_non_producer = [&]() {
+      if constexpr (WarpInterleaving) {
+        if (warp_group_id == 0) {
+          run_group(Int<0>{}, Int<-1>{});
+        } else {
+          run_group(Int<1>{}, Int<-1>{});
+        }
+      } else {
+        run_group(Int<0>{}, Int<-1>{});
+      }
+    };
+
+    // Select a producer role once, before entering the steady-state loop.
+    switch (warp_idx) {
+      case 0: run_group(Int<0>{}, Int<0>{}); break;  // A/B
+      case 1: run_group(Int<0>{}, Int<1>{}); break;  // SFA
+      case 2: run_group(Int<0>{}, Int<2>{}); break;  // SFB
+      default: run_non_producer(); break;
     }
     if constexpr (WarpInterleaving) {
       if (warp_group_id == 0) {
