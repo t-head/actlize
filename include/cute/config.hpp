@@ -130,7 +130,8 @@
 
 // Fail and print a message. Typically used for notification of a compiler misconfiguration.
 #if defined(__HGGC_ARCH__)
-#  define CUTE_INVALID_CONTROL_PATH(x) assert(0 && x); printf(x); __brkpt()
+#  define CUTE_INVALID_CONTROL_PATH(x) \
+    __assert_fail((x), __FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
 #  define CUTE_INVALID_CONTROL_PATH(x) assert(0 && x); printf(x)
 #endif
