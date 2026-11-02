@@ -124,8 +124,9 @@ struct CollectiveMma<
   static constexpr int ScaleGranularityK = size<1,0>(LayoutSFA{});
   static constexpr int blockK = size<2>(TileShape{});
 
-  static_assert(blockK > ScaleGranularityK ? (blockK % ScaleGranularityK) == 0 : (ScaleGranularityK % blockK) == 0,
-              "block scaling granularity must evenly divide tile shape along K.");
+  // Each tile owns complete scale-K groups; cross-tile scale accumulation is unsupported.
+  static_assert(blockK >= ScaleGranularityK && blockK % ScaleGranularityK == 0,
+                "Blockwise AIU mainloop requires blockK to be a positive multiple of ScaleGranularityK.");
   static_assert(ScaleGranularityK % size<2>(typename TiledMma::AtomShape_MNK{}) == 0);
 
   static constexpr int ScalePromotionInterval = ScaleGranularityK / size<2>(typename TiledMma::AtomShape_MNK{});
@@ -133,9 +134,6 @@ struct CollectiveMma<
   static constexpr int ScaleMsPerTile = cute::ceil_div(size<0>(TileShape{}), Int<ScaleGranularityM>{});
   static constexpr int ScaleNsPerTile = cute::ceil_div(size<1>(TileShape{}), Int<ScaleGranularityN>{});
   static constexpr int ScaleKsPerTile = cute::ceil_div(size<2>(TileShape{}), Int<ScaleGranularityK>{});
-
-  static constexpr int StageNumPerBlock = cute::ceil_div(Int<ScaleGranularityK>{}, size<2>(TileShape{}));
-  static constexpr int ScaleStages = StageNumPerBlock > 1 ? (DispatchPolicy::Stages / StageNumPerBlock + 1) : DispatchPolicy::Stages;
 
   static_assert(rank(SmemLayoutAtomA{}) == 2, "SmemLayoutAtom must be rank 2 (M/N, K)");
   static_assert((size<0>(TileShape{}) % size<0>(SmemLayoutAtomA{})) == 0, "SmemLayoutAtom must evenly divide tile shape.");
@@ -159,11 +157,11 @@ struct CollectiveMma<
 
   // Broadcast views used by the default shared-memory-to-register copy.
   using SmemLayoutSFA = decltype(make_layout(
-    append(shape(SmemLayoutAtomSFA{}), Int<ScaleStages>{}),
+    append(shape(SmemLayoutAtomSFA{}), Int<DispatchPolicy::Stages>{}),
     append(stride(SmemLayoutAtomSFA{}), size(filter_zeros(SmemLayoutAtomSFA{})))
   ));
   using SmemLayoutSFB = decltype(make_layout(
-    append(shape(SmemLayoutAtomSFB{}), Int<ScaleStages>{}),
+    append(shape(SmemLayoutAtomSFB{}), Int<DispatchPolicy::Stages>{}),
     append(stride(SmemLayoutAtomSFB{}), size(filter_zeros(SmemLayoutAtomSFB{})))
   ));
 
@@ -172,10 +170,10 @@ struct CollectiveMma<
   // Compact physical views used by AIU. Coordinates stay in logical (M/N, K) order.
   using RealSmemLayoutSFA = decltype(tile_to_shape(
       cute::tuple_element_t<1, SmemLayoutAtomPairA_>{},
-      make_shape(Int<ScaleMsPerTile>{}, Int<ScaleKsPerTile>{}, Int<ScaleStages>{})));
+      make_shape(Int<ScaleMsPerTile>{}, Int<ScaleKsPerTile>{}, Int<DispatchPolicy::Stages>{})));
   using RealSmemLayoutSFB = decltype(tile_to_shape(
       cute::tuple_element_t<1, SmemLayoutAtomPairB_>{},
-      make_shape(Int<ScaleNsPerTile>{}, Int<ScaleKsPerTile>{}, Int<ScaleStages>{})));
+      make_shape(Int<ScaleNsPerTile>{}, Int<ScaleKsPerTile>{}, Int<DispatchPolicy::Stages>{})));
 
   static_assert(DispatchPolicy::Stages >= 2, "CpAsync mainloop must have at least 2 stages in the pipeline.");
 
@@ -365,24 +363,16 @@ struct CollectiveMma<
     Tensor tSFBgSFB = gmem_thr_copy_SFB.partition_S(gSFB);
     Tensor tSFBsSFB = gmem_thr_copy_SFB.partition_D(sSFB);
 
-    auto copy_to_tsm = [&](auto group_tag, auto producer_tag,
-                           int k_pipe_write, int k_scale_pipe_write, int k_idx, bool scale_flag) {
-      constexpr int WarpGroupId = decltype(group_tag)::value;
+    auto copy_to_tsm = [&](auto producer_tag, int k_pipe_write, int k_idx) {
       constexpr int ProducerWarpIdx = decltype(producer_tag)::value;
       if constexpr (ProducerWarpIdx == 0) {
         copy(gmem_tiled_copy_A, tAgA(_,_,_,k_idx), tAsA(_,_,_,k_pipe_write));
         copy(gmem_tiled_copy_B, tBgB(_,_,_,k_idx), tBsB(_,_,_,k_pipe_write));
       } else if constexpr (ProducerWarpIdx == 1 || ProducerWarpIdx == 2) {
-        if constexpr (StageNumPerBlock > 1) {
-          if (!scale_flag) {
-            return;
-          }
-        }
-        int k_scale_idx = k_idx / StageNumPerBlock;
-        if constexpr (ProducerWarpIdx == 1) {
-          copy(gmem_tiled_copy_SFA, tSFAgSFA(_,_,_,k_scale_idx), tSFAsSFA(_,_,_,k_scale_pipe_write));
+        if constexpr (ProducerWarpIdx == 2) {
+          copy(gmem_tiled_copy_SFA, tSFAgSFA(_,_,_,k_idx), tSFAsSFA(_,_,_,k_pipe_write));
         } else {
-          copy(gmem_tiled_copy_SFB, tSFBgSFB(_,_,_,k_scale_idx), tSFBsSFB(_,_,_,k_scale_pipe_write));
+          copy(gmem_tiled_copy_SFB, tSFBgSFB(_,_,_,k_idx), tSFBsSFB(_,_,_,k_pipe_write));
         }
       }
     };
@@ -393,11 +383,11 @@ struct CollectiveMma<
       if (k_tile_count > 0) {
         // All three producers belong to physical group 0; preserve prologue dispatch.
         if (warp_idx == 0) {
-          copy_to_tsm(Int<0>{}, Int<0>{}, k_pipe, k_pipe / StageNumPerBlock, *k_tile_iter, k_pipe % StageNumPerBlock == 0);
+          copy_to_tsm(Int<0>{}, k_pipe, *k_tile_iter);
         } else if (warp_idx == 1) {
-          copy_to_tsm(Int<0>{}, Int<1>{}, k_pipe, k_pipe / StageNumPerBlock, *k_tile_iter, k_pipe % StageNumPerBlock == 0);
+          copy_to_tsm(Int<1>{}, k_pipe, *k_tile_iter);
         } else if (warp_idx == 2) {
-          copy_to_tsm(Int<0>{}, Int<2>{}, k_pipe, k_pipe / StageNumPerBlock, *k_tile_iter, k_pipe % StageNumPerBlock == 0);
+          copy_to_tsm(Int<2>{}, k_pipe, *k_tile_iter);
         }
         ++k_tile_iter;
       }
@@ -469,10 +459,7 @@ struct CollectiveMma<
     // Current pipe index in smem to write to
     int smem_pipe_write = DispatchPolicy::Stages-1;
 
-    int pipe_stage_step = 0;
-
     int smem_scale_pipe_read = smem_pipe_read;
-    int smem_scale_pipe_write = ScaleStages - 1;
 
     Tensor tCsA_p = tCsA(_,_,_,smem_pipe_read);
     Tensor tCsB_p = tCsB(_,_,_,smem_pipe_read);
@@ -549,7 +536,6 @@ struct CollectiveMma<
         copy(tCsSFB(_,_,_,make_coord(k_idx, k_pipe_read)), tCrSFB);
         copy(tCsSFA(_,_,_,make_coord(k_idx, k_pipe_read)), tCrSFA);
       };
-      constexpr int ScaleLoadStep = int(DispatchPolicy::Stages % 2 == 0);
 
       CUTLASS_PRAGMA_NO_UNROLL
       while (k_tile_count > -(DispatchPolicy::Stages-1)) {
@@ -570,36 +556,8 @@ struct CollectiveMma<
               __syncthreads();
             }
           }
-          if constexpr (StageNumPerBlock > 1) {
-            if ((k_block % K_BLOCK_GROUP == 0) && pipe_stage_step == 0) {
-              preprocess_scale();
-            }
-          } else {
-            if (k_block % K_BLOCK_GROUP == 0) {
-              preprocess_scale();
-            }
-          }
-          // Copy gmem to smem before computing gemm on each k-pipe
-          if (k_block == 0) {
-            if constexpr (StageNumPerBlock > 1) {
-              copy_to_tsm(group_tag, producer_tag, smem_pipe_write, smem_scale_pipe_write, *k_tile_iter, pipe_stage_step == ScaleLoadStep);
-              if (pipe_stage_step == ScaleLoadStep) {
-                smem_scale_pipe_write = smem_scale_pipe_read;
-                smem_scale_pipe_read = (smem_scale_pipe_read + 1) % ScaleStages;
-              }
-            } else {
-              copy_to_tsm(group_tag, producer_tag, smem_pipe_write, smem_pipe_write, *k_tile_iter, true);
-            }
-            cp_async_fence();
-
-            // Advance the tile
-            --k_tile_count;
-            if (k_tile_count > 0) { ++k_tile_iter; }
-
-            // Advance the pipe -- Doing it here accounts for K_BLOCK_MAX = 1 (no rmem pipe)
-            smem_pipe_write = smem_pipe_read;
-            ++smem_pipe_read;
-            smem_pipe_read = (smem_pipe_read == DispatchPolicy::Stages) ? 0 : smem_pipe_read;
+          if (k_block % K_BLOCK_GROUP == 0) {
+            preprocess_scale();
           }
           // Load A, B shmem->regs for k_block+1
           auto k_block_next = (k_block + Int<1>{}) % K_BLOCK_MAX;  // static
@@ -615,11 +573,21 @@ struct CollectiveMma<
             // gemm for one tiled_mma atom on K
             cute::gemm(tiled_mma, tCrA(_,_,atom_idx), tCrB(_,_,atom_idx), accumulation());
           }
-          if constexpr (StageNumPerBlock > 1) {         // ctaK = 64
-            if ((k_block_next == 0) && (pipe_stage_step == 1)) {
-              process_scale_and_copy(smem_scale_pipe_read);
-            }
-          } else if constexpr(ScaleKsPerTile > 1) {
+          // Issue the next tile after the first MMA block.
+          if (k_block == 0) {
+            copy_to_tsm(producer_tag, smem_pipe_write, *k_tile_iter);
+            cp_async_fence();
+
+            // Advance the tile
+            --k_tile_count;
+            if (k_tile_count > 0) { ++k_tile_iter; }
+
+            // Advance the pipe before the last-block wait.
+            smem_pipe_write = smem_pipe_read;
+            ++smem_pipe_read;
+            smem_pipe_read = (smem_pipe_read == DispatchPolicy::Stages) ? 0 : smem_pipe_read;
+          }
+          if constexpr (ScaleKsPerTile > 1) {
             if (k_block_next % K_BLOCK_GROUP == 0) {    // ctaK = 256
               process_scale_and_copy(smem_scale_pipe_read, k_block_next / K_BLOCK_GROUP * ScaleGranularityK);
               smem_scale_pipe_read = smem_pipe_read;
@@ -630,10 +598,6 @@ struct CollectiveMma<
             }
           }
         }); // for_each
-        if constexpr (StageNumPerBlock > 1) {
-          ++pipe_stage_step;
-          pipe_stage_step = (pipe_stage_step == StageNumPerBlock) ? 0 : pipe_stage_step;
-        }
       }
     };
 
@@ -653,8 +617,8 @@ struct CollectiveMma<
     // Select a producer role once, before entering the steady-state loop.
     switch (warp_idx) {
       case 0: run_group(Int<0>{}, Int<0>{}); break;  // A/B
-      case 1: run_group(Int<0>{}, Int<1>{}); break;  // SFA
-      case 2: run_group(Int<0>{}, Int<2>{}); break;  // SFB
+      case 1: run_group(Int<0>{}, Int<1>{}); break;  // SFB
+      case 2: run_group(Int<0>{}, Int<2>{}); break;  // SFA
       default: run_non_producer(); break;
     }
     if constexpr (WarpInterleaving) {
