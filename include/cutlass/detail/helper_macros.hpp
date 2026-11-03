@@ -78,7 +78,7 @@ CUTLASS_HOST_DEVICE void __CUTLASS_UNUSED(T const &)
 #endif
 
 #if defined(__HGGC_ARCH__)
-  #define CUTLASS_NOT_IMPLEMENTED() { printf("%s not implemented\n", __PRETTY_FUNCTION__);}
+  #define CUTLASS_NOT_IMPLEMENTED() { printf("%s not implemented\n", __PRETTY_FUNCTION__); __assert();}
 #else
   #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __PRETTY_FUNCTION__)
 #endif
