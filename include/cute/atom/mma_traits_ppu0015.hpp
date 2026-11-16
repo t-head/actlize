@@ -733,41 +733,7 @@ struct MMA_Traits<PPU0015_16x8x16_S32S8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x8x16_S32S8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,_4>,
-                         Stride<Stride<_32,_1>,_8>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x8x16_S32S8U8S32_TN>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,_4>,
-                         Stride<Stride<_32,_1>,_8>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x8x16_S32S8U8S32_TN_SATURATE>
 {
   using ValTypeD = int32_t;
   using ValTypeA = int8_t;
@@ -801,41 +767,7 @@ struct MMA_Traits<PPU0015_16x8x16_S32U8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x8x16_S32U8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,_4>,
-                         Stride<Stride<_32,_1>,_8>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x8x16_S32U8U8S32_TN>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,_4>,
-                         Stride<Stride<_32,_1>,_8>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x8x16_S32U8U8S32_TN_SATURATE>
 {
   using ValTypeD = int32_t;
   using ValTypeA = uint8_t;
@@ -869,41 +801,7 @@ struct MMA_Traits<PPU0015_16x8x32_S32S8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x8x32_S32S8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_32,_1>,Stride<_8,_128>>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x8x32_S32S8U8S32_TN>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_32,_1>,Stride<_8,_128>>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x8x32_S32S8U8S32_TN_SATURATE>
 {
   using ValTypeD = int32_t;
   using ValTypeA = int8_t;
@@ -937,23 +835,6 @@ struct MMA_Traits<PPU0015_16x8x32_S32U8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x8x32_S32U8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_8,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_32,_1>,Stride<_8,_128>>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x8x32_S32U8U8S32_TN>
 {
   using ValTypeD = int32_t;
@@ -971,39 +852,20 @@ struct MMA_Traits<PPU0015_16x8x32_S32U8U8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x8x32_S32U8U8S32_TN_SATURATE>
+struct MMA_Traits<PPU0015_16x8x64_F32F4F4F32_TN>
 {
-  using ValTypeD = int32_t;
+  using ValTypeD = float;
   using ValTypeA = uint8_t;
   using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
+  using ValTypeC = float;
 
+  // Match the existing FP4 atom's packed-byte layout: PTX K=64 is 32 bytes.
   using Shape_MNK = Shape<_16,_8,_32>;
   using ThrID   = Layout<_32>;
   using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
                          Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
   using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
                          Stride<Stride<_32,_1>,Stride<_8,_128>>>;
-  using CLayout = PPU0015_16x8_Row;
-};
-
-// Raw E2M1 storage uses four logical bits per element and the native K=64.
-// Scale operands are supplied through MMA_Atom::call(D,A,B,C,S).
-
-template <>
-struct MMA_Traits<PPU0015_16x8x64_F32F4F4F32_TN>
-{
-  using ValTypeD = float;
-  using ValTypeA = cutlass::uint4b_t;
-  using ValTypeB = cutlass::uint4b_t;
-  using ValTypeC = float;
-
-  using Shape_MNK = Shape<_16,_8,_64>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_8,_2,_2>>,
-                         Stride<Stride<_128,_1>,Stride<_16,_8,_512>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_8,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_8,_256>>>;
   using CLayout = PPU0015_16x8_Row;
 };
 
@@ -1314,41 +1176,7 @@ struct MMA_Traits<PPU0015_16x16x16_S32S8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x16x16_S32S8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x16x16_S32S8U8S32_TN>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x16x16_S32S8U8S32_TN_SATURATE>
 {
   using ValTypeD = int32_t;
   using ValTypeA = int8_t;
@@ -1382,23 +1210,6 @@ struct MMA_Traits<PPU0015_16x16x16_S32U8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x16x16_S32U8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x16x16_S32U8U8S32_TN>
 {
   using ValTypeD = int32_t;
@@ -1416,58 +1227,7 @@ struct MMA_Traits<PPU0015_16x16x16_S32U8U8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x16x16_S32U8U8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_16>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x16x32_S32S8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_256,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x16x32_S32S8U8S32_TN>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = int8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_256,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x16x32_S32S8U8S32_TN_SATURATE>
 {
   using ValTypeD = int32_t;
   using ValTypeA = int8_t;
@@ -1501,23 +1261,6 @@ struct MMA_Traits<PPU0015_16x16x32_S32U8S8S32_TN>
 };
 
 template <>
-struct MMA_Traits<PPU0015_16x16x32_S32U8S8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = int8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_256,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
 struct MMA_Traits<PPU0015_16x16x32_S32U8U8S32_TN>
 {
   using ValTypeD = int32_t;
@@ -1531,43 +1274,6 @@ struct MMA_Traits<PPU0015_16x16x32_S32U8U8S32_TN>
                          Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
   using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
                          Stride<Stride<_64,_1>,Stride<_16,_256,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-template <>
-struct MMA_Traits<PPU0015_16x16x32_S32U8U8S32_TN_SATURATE>
-{
-  using ValTypeD = int32_t;
-  using ValTypeA = uint8_t;
-  using ValTypeB = uint8_t;
-  using ValTypeC = int32_t;
-
-  using Shape_MNK = Shape<_16,_16,_32>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_8,_256>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_4,_2,_2>>,
-                         Stride<Stride<_64,_1>,Stride<_16,_256,_8>>>;
-  using CLayout = PPU0015_16x16_Row;
-};
-
-// Raw E2M1 storage uses four logical bits per element and the native K=64.
-// Scale operands are supplied through MMA_Atom::call(D,A,B,C,S).
-
-template <>
-struct MMA_Traits<PPU0015_16x16x64_F32F4F4F32_TN_NATIVE>
-{
-  using ValTypeD = float;
-  using ValTypeA = cutlass::uint4b_t;
-  using ValTypeB = cutlass::uint4b_t;
-  using ValTypeC = float;
-
-  using Shape_MNK = Shape<_16,_16,_64>;
-  using ThrID   = Layout<_32>;
-  using ALayout = Layout<Shape <Shape < _4,_8>,Shape <_8,_2,_2>>,
-                         Stride<Stride<_128,_1>,Stride<_16,_8,_512>>>;
-  using BLayout = Layout<Shape <Shape < _4,_8>,Shape <_8,_2,_2>>,
-                         Stride<Stride<_128,_1>,Stride<_16,_512,_8>>>;
   using CLayout = PPU0015_16x16_Row;
 };
 
@@ -1594,7 +1300,6 @@ mma_unpack(MMA_Traits<MMA_Op, MMA_Args...> const& traits,
   static_assert(is_rmem<TA>::value, "Expected registers in MMA_Atom::call");
   static_assert(is_rmem<TB>::value, "Expected registers in MMA_Atom::call");
   static_assert(is_rmem<TC>::value, "Expected registers in MMA_Atom::call");
-  static_assert(is_rmem<TS>::value, "Expected scale registers in MMA_Atom::call");
 
   // Register value types from the MMA_Operation register arrays
   using RegTypeD = typename remove_extent<typename MMA_Op::DRegisters>::type;
@@ -1617,7 +1322,6 @@ mma_unpack(MMA_Traits<MMA_Op, MMA_Args...> const& traits,
 
   CUTE_STATIC_ASSERT_V(size(rA) == Int<RegNumA>{});
   CUTE_STATIC_ASSERT_V(size(rB) == Int<RegNumB>{});
-  CUTE_STATIC_ASSERT_V(size(rS) == Int<RegNumS>{});
 
   static_assert(is_same<typename TD::value_type, typename TC::value_type>::value, "GMMA C and D value_type must match.");
   static_assert(is_same<DLayout, CLayout>::value, "GMMA C and D layouts must match.");
