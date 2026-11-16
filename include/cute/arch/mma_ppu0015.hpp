@@ -145,7 +145,7 @@ asm volatile(
          "r"(b0),  "r"(b1),
          "f"(c0),  "f"(c1),  "f"(c2),  "f"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -276,7 +276,7 @@ asm volatile(
     [[maybe_unused]]  uint32_t *d[4] = {&d0, &d1, &d2, &d3};
 
     // ppu_fp16_mma_simulator<cutlass::half_t, cutlass::half_t>(a, b, c, d);
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -340,7 +340,7 @@ asm volatile(
       "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
     uint32_t a[4] = {a0, a1, a2, a3};
     uint32_t b[4] = {b0, b1, b2, b3};
     float c[8] = {c0, c1, c2, c3, c4, c5, c6, c7};
@@ -375,7 +375,7 @@ asm volatile(
       "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
     uint32_t a[4] = {a0, a1, a2, a3};
     uint32_t b[4] = {b0, b1, b2, b3};
     float c[8] = {c0, c1, c2, c3, c4, c5, c6, c7};
@@ -410,7 +410,7 @@ asm volatile(
       "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
     uint32_t a[4] = {a0, a1, a2, a3};
     uint32_t b[4] = {b0, b1, b2, b3};
     float c[8] = {c0, c1, c2, c3, c4, c5, c6, c7};
@@ -446,7 +446,7 @@ asm volatile(
       "r"(c0), "r"(c1), "r"(c2), "r"(c3), "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
     uint32_t a[4] = {a0, a1, a2, a3};
     uint32_t b[4] = {b0, b1, b2, b3};
     float c[8] = {c0, c1, c2, c3, c4, c5, c6, c7};
@@ -478,7 +478,7 @@ asm volatile(
       :"r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1), "r"(b2), "r"(b3),
       "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -504,7 +504,7 @@ asm volatile(
       :"r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1), "r"(b2), "r"(b3),
       "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -530,7 +530,7 @@ asm volatile(
       :"r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1), "r"(b2), "r"(b3),
       "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -556,7 +556,7 @@ asm volatile(
       :"r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1), "r"(b2), "r"(b3),
       "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -626,7 +626,7 @@ asm (
       "r"(s0), "r"(s1), "r"(s2), "r"(s3));
       // "r"(ss0), "r"(ss1), "r"(ss2), "r"(ss3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -661,7 +661,7 @@ struct PPU0015_16x8x8_F32F16F16F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -693,7 +693,7 @@ struct PPU0015_16x8x8_F16F16F16F16_TN
         "r"(b0),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -725,7 +725,7 @@ struct PPU0015_16x8x8_F32BF16BF16F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -757,7 +757,7 @@ struct PPU0015_16x8x8_BF16BF16BF16BF16_TN
         "r"(b0),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -789,7 +789,7 @@ struct PPU0015_16x8x16_F32F16F16F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -821,7 +821,7 @@ struct PPU0015_16x8x16_F16F16F16F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -853,7 +853,7 @@ struct PPU0015_16x8x16_F32BF16BF16F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -885,7 +885,7 @@ struct PPU0015_16x8x16_BF16BF16BF16BF16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -917,7 +917,7 @@ struct PPU0015_16x8x4_F32F32F32F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -949,7 +949,7 @@ struct PPU0015_16x8x4_F32TF32TF32F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -981,7 +981,7 @@ struct PPU0015_16x8x8_F32F32F32F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1013,7 +1013,7 @@ struct PPU0015_16x8x16_F16E4M3E4M3F16_TN
         "r"(b0),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1045,7 +1045,7 @@ struct PPU0015_16x8x16_F16E4M3E5M2F16_TN
         "r"(b0),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1077,7 +1077,7 @@ struct PPU0015_16x8x16_F16E5M2E4M3F16_TN
         "r"(b0),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1109,7 +1109,7 @@ struct PPU0015_16x8x16_F16E5M2E5M2F16_TN
         "r"(b0),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1141,7 +1141,7 @@ struct PPU0015_16x8x16_F32E4M3E4M3F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1173,7 +1173,7 @@ struct PPU0015_16x8x16_F32E4M3E5M2F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1205,7 +1205,7 @@ struct PPU0015_16x8x16_F32E5M2E4M3F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1237,7 +1237,7 @@ struct PPU0015_16x8x16_F32E5M2E5M2F32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1269,7 +1269,7 @@ struct PPU0015_16x8x32_F16E4M3E4M3F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1301,7 +1301,7 @@ struct PPU0015_16x8x32_F16E4M3E5M2F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1333,7 +1333,7 @@ struct PPU0015_16x8x32_F16E5M2E4M3F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1365,7 +1365,7 @@ struct PPU0015_16x8x32_F16E5M2E5M2F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1397,7 +1397,7 @@ struct PPU0015_16x8x32_F32E4M3E4M3F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1429,7 +1429,7 @@ struct PPU0015_16x8x32_F32E4M3E5M2F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1461,7 +1461,7 @@ struct PPU0015_16x8x32_F32E5M2E4M3F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1493,7 +1493,7 @@ struct PPU0015_16x8x32_F32E5M2E5M2F32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1524,7 +1524,7 @@ struct PPU0015_16x8x16_S32S8S8S32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1555,7 +1555,7 @@ struct PPU0015_16x8x16_S32S8U8S32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1586,7 +1586,7 @@ struct PPU0015_16x8x16_S32U8S8S32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1617,7 +1617,7 @@ struct PPU0015_16x8x16_S32U8U8S32_TN
         "r"(b0),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1648,7 +1648,7 @@ struct PPU0015_16x8x32_S32S8S8S32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1679,7 +1679,7 @@ struct PPU0015_16x8x32_S32S8U8S32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1710,7 +1710,7 @@ struct PPU0015_16x8x32_S32U8S8S32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1741,7 +1741,7 @@ struct PPU0015_16x8x32_S32U8U8S32_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1778,7 +1778,7 @@ struct PPU0015_16x8x64_F32F4F4F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(s0), "r"(s1), "r"(s2), "r"(s3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1816,7 +1816,7 @@ struct PPU0015_16x16x8_F32F16F16F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1848,7 +1848,7 @@ struct PPU0015_16x16x8_F16F16F16F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1886,7 +1886,7 @@ struct PPU0015_16x16x8_F32BF16BF16F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1918,7 +1918,7 @@ struct PPU0015_16x16x8_BF16BF16BF16BF16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1950,7 +1950,7 @@ struct PPU0015_16x16x16_BF16BF16BF16BF16_TN
         "r"(b0), "r"(b1), "r"(b2), "r"(b3),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -1988,7 +1988,7 @@ struct PPU0015_16x16x4_F32F32F32F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2026,7 +2026,7 @@ struct PPU0015_16x16x4_F32TF32TF32F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2058,7 +2058,7 @@ struct PPU0015_16x16x16_F16E4M3E4M3F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2090,7 +2090,7 @@ struct PPU0015_16x16x16_F16E4M3E5M2F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2122,7 +2122,7 @@ struct PPU0015_16x16x16_F16E5M2E4M3F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2154,7 +2154,7 @@ struct PPU0015_16x16x16_F16E5M2E5M2F16_TN
         "r"(b0), "r"(b1),
         "r"(c0), "r"(c1), "r"(c2), "r"(c3));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2192,7 +2192,7 @@ struct PPU0015_16x16x16_F32E4M3E4M3F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2230,7 +2230,7 @@ struct PPU0015_16x16x16_F32E4M3E5M2F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2268,7 +2268,7 @@ struct PPU0015_16x16x16_F32E5M2E4M3F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2306,7 +2306,7 @@ struct PPU0015_16x16x16_F32E5M2E5M2F32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2343,7 +2343,7 @@ struct PPU0015_16x16x16_S32S8S8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2380,7 +2380,7 @@ struct PPU0015_16x16x16_S32S8U8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2417,7 +2417,7 @@ struct PPU0015_16x16x16_S32U8S8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2454,7 +2454,7 @@ struct PPU0015_16x16x16_S32U8U8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2491,7 +2491,7 @@ struct PPU0015_16x16x32_S32S8U8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2528,7 +2528,7 @@ struct PPU0015_16x16x32_S32U8S8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
@@ -2565,7 +2565,7 @@ struct PPU0015_16x16x32_S32U8U8S32_TN
         "r"(c0), "r"(c1), "r"(c2), "r"(c3),
         "r"(c4), "r"(c5), "r"(c6), "r"(c7));
 #else
-    assert(0);
+    CUTLASS_NOT_IMPLEMENTED();
 #endif
   }
 };
