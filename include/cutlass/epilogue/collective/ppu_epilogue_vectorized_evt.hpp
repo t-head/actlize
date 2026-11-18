@@ -483,7 +483,22 @@ public:
               // run output op for all regs in cur epi loop
               // corresponds to multiple vmem.st
               tDrD_array[0] = cst_callbacks.visit(tDrAcc_array[0], sub_loop_idx, step_m, step_n);
-              copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
+              constexpr int VectorBytes = sizeof(ElementOutput) * EvtFragSize;
+              bool vector_safe = reinterpret_cast<uintptr_t>(&tDgDmn(0,m,n)) % VectorBytes == 0;
+              CUTLASS_PRAGMA_UNROLL
+              for (int v = 0; v < size<0>(tDrD); ++v) {
+                vector_safe = vector_safe && elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk));
+              }
+              if (vector_safe) {
+                copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
+              } else {
+                CUTLASS_PRAGMA_UNROLL
+                for (int v = 0; v < size<0>(tDrD); ++v) {
+                  if (elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk))) {
+                    tDgDmn(v,m,n) = tDrD(v,m,n);
+                  }
+                }
+              }
             }
           }
         }
