@@ -133,6 +133,35 @@ using CollectiveMainloopBlockWise = typename cutlass::gemm::collective::Collecti
     KernelSchedule,
   >::CollectiveOp;
 
+// Catch exhausted-iterator accesses that numerical checks can miss.
+template <class Iterator>
+struct CheckedKTileIterator {
+  Iterator iterator;
+
+  CUTLASS_DEVICE auto operator*() const {
+    if (iterator == cute::ForwardCoordIteratorSentinel{}) {
+      CUTE_INVALID_CONTROL_PATH("K-tile iterator accessed past the last tile\n");
+    }
+    return *iterator;
+  }
+
+  CUTLASS_DEVICE CheckedKTileIterator& operator++() {
+    ++iterator;
+    return *this;
+  }
+};
+
+template <class Base>
+struct CheckedCollective : Base {
+  template <class... Ts, class FrgTensorC, class Iterator>
+  CUTLASS_DEVICE void operator()(
+      typename Base::Params const& params, cute::tuple<Ts...> const& inputs,
+      FrgTensorC& accum, Iterator iterator, int tile_count, int thread_idx, char* smem_buf) {
+    Base::operator()(params, inputs, accum,
+        CheckedKTileIterator<Iterator>{iterator}, tile_count, thread_idx, smem_buf);
+  }
+};
+
 using GemmKernelBlockWise = cutlass::gemm::kernel::GemmUniversal<
     Shape<int,int,int,int>, // Indicates ProblemShape
     CollectiveMainloopBlockWise,
@@ -140,6 +169,10 @@ using GemmKernelBlockWise = cutlass::gemm::kernel::GemmUniversal<
 >;
 
 using GemmBlockWise = cutlass::gemm::device::GemmUniversalAdapter<GemmKernelBlockWise>;
+
+using CheckedGemmKernelBlockWise = cutlass::gemm::kernel::GemmUniversal<
+    Shape<int,int,int,int>, CheckedCollective<CollectiveMainloopBlockWise>, CollectiveEpilogue>;
+using CheckedGemmBlockWise = cutlass::gemm::device::GemmUniversalAdapter<CheckedGemmKernelBlockWise>;
 
 using StrideA = cutlass::detail::TagToStrideA_t<LayoutA>;
 using StrideB = cutlass::detail::TagToStrideB_t<LayoutB>;
@@ -179,6 +212,7 @@ cutlass::DeviceAllocation<ElementOutput> block_ref_D;
 struct Options {
 
   bool help = false;
+  bool check_k_tiles = false;
 
   float alpha = 1.0f;
   float beta = 0.0f;
@@ -204,6 +238,7 @@ struct Options {
     cmd.get_cmd_line_argument("beta", beta, 0.f);
     cmd.get_cmd_line_argument("iterations", iterations);
     cmd.get_cmd_line_argument("eps", eps);
+    check_k_tiles = cmd.check_cmd_line_flag("check-k-tiles");
   }
 
   /// Prints the usage statement.
@@ -219,6 +254,7 @@ struct Options {
       << "  --alpha=<f32>               Epilogue scalar alpha\n"
       << "  --beta=<f32>                Epilogue scalar beta\n\n"
       << "  --iterations=<int>          Number of profiling iterations to perform.\n\n"
+      << "  --check-k-tiles              Check every mainloop K-tile iterator access\n"
       << "  --eps=<f32>          ";
 
     out
@@ -483,18 +519,19 @@ bool verify(const Options &options) {
 }
 
 /// Execute a given example GEMM computation
+template <class Gemm = GemmBlockWise>
 int run(Options &options)
 {
   initialize(options);
 
   // Instantiate kernel depending on templates
-  GemmBlockWise gemm;
+  Gemm gemm;
 
   // Create a structure of gemm kernel arguments suitable for invoking an instance of Gemm
-  auto arguments = args_from_options<typename GemmBlockWise::Arguments>(options);
+  auto arguments = args_from_options<typename Gemm::Arguments>(options);
 
   // Using the arguments, query for extra workspace required for matrix multiplication computation
-  size_t workspace_size = GemmBlockWise::get_workspace_size(arguments);
+  size_t workspace_size = Gemm::get_workspace_size(arguments);
 
   // Allocate workspace memory
   cutlass::device_memory::allocation<uint8_t> workspace(workspace_size);
@@ -550,6 +587,9 @@ int main(int argc, char const **args) {
   //
   // Evaluate kernels
   //
+  if (options.check_k_tiles) {
+    return run<CheckedGemmBlockWise>(options);
+  }
   run(options);
   return 0;
 }

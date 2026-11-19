@@ -66,6 +66,10 @@
     "./examples/12_ppu_gemm_with_schedule/12_ppu_gemm_with_schedule --m=256 --n=256 --k=64 --l=1",
     "./examples/101_ppu0015_fp4_gemm/101_ppu0015_fp4_gemm --m=1280 --n=2048 --k=4096",
     "./examples/13_ppu_gemm_with_schedule_multistream/13_ppu_gemm_with_schedule_multistream --m=1024 --n=2048 --k=1024",
-    "./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=8 --n=128 --k=1024"
+    "./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=8 --n=128 --k=1024",
+    "./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=8 --n=128 --k=256 --check-k-tiles",
+    "./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=8 --n=128 --k=384 --check-k-tiles",
+    "./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=16 --n=128 --k=512 --check-k-tiles",
+    "./examples/104_ppu0015_fp8_gemm_with_blockwise_quant/104_ppu0015_fp8_gemm_with_blockwise_quant --m=16 --n=128 --k=640 --check-k-tiles"
   ]
 }
