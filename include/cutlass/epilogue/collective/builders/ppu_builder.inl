@@ -111,7 +111,8 @@ template <
   class GmemLayoutTagD,
   int AlignmentD,
   class Schedule,
-  FloatRoundStyle RoundStyle
+  FloatRoundStyle RoundStyle,
+  bool EnableSafeStore
 >
 struct CollectiveBuilder<
     Arch,
@@ -130,7 +131,9 @@ struct CollectiveBuilder<
     Schedule,
     fusion::LinearCombination<ElementD,ElementCompute,ElementC_,ElementCompute,RoundStyle>,
     cute::enable_if_t<cute::is_same_v<Schedule, NoSmemWarpSpecialized> ||
-                      cute::is_same_v<Schedule, PtrArrayNoSmemWarpSpecialized> >> {
+                      cute::is_same_v<Schedule, PtrArrayNoSmemWarpSpecialized> >,
+    EnableSafeStore> {
+  static_assert(!EnableSafeStore, "Safe store is supported only by the PPU EVT epilogue.");
 
   // Passing void C disables source load
   using ElementC = cute::conditional_t<cute::is_void_v<ElementC_>,
@@ -176,7 +179,8 @@ template <
   class ElementD,
   class GmemLayoutTagD,
   int AlignmentD,
-  class FusionOperation
+  class FusionOperation,
+  bool EnableSafeStore
 >
 struct CollectiveBuilder<
     Arch,
@@ -194,7 +198,8 @@ struct CollectiveBuilder<
     AlignmentD,
     EpilogueScheduleAuto,
     FusionOperation,
-    void> {
+    void,
+    EnableSafeStore> {
 private:
   static_assert(cute::is_same_v<FusionOperation, fusion::LinearCombination<ElementD,ElementCompute,ElementC,ElementCompute>>,
                 "Auto schedule doesn't support fusion. Use one of the TmaWarpSpecialized schedules instead.");
@@ -217,7 +222,9 @@ private:
     GmemLayoutTagD,
     AlignmentD,
     EpilogueSchedule,
-    FusionOperation
+    FusionOperation,
+    void,
+    EnableSafeStore
   >;
 
 public:
@@ -241,7 +248,8 @@ template <
   class GmemLayoutTagD,
   int AlignmentD,
   class Schedule,
-  class EpilogueOp
+  class EpilogueOp,
+  bool EnableSafeStore
 >
 struct CollectiveBuilder<
     Arch,
@@ -264,7 +272,8 @@ struct CollectiveBuilder<
                       cute::is_same_v<Schedule, EpiloguePtrArraySimtVectorized> ||
                       cute::is_same_v<Schedule, TmaWarpSpecialized> ||
                       cute::is_same_v<Schedule, TmaWarpSpecializedCooperative> ||
-                      detail::ppu_is_ptr_array_tma_v<Schedule>>> {
+                      detail::ppu_is_ptr_array_tma_v<Schedule>>,
+    EnableSafeStore> {
 private:
   static_assert(cute::is_same_v<EpilogueTileType, cutlass::epilogue::collective::EpilogueTileAuto>, "PPU can only support auto epilogue tile");
 
@@ -285,7 +294,13 @@ private:
   using WarpOnN = Int<BlockN / WarpN>;
   static constexpr int ThreadNum = WarpOnM() * WarpOnN() * 32;
   static constexpr int FragmentSize = BlockM * BlockN / ThreadNum;
+  static_assert(AlignmentC > 0 && AlignmentD > 0, "Epilogue alignments must be positive.");
   static constexpr int Alignment = platform::min(AlignmentC, AlignmentD);
+  static_assert(BlockN % Alignment == 0, "Epilogue alignment must divide block N.");
+  static_assert(BlockM % WarpM == 0 && BlockN % WarpN == 0,
+                "Warp shape must divide block shape.");
+  static_assert((BlockN / Alignment) >= ThreadNum || ThreadNum % (BlockN / Alignment) == 0,
+                "Epilogue N threads must divide the thread count.");
 
   using EpilogueCopyInst = AutoVectorizingCopyWithAssumedAlignment<128>;
   using GemmEpilogueConfiguration = gemm::config::DefaultGemm_Epilogue_Configuration<EpilogueCopyInst, ElementAccumulator, Alignment, Int<BlockM>, Int<BlockN>, WarpOnM, ThreadNum>;
@@ -306,8 +321,22 @@ private:
   static constexpr bool use_evt = !cute::is_same_v<Schedule, EpilogueSimtVectorizedWithoutEvt>;
   using ThreadEpilogueOp = cute::conditional_t<use_evt, FusionCallbacks, DefaultOperation>;
 public:
-  using CollectiveOp = detail::ChooseEpilogue<
-    use_evt,
+  static_assert(use_evt || !EnableSafeStore,
+                "Safe store requires the PPU EVT epilogue.");
+  using CollectiveOp = cute::conditional_t<use_evt,
+    cutlass::epilogue::collective::EpilogueEvt<
+      cutlass::detail::TagToStrideC_t<GmemLayoutTagC>,
+      cutlass::detail::TagToStrideC_t<GmemLayoutTagD>,
+      ThreadEpilogueOp,
+      typename GemmEpilogueConfiguration::SmemLayoutO,
+      Copy_Atom<EpilogueCopyInst,ElementAccumulator>,
+      typename GemmEpilogueConfiguration::GmemTiledCopyO,
+      Copy_Atom<AutoVectorizingCopyWithAssumedAlignment<sizeof(ElementD) * AlignmentD * 8>,ElementD>,
+      EpilogueDispatchPolicy,
+      Copy_Atom<AutoVectorizingCopyWithAssumedAlignment<sizeof(ElementD) * AlignmentD * 8>,ElementD>,
+      EnableSafeStore,
+      AlignmentD>,
+    cutlass::epilogue::collective::Epilogue<
     cutlass::detail::TagToStrideC_t<GmemLayoutTagC>,
     cutlass::detail::TagToStrideC_t<GmemLayoutTagD>,
     ThreadEpilogueOp,
@@ -315,7 +344,7 @@ public:
     Copy_Atom<EpilogueCopyInst,ElementAccumulator>,
     typename GemmEpilogueConfiguration::GmemTiledCopyO,
     Copy_Atom<AutoVectorizingCopyWithAssumedAlignment<sizeof(ElementD) * AlignmentD * 8>,ElementD>,
-    EpilogueDispatchPolicy
+    EpilogueDispatchPolicy>
   >;
 };
 

@@ -68,7 +68,8 @@ template <
   int AlignmentD,
   class EpilogueScheduleType,
   class FusionOpOrCallbacks = cutlass::epilogue::fusion::LinearCombination<ElementD,ElementCompute,ElementC,ElementCompute>,
-  class Enable = void
+  class Enable = void,
+  bool EnableSafeStore = false
 >
 struct CollectiveBuilder {
   static_assert(cutlass::detail::dependent_false<ArchTag>,

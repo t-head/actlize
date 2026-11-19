@@ -50,6 +50,18 @@ namespace collective {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+namespace detail {
+
+template <class CopyAtom>
+struct PpuOutputCopyAlignment : cute::Int<CopyAtom::NumValDst> {};
+
+template <int Bits, class Element>
+struct PpuOutputCopyAlignment<
+    cute::Copy_Atom<cute::AutoVectorizingCopyWithAssumedAlignment<Bits>, Element>>
+    : cute::Int<Bits / cute::sizeof_bits_v<Element>> {};
+
+} // namespace detail
+
 /// Applies an element wise operation to all elements within the fragment
 /// and writes it out to destination storage.
 ///
@@ -67,7 +79,9 @@ template <
   class TiledCopyS2R_,
   class CopyAtomR2G_,
   class EpilogueScheduleType_,
-  class CopyAtomG2R_ = CopyAtomR2G_
+  class CopyAtomG2R_ = CopyAtomR2G_,
+  bool EnableSafeStore_ = false,
+  int AlignmentD_ = detail::PpuOutputCopyAlignment<CopyAtomR2G_>::value
 >
 class EpilogueEvt {
 public:
@@ -87,6 +101,11 @@ public:
   using ElementScalar = ElementCompute;
   using ElementOutput = typename CopyAtomR2G::ValType;
   using ElementC = typename CopyAtomG2R::ValType;
+  static constexpr bool EnableSafeStore = EnableSafeStore_;
+  static constexpr int kAlignmentD = AlignmentD_;
+  static_assert(kAlignmentD > 0, "Output alignment must be positive.");
+  static_assert(kAlignmentD == detail::PpuOutputCopyAlignment<CopyAtomR2G>::value,
+                "Output alignment must match the R2G copy atom.");
   using StrideC = StrideC_;
   using InternalStrideC = cute::remove_pointer_t<StrideC>;
   using ElementD = ElementOutput;
@@ -357,6 +376,19 @@ public:
     // CUTE_STATIC_ASSERT(typename TiledCopyS2R::TiledNumThr{} == size<0>(typename TiledMma::AtomLayoutC_TV{}));
 
     constexpr int EvtFragSize = size(tDrAcc(_,0,0));
+    static_assert(EvtFragSize > 0, "Output fragment must be nonempty.");
+    if constexpr (!EnableSafeStore) {
+      static_assert(kAlignmentD % EvtFragSize == 0,
+                    "Unchecked store fragment must divide output alignment.");
+      static_assert(int(get<1>(BlockShapeMNK{})) % EvtFragSize == 0,
+                    "Unchecked store fragment must divide block N.");
+      static_assert(int(size<1>(SmemLayout{})) % EvtFragSize == 0,
+                    "Unchecked store fragment must divide epilogue tile N.");
+      if constexpr (is_static<decltype(N)>::value) {
+        static_assert(decltype(N)::value % EvtFragSize == 0,
+                      "Unchecked store fragment must divide static problem N.");
+      }
+    }
     // frag for one epilogue outer loop
     Tensor evt_c_tensor = make_tensor<ElementC>(take<0,3>(shape(tDgC)));
 
@@ -483,21 +515,26 @@ public:
               // run output op for all regs in cur epi loop
               // corresponds to multiple vmem.st
               tDrD_array[0] = cst_callbacks.visit(tDrAcc_array[0], sub_loop_idx, step_m, step_n);
-              constexpr int VectorBytes = sizeof(ElementOutput) * EvtFragSize;
-              bool vector_safe = reinterpret_cast<uintptr_t>(&tDgDmn(0,m,n)) % VectorBytes == 0;
-              CUTLASS_PRAGMA_UNROLL
-              for (int v = 0; v < size<0>(tDrD); ++v) {
-                vector_safe = vector_safe && elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk));
-              }
-              if (vector_safe) {
-                copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
-              } else {
+              if constexpr (EnableSafeStore) {
+                constexpr int VectorBytes = sizeof(ElementOutput) * EvtFragSize;
+                bool vector_safe = reinterpret_cast<uintptr_t>(&tDgDmn(0,m,n)) % VectorBytes == 0;
                 CUTLASS_PRAGMA_UNROLL
                 for (int v = 0; v < size<0>(tDrD); ++v) {
-                  if (elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk))) {
-                    tDgDmn(v,m,n) = tDrD(v,m,n);
+                  vector_safe = vector_safe && elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk));
+                }
+                if (vector_safe) {
+                  copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
+                } else {
+                  CUTLASS_PRAGMA_UNROLL
+                  for (int v = 0; v < size<0>(tDrD); ++v) {
+                    if (elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk))) {
+                      tDgDmn(v,m,n) = tDrD(v,m,n);
+                    }
                   }
                 }
+              } else {
+                // Dynamic N, D pointers and strides must satisfy the declared alignment.
+                copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
               }
             }
           }

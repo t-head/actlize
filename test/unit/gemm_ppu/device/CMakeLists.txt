@@ -42,6 +42,7 @@ add_custom_target(
 cutlass_test_unit_add_executable(
   cutlass_test_unit_gemm_device_tensorop_f32_ppu0010_3x
   # gemm
+  ppu0010_epilogue_vectorized_evt.cu
   ppu0010_gemm_s8_s8_s32_tensor_op.cu
   ppu0010_gemm_s8_s8_s32_tensor_op_aiu.cu
   ppu0010_gemm_f16_f16_f32_tensor_op_f32.cu
@@ -54,3 +55,16 @@ cutlass_test_unit_add_executable(
 )
 
 target_compile_options(cutlass_test_unit_gemm_device_tensorop_f32_ppu0010_3x PRIVATE -w)
+
+if("ppu0010" IN_LIST CUTLASS_PPU_ARCHS)
+  get_filename_component(epilogue_source_root "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
+  foreach(epilogue_case IN ITEMS STATIC_TAIL FRAGMENT_MISMATCH NO_EVT ZERO_ALIGNMENT)
+    add_test(NAME ppu0010_epilogue_compile_fail_${epilogue_case}
+      COMMAND "${CMAKE_COMMAND}"
+        "-DHGCC=${PPU_DEVICE_HGCC_REAL}"
+        "-DSOURCE_ROOT=${epilogue_source_root}"
+        "-DOUTPUT_ROOT=${CMAKE_CURRENT_BINARY_DIR}/compile_fail"
+        "-DTEST_MACRO=ACTLIZE_TEST_${epilogue_case}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/epilogue_compile_fail.cmake")
+  endforeach()
+endif()
