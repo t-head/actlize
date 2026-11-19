@@ -575,12 +575,14 @@ struct CollectiveMma<
           }
           // Issue the next tile after the first MMA block.
           if (k_block == 0) {
-            copy_to_tsm(producer_tag, smem_pipe_write, *k_tile_iter);
+            if (k_tile_count > 0) {
+              copy_to_tsm(producer_tag, smem_pipe_write, *k_tile_iter);
+              ++k_tile_iter;
+            }
             cp_async_fence();
 
             // Advance the tile
             --k_tile_count;
-            if (k_tile_count > 0) { ++k_tile_iter; }
 
             // Advance the pipe before the last-block wait.
             smem_pipe_write = smem_pipe_read;
