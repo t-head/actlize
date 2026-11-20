@@ -53,12 +53,15 @@ namespace collective {
 namespace detail {
 
 template <class CopyAtom>
-struct PpuOutputCopyAlignment : cute::Int<CopyAtom::NumValDst> {};
+struct PpuEvtCopyAlignment : cute::Int<CopyAtom::NumValDst> {};
 
 template <int Bits, class Element>
-struct PpuOutputCopyAlignment<
+struct PpuEvtCopyAlignment<
     cute::Copy_Atom<cute::AutoVectorizingCopyWithAssumedAlignment<Bits>, Element>>
-    : cute::Int<Bits / cute::sizeof_bits_v<Element>> {};
+    : cute::Int<Bits / cute::sizeof_bits_v<Element>> {
+  static_assert(Bits > 0 && Bits % cute::sizeof_bits_v<Element> == 0,
+                "Legacy EVT copy alignment must contain whole output elements.");
+};
 
 } // namespace detail
 
@@ -79,9 +82,7 @@ template <
   class TiledCopyS2R_,
   class CopyAtomR2G_,
   class EpilogueScheduleType_,
-  class CopyAtomG2R_ = CopyAtomR2G_,
-  bool EnableSafeStore_ = false,
-  int AlignmentD_ = detail::PpuOutputCopyAlignment<CopyAtomR2G_>::value
+  class CopyAtomG2R_ = CopyAtomR2G_
 >
 class EpilogueEvt {
 public:
@@ -101,11 +102,8 @@ public:
   using ElementScalar = ElementCompute;
   using ElementOutput = typename CopyAtomR2G::ValType;
   using ElementC = typename CopyAtomG2R::ValType;
-  static constexpr bool EnableSafeStore = EnableSafeStore_;
-  static constexpr int kAlignmentD = AlignmentD_;
-  static_assert(kAlignmentD > 0, "Output alignment must be positive.");
-  static_assert(kAlignmentD == detail::PpuOutputCopyAlignment<CopyAtomR2G>::value,
-                "Output alignment must match the R2G copy atom.");
+  static constexpr int kAlignmentD = detail::PpuEvtCopyAlignment<CopyAtomR2G>::value;
+  static_assert(kAlignmentD > 0, "Legacy EVT output alignment must be positive.");
   using StrideC = StrideC_;
   using InternalStrideC = cute::remove_pointer_t<StrideC>;
   using ElementD = ElementOutput;
@@ -132,6 +130,71 @@ public:
     cute::array_aligned<ElementAccumulator, cute::cosize_v<SmemLayout>> smem_epilogue;
     FusionStorage thread;
   };
+
+  // Inspect the same S2R partition used by compute_epilogue. A row-major
+  // scalar coordinate avoids repeated tuple evaluation in constexpr loops.
+  // These helpers emit no device instructions and preserve Arguments/Params.
+  static constexpr auto store_partition_layout() {
+    using namespace cute;
+    constexpr auto tile = make_shape(Int<size<0>(SmemLayout{})>{},
+                                     Int<size<1>(SmemLayout{})>{});
+    constexpr auto coordinates = make_counting_tensor(
+        make_layout(tile, make_stride(Int<size<1>(SmemLayout{})>{}, Int<1>{})));
+    constexpr auto divided = flat_divide(coordinates, tile);
+    return TiledCopyS2R::tidfrg_D(divided.layout());
+  }
+
+  static constexpr bool is_store_shape_safe(int rows, int cols) {
+    using namespace cute;
+    if (rows <= 0 || cols <= 0) return false;
+    constexpr int sm = size<0>(SmemLayout{}), sn = size<1>(SmemLayout{});
+    constexpr auto partition = store_partition_layout();
+    constexpr auto layout = coalesce(partition);
+    constexpr int threads = size<0>(partition), fragment = size<1>(partition);
+    constexpr int groups = size(partition) / (threads * fragment);
+    // A proven aligned row vector cannot cross an aligned column boundary.
+    // Keep the exact partition fallback for other fragment layouts and tails.
+    if (is_row_vector_partition() && cols % kAlignmentD == 0) return true;
+    const int rm = rows % sm == 0 ? sm : rows % sm;
+    const int rn = cols % sn == 0 ? sn : cols % sn;
+    for (int group = 0; group < groups; ++group)
+      for (int tid = 0; tid < threads; ++tid) {
+        const int base = tid + threads * fragment * group;
+        const int first = layout(base);
+        if (first / sn < rm && first % sn < rn)
+          for (int v = 1; v < fragment; ++v) {
+            const int current = layout(base + threads * v);
+            if (current / sn >= rm || current % sn >= rn) return false;
+          }
+      }
+    return true;
+  }
+
+  static constexpr bool is_row_vector_partition() {
+    using namespace cute;
+    constexpr int sm = size<0>(SmemLayout{}), sn = size<1>(SmemLayout{});
+    constexpr auto partition = store_partition_layout();
+    constexpr auto vector = coalesce(get<1>(partition));
+    if constexpr (size(vector) != kAlignmentD || rank(vector) != 1) {
+      return false;
+    } else {
+      if (sn % kAlignmentD || (kAlignmentD > 1 && stride<0>(vector) != 1)) return false;
+      // Every non-vector layout basis must preserve vector alignment. Together
+      // with the unit-stride vector mode and the tile bound, this proves all
+      // fragments without constexpr work proportional to the tile area.
+      constexpr auto bases = flatten(make_layout(remove<1>(partition.shape()),
+                                                  remove<1>(partition.stride())));
+      bool aligned = true;
+      int maximum = 0;
+      for_each(make_seq<rank(bases)>{}, [&](auto mode) {
+        constexpr int i = decltype(mode)::value;
+        constexpr int extent = size<i>(bases), step = stride<i>(bases);
+        if (extent <= 0 || step < 0 || (extent > 1 && step % kAlignmentD)) aligned = false;
+        maximum += (extent - 1) * step;
+      });
+      return aligned && maximum + kAlignmentD - 1 < sm * sn;
+    }
+  }
 
   // Host side epilogue arguments
   struct Arguments {
@@ -376,19 +439,14 @@ public:
     // CUTE_STATIC_ASSERT(typename TiledCopyS2R::TiledNumThr{} == size<0>(typename TiledMma::AtomLayoutC_TV{}));
 
     constexpr int EvtFragSize = size(tDrAcc(_,0,0));
-    static_assert(EvtFragSize > 0, "Output fragment must be nonempty.");
-    if constexpr (!EnableSafeStore) {
-      static_assert(kAlignmentD % EvtFragSize == 0,
-                    "Unchecked store fragment must divide output alignment.");
-      static_assert(int(get<1>(BlockShapeMNK{})) % EvtFragSize == 0,
-                    "Unchecked store fragment must divide block N.");
-      static_assert(int(size<1>(SmemLayout{})) % EvtFragSize == 0,
-                    "Unchecked store fragment must divide epilogue tile N.");
-      if constexpr (is_static<decltype(N)>::value) {
-        static_assert(decltype(N)::value % EvtFragSize == 0,
-                      "Unchecked store fragment must divide static problem N.");
-      }
-    }
+    static_assert(EvtFragSize > 0 && EvtFragSize % kAlignmentD == 0,
+                  "Legacy EVT fragment width must match output alignment.");
+    // Dynamic dimensions still require a caller-side eligibility check.
+    constexpr int StaticM = is_static<decltype(M)>::value ? decltype(M){} : size<0>(SmemLayout{});
+    constexpr int StaticN = is_static<decltype(N)>::value ? decltype(N){} : size<1>(SmemLayout{});
+    static_assert((!is_static<decltype(M)>::value && !is_static<decltype(N)>::value) ||
+                  is_store_shape_safe(StaticM, StaticN),
+                  "Legacy EVT static tail does not match its writeback fragment alignment.");
     // frag for one epilogue outer loop
     Tensor evt_c_tensor = make_tensor<ElementC>(take<0,3>(shape(tDgC)));
 
@@ -515,27 +573,7 @@ public:
               // run output op for all regs in cur epi loop
               // corresponds to multiple vmem.st
               tDrD_array[0] = cst_callbacks.visit(tDrAcc_array[0], sub_loop_idx, step_m, step_n);
-              if constexpr (EnableSafeStore) {
-                constexpr int VectorBytes = sizeof(ElementOutput) * EvtFragSize;
-                bool vector_safe = reinterpret_cast<uintptr_t>(&tDgDmn(0,m,n)) % VectorBytes == 0;
-                CUTLASS_PRAGMA_UNROLL
-                for (int v = 0; v < size<0>(tDrD); ++v) {
-                  vector_safe = vector_safe && elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk));
-                }
-                if (vector_safe) {
-                  copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
-                } else {
-                  CUTLASS_PRAGMA_UNROLL
-                  for (int v = 0; v < size<0>(tDrD); ++v) {
-                    if (elem_less(tDcDmn(v,m,n), take<0,2>(residue_mnk))) {
-                      tDgDmn(v,m,n) = tDrD(v,m,n);
-                    }
-                  }
-                }
-              } else {
-                // Dynamic N, D pointers and strides must satisfy the declared alignment.
-                copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
-              }
+              copy(CopyAtomR2G{}, tDrD(_,m,n), tDgDmn(_,m,n));
             }
           }
         }
