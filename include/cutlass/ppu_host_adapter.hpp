@@ -97,7 +97,13 @@ namespace cutlass {
 #include <hggc_runtime_api.h>
 #endif // in open_source: (__HGGCCC_VERSION__ >= 11.8)
 
-#include <driver_types.h>
+// cutlass3 change: the explicit driver-types include that upstream CUDA
+// cutlass keeps here is dropped on purpose. hggc_runtime_api.h above already
+// pulls in the driver-types header under whatever name the active SDK uses
+// (driver_types.h before SDK 2.3, hggc_driver_types.h from SDK 2.3 on, see
+// gerrit 146661), so naming it again here only creates a second place that
+// has to track SDK header renames. Under HGRTC the whole block is skipped and
+// the RTC frontend injects the driver types itself.
 
 #define CUTLASS_PPU_DRIVER_STRINGIFY(tok) #tok
 
