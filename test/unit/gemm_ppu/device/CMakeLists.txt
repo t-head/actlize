@@ -42,6 +42,7 @@ add_custom_target(
 cutlass_test_unit_add_executable(
   cutlass_test_unit_gemm_device_tensorop_f32_ppu0010_3x
   # gemm
+  ppu0010_epilogue_vectorized_evt.cu
   ppu0010_gemm_s8_s8_s32_tensor_op.cu
   ppu0010_gemm_s8_s8_s32_tensor_op_aiu.cu
   ppu0010_gemm_f16_f16_f32_tensor_op_f32.cu
